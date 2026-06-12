@@ -49,6 +49,10 @@ Game state effects are applied deterministically as events resolve. Visual effec
 
 A developer previews next events, validates configuration Resources, inspects why a tie-breaker chose one event over another, and loads demo templates for common genres.
 
+### Workflow F: Calibrate editor layout with structured feedback
+
+The addon author enables a debug-only calibration tab, adjusts layout parameters directly on a dock, and copies a structured layout feedback JSON. Development bakes accepted values back into code, contract thresholds, and tests. Controls untouched across calibration iterations accumulate history and become quality review candidates.
+
 ## 3. Adopted principles
 
 1. Event-first: actor turns, status ticks, cooldown completions, reactions, phase changes, and visual flush barriers are all events.
@@ -61,6 +65,10 @@ A developer previews next events, validates configuration Resources, inspects wh
 8. Observable behavior: prediction, debug snapshots, and timeline explanation are part of the product, not optional polish.
 9. No sample-only completion: sample scenes teach usage but do not prove production readiness.
 10. Autoload optional: scene-local `EQManager` is the default; global service is opt-in.
+11. Projection-first editor UI: editor surfaces render injected headless state (snapshot, validation, prediction), so every UI state can be constructed and tested without editor selection.
+12. Structural UI acceptance: editor UI is gated by layout metric, state matrix, and interaction contract tests, not screenshots (`docs/devflow/policy/UI_TESTABILITY_POLICY.md`).
+13. Trace as artifact: resolved event order is exported as a canonical trace and approval-tested against golden fixtures (`docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md`).
+14. Path reduction: input classes for primary features are narrowed so that no flow can be entered but not completed (`docs/devflow/policy/UX_PATH_REDUCTION_POLICY.md`).
 
 ## 4. Rejected or deferred principles
 
@@ -95,6 +103,8 @@ A developer previews next events, validates configuration Resources, inspects wh
 | Presentation event | The visual/audio representation of an effect. |
 | Flush barrier | A rule that forces deferred presentation events to play before continuing. |
 | Snapshot | Serializable scheduler and actor/reservation state for save/load, prediction, or rollback. |
+| Trace | Canonical, replayable record of resolved events used as an approval-tested artifact. |
+| Projection integrity | The editor UI displays exactly the values derived from injected headless state, never recomputed UI-side. |
 
 ## 6. Target architecture
 
@@ -110,10 +120,18 @@ addons/event_queue_manager/
     actor adapter, Godot node bridge, visibility/sensing bridge, animation bridge
   editor/
     timeline dock, config inspector, debug inspector, template generator
+    testing/
+      ui snapshot collector, metric evaluator, scenario builder, calibration tab
   demos/
     ctb_battle, roguelike_energy, wait_turn_tactics, action_resolution, phase_4x, stack_cards
   tests/
-    core, policy, resource, trigger, transaction, presentation, ui headless, package
+    core, policy, resource, trigger, transaction, presentation, ui headless, golden traces, package
+
+tools/
+  test.sh, ui_static_audit.py
+
+docs/ui/
+  EDITOR_UI_CONTRACT.md, EDITOR_STATE_MATRIX.md, LAYOUT_CALIBRATION_LEDGER.md
 ```
 
 ## 7. Phase roadmap
@@ -128,6 +146,7 @@ Produces:
 - Filled `docs/devflow/TEST.md`.
 - `tools/test.sh` skeleton.
 - Initial `docs/plan/2026-06-09_event_queue_manager/ROADMAP.md` and `IMPLEMENTATION_QUEUE.md`.
+- Test/UX policy pack under `docs/devflow/policy/` (added 2026-06-13): `UI_TESTABILITY_POLICY.md`, `UI_LAYOUT_METRIC_TEST_POLICY.md`, `UI_LAYOUT_CALIBRATION_POLICY.md`, `UX_PATH_REDUCTION_POLICY.md`, `DETERMINISM_TRACE_TEST_POLICY.md`.
 
 Why first: Without project-specific principles and test gates, the autopilot loop cannot judge completion cleanly.
 
@@ -141,6 +160,7 @@ Produces:
 - Stable ordering by `due_tick ASC`, `priority DESC`, `sequence ASC`.
 - `EQSnapshot` for current tick, sequence counter, actors, and entries.
 - Core tests for ordering, cancellation, invalidation, and snapshot roundtrip.
+- Canonical trace export and determinism harness: golden trace fixtures, insertion-permutation and snapshot-replay property tests per `DETERMINISM_TRACE_TEST_POLICY.md`.
 
 Why now: All later policies and reservations depend on this contract.
 
@@ -150,6 +170,8 @@ Purpose: expose clean Godot-facing configuration without binding the core to sce
 
 Produces:
 
+- `docs/design/EVENT_MODEL_SEMANTICS.md`: ordering key, tick advancement, phase/insertion-window model (turn-as-event), reentrancy, simultaneous-trigger resolution, and AP accounting, decided before the public contracts freeze.
+- `docs/design/ORDERING_MODEL_COVERAGE.md`: a matrix mapping known ordering systems (CTB, energy, wait-turn, FE phase, 4X phase, stack/LIFO, Pokemon-style speed turn, 行動解決ターン制) onto the model, so missing primitives surface before the API hardens.
 - `EQConfig` Resource.
 - `EQPolicy` base Resource.
 - `EQActorState` and actor registration contract.
@@ -169,6 +191,7 @@ Produces:
 - `EQManager` Node with signals: `queue_changed`, `event_ready`, `turn_ready`, `event_resolved`, `timeline_advanced`, `invalid_event_skipped`.
 - Next-N prediction for round and CTB.
 - Minimal CTB sample battle.
+- v0.1 milestone evaluation: API friction and semantics drift audit feeding queue adjustments.
 
 Why now: This delivers the first playable addon slice.
 
@@ -270,10 +293,14 @@ Produces:
 
 - Timeline Preview Dock.
 - Config Resource editor helpers.
-- Debug inspector explaining order decisions.
+- Debug inspector explaining order decisions, rendered from explanation-as-data.
 - Template generator for CTB, energy, wait turn, action resolution, phase, and stack.
 - Validation UI with explicit unset/error states.
 - UI headless tests for project asset selection and validation state.
+- `docs/ui/EDITOR_UI_CONTRACT.md` and `docs/ui/EDITOR_STATE_MATRIX.md` as UI test source of truth.
+- UI static audit, layout snapshot collector, and metric evaluator with staged gates (WARN -> P0 -> P1).
+- Projection integrity tests: displayed timeline order equals headless prediction order.
+- Layout Calibration Loop: debug-only calibration tab, layout feedback JSON, calibration ledger, cold-control review candidates.
 
 Why now: Editor UX depends on stable APIs and must not become sample-only.
 
@@ -342,6 +369,8 @@ The roadmap succeeds when:
 - Timeline preview explains why the next event is next.
 - Save/load restores event order without storing live Node references.
 - Tests cover core ordering, policies, resources, triggers, rollback, presentation flush, and package smoke.
+- Same-seed replays, insertion permutations, and prediction purity tests prove deterministic order; demos ship golden traces.
+- Editor UI passes layout metric P0 gates across the dock size / scale / locale / state scenario matrix without screenshot review.
 
 ## 10. First queue-designed scope
 
@@ -349,11 +378,12 @@ The first implementation queue should cover Phase 0 through Phase 3:
 
 1. Devflow specialization and test harness.
 2. Deterministic core scheduler.
-3. Resource/API contract.
-4. Fixed round policy.
-5. CTB policy.
-6. Runtime `EQManager` signal integration.
-7. Next-N prediction.
-8. Minimal sample battle.
+3. Canonical trace export and determinism harness.
+4. Resource/API contract.
+5. Fixed round policy.
+6. CTB policy.
+7. Runtime `EQManager` signal integration.
+8. Next-N prediction.
+9. Minimal sample battle.
 
 Phase 4 and later should remain BACKLOG until the MVP contracts are complete.

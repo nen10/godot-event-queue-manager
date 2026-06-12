@@ -17,6 +17,9 @@ Read the smallest relevant set.
 | Write task-level UX / POLICY / IMPLEMENTATION_PLAN | `docs/devflow/TASK_PACKET.md` |
 | Execute an existing queue | `docs/devflow/LINEAR_AUTOPILOT_QUEUE.md` |
 | Update queue status | `docs/devflow/QUEUE_OPERATION_RULES.md` |
+| Design or test editor UI | `docs/devflow/policy/UI_TESTABILITY_POLICY.md` |
+| Prove ordering / trace determinism | `docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md` |
+| Remove hack UX paths / narrow inputs | `docs/devflow/policy/UX_PATH_REDUCTION_POLICY.md` |
 
 ## Autopilot rule
 

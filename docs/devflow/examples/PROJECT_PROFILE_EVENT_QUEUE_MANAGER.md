@@ -13,7 +13,7 @@ This file specializes the reusable addon devflow for the Event Queue Manager God
 | Simulation Transaction | player turn中の仮行動、rollback、commit、snapshot、deterministic RNG。 | プレイヤーの試行錯誤を許しつつ、commit後のevent orderを再現可能にする。 |
 | Presentation Pipeline | status反映と画面エフェクト反映の分離、visibility、importance、flush barrier。 | simulation correctnessをUI都合で歪めない。表示矛盾をflush policyで防ぐ。 |
 | Adapter | Core / Resource と Godot Node / Scene / signal / Autoload optional を接続する。 | Node参照を保存形式に混ぜない。WeakRef / actor_id / event_idで橋渡しする。 |
-| Editor UI | Timeline Preview、Config editor、Debug inspector、template generator。 | project asset selectionを主導線にし、sampleはlearning pathへ隔離する。raw JSONやnumeric fallbackを通常導線にしない。 |
+| Editor UI | Timeline Preview、Config editor、Debug inspector、template generator。 | project asset selectionを主導線にし、sampleはlearning pathへ隔離する。raw JSONやnumeric fallbackを通常導線にしない。editor UI は injected headless state (snapshot/validation/prediction) の projection として実装し、headless scenario で全表示状態を再現できること。 |
 | Tests | 採用した API / policy / UX が壊れていないことを確認する。 | test都合でUX/APIを歪めない。sample presetだけで完了扱いにしない。 |
 | Docs / Demos | 判断、使い方、制約、demo sceneを残す。 | manualは採用済みUX/APIの説明であり、仕様決定の代替ではない。 |
 
@@ -27,7 +27,10 @@ This file specializes the reusable addon devflow for the Event Queue Manager God
 | Trigger/Reaction | condition matching、reaction arming、duration、rumination、cycle guard。 |
 | Transaction | rollback/commit、player turn draft、snapshot restore、deterministic random。 |
 | Presentation | visibility classification、importance barrier、effect flush ordering。 |
-| UI headless | Editor dock state、selected project asset、validation state、timeline preview state。 |
+| UI headless | Editor dock state、selected project asset、validation state、timeline preview state。scenario builder により injected state から構築する。 |
+| UI layout metric | layout snapshot 収集、metric 評価、P0/P1 gate。cf. `docs/devflow/policy/UI_LAYOUT_METRIC_TEST_POLICY.md`。 |
+| Determinism trace | canonical trace 出力、golden fixture、permutation / replay / prediction purity の property tests。cf. `docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md`。 |
+| Layout calibration | tweak-and-bake feedback の取り込み、ledger、cold-control 候補管理。人間 loop であり CI gate にしない。 |
 | Debug scene | sample battle / wait-turn / action-resolution scene の状態切替。 |
 | Package | addon-only manifest、clean project load、sample asset isolation。 |
 
@@ -44,6 +47,10 @@ This file specializes the reusable addon devflow for the Event Queue Manager God
 - sample-only completionは禁止。sample sceneはlearning pathであり、production featureの証明ではない。
 - Autoloadは任意。標準導線はscene-local EQManager node。
 - 旧互換は新規addonでは原則扱わない。必要になった場合のみroadmap sourceで明示する。
+- Editor UI は projection-first。表示値は headless state から導出し、UI 側で再計算しない。
+- UI の acceptance は構造評価 (layout metric / state matrix / interaction contract)。screenshot は acceptance に使わない。
+- 負の価値を生む UX 経路は fallback として温存せず削除する。cf. `docs/devflow/policy/UX_PATH_REDUCTION_POLICY.md`。
+- 解決済み event order は canonical trace として出力し、golden fixture の approval 運用で守る。golden の自動更新は禁止。
 
 ## Standard verification
 
@@ -58,6 +65,7 @@ Recommended default command:
 ```bash
 # examples; adapt to repository layout
 godot --headless --path test_project --script res://tests/run_all.gd
+python3 tools/ui_static_audit.py
 python3 tools/check_addon_manifest.py
 python3 tools/check_docs_links.py
 ```
