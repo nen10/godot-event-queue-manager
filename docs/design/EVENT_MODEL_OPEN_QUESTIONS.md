@@ -52,6 +52,8 @@ status:
 
 影響: EQM-014, ORDERING_MODEL_COVERAGE, EQM-070。
 
+user意見: 良い。
+
 ## Q04 — 同時性 / batch 解決 [RECOMMENDED]
 
 問い: 厳密全順序のみか、「同時」に解決すべき event 群 (WeGo 同時手番、相打ち、同時 KO) を表す primitive を持つか。
@@ -59,6 +61,8 @@ status:
 推奨: core は全順序を維持し、同時性は composite event (複数 effect を単一解決として束ねる) で表現する。全順序を崩す並行解決は導入しない。
 
 影響: EQM-014, EQM-050, EQM-080。
+
+user意見: 賛成の上で疑問点 - composite event としての解決に関する実際の game 上の挙動は event 分類ごとに acceptance 側定義に寄せるとして理解することになるか？
 
 ## Q05 — 予約の無効化 [RECOMMENDED]
 
@@ -68,6 +72,8 @@ status:
 
 影響: EQM-011, EQM-051, EQM-061。
 
+user意見: 主眼としては正しいが、eagarの責務については検討したい。
+
 ## Q06 — 持続時間切れの event 化 [RECOMMENDED]
 
 問い: 反応準備等の duration expiry は event として timeline に乗るか、参照時に lazy 判定か。
@@ -75,6 +81,8 @@ status:
 推奨: event 化する。trace に可視になり、on-expiry trigger が定義可能で、決定性検証が単純になる。
 
 影響: EQM-061。
+
+user意見: 正しい。ただし、反応準備は反応回数によっても event の close を行う余地があり、その場合 deadline = ∞ を許容する。
 
 ## Q07 — 遡及的時間変更 [RECOMMENDED]
 
@@ -84,6 +92,11 @@ status:
 
 影響: EQM-011, EQM-041。
 
+user意見: 
+  first-discussion: event の管理に関して global tick は全てではなく、TO(tactics ogre) のWTシステム、FFT(FFタクティクス)のCTシステムでは entity 固有の paramater 消費/蓄積で行動ターン event が来る。
+  second-discussion: 毎 tick 進行自体に、WT/CT条件で行動ターン予約効果をもつ event を追加すれば、再計算なしに少ない誤差で entity 別で進みの異なる WT/CT 進行を再現可能。ただし、Q06との関連にも注意すると、global な timeline 以外にも、更新量・更新条件を acceptance 側定義として設定可能な incremental な event 進行順管理指標("event-line")が任意個数可能・event側からのevent-line発行が可能 な方が良い可能性を感じる。Q05について、numerical な eager 条件は、event-line 化した方が trigger の責務を理解可能にできるようにも思う。
+  third-discussion: global tick ではない増減する値によって管理されるような、効果回数制限付きの状態変化 などの扱いを管理しやすい方式は、Q05 のeager (i.e. trigger) として回収することになるか。eagar と global tick のどちらかでも切れたら消滅する event も設計可能とする需要が 効果回数制限付きの状態変化 等にある。
+
 ## Q08 — priority の不変性 [RECOMMENDED]
 
 問い: ordering key の priority は entry 生成後に可変か。
@@ -91,6 +104,8 @@ status:
 推奨: 不変。変更は reschedule 経由のみ。heap/sorted backend の不変条件と trace の説明可能性を守る。
 
 影響: EQM-010/011。
+
+user意見: 正しい。
 
 ## Q09 — event 内 effect 順序と trigger 収集 [RECOMMENDED]
 
@@ -100,6 +115,10 @@ status:
 
 影響: EQM-051, EQM-061, EQM-080。
 
+user意見:
+  first-discussion: 原則としてそれで良いが acceptance 側でより上位の順序を定義できる必要がある(Q04)。例えば TO(tactics ogre) での WT値解消が複数 entity 時の composite event 解決として、ベースWT値が低い方を先に行動順とするなど。
+  second-discussion: trigger は適用中にさらに別のtrigger あるいは event が反応するなど trigger nest の可能性についても配慮し、解決の判定には注意が必要となる。(Q05, Q02..?)
+
 ## Q10 — actor lifecycle [OPEN]
 
 問い: 戦闘中の参加 (召喚・増援) / 離脱 / 死亡時に、pending 予約・round membership・反応準備をどう処理するか。actor_id の再利用を許すか。
@@ -107,6 +126,8 @@ status:
 推奨方向: actor_id 再利用禁止 (save/load と trace の同一性保証)。離脱時の pending は Q05 の invalidation 経路で処理。round membership 更新は policy 所有。
 
 影響: EQM-021, EQM-030, EQM-090。
+
+user意見: とくに問題ない
 
 ## Q11 — 数値域 [RECOMMENDED]
 
@@ -116,6 +137,8 @@ status:
 
 影響: EQM-010, EQM-020。
 
+user意見: 上限超過は acceptance 側定義動作とする。EQM 側 ordering には float 関与しないが、composit event 効果としての event 内効果順序として acceptance 側定義を想定した方が良い。
+
 ## Q12 — 感知分類の所属側 [RECOMMENDED]
 
 問い: 感知範囲 / 可視性の分類 (important / sensed / offscreen) は simulation 側の deterministic data か、presentation 側の判断か。
@@ -123,6 +146,8 @@ status:
 推奨: simulation 側の deterministic data とし trace に含める。flush barrier 判断が依存するため、presentation 側に置くと presentation neutrality property (flush policy を変えても simulation trace 不変) が検証不能になる。見せ方の良否のみ presentation 側。
 
 影響: EQM-080/081/082。
+
+user意見: 正しい。
 
 ## Q13 — timeline の単一性 [RECOMMENDED]
 
@@ -132,6 +157,8 @@ status:
 
 影響: EQM-014, EQM-032。
 
+user意見: 他要件と合わせて総合的に判断。
+
 ## Q14 — 反芻の経済 [OPEN]
 
 問い: 予約反芻による再予約時に AP を再徴収するか。解決時間 / due の再計算規則はどうするか。(ユーザー設計の "反撃準備" 予約反芻=1 は再徴収なしと読める。)
@@ -140,6 +167,8 @@ status:
 
 影響: EQM-050, EQM-062。
 
+user意見: 正しい。
+
 ## Q15 — replay の製品化 [OPEN]
 
 問い: canonical trace を使った in-game replay / 戦闘 log UI を product 機能にするか。
@@ -147,3 +176,5 @@ status:
 推奨方向: v1 では defer。trace format が既に互換資産なので後付け可能。roadmap 改訂時に再検討。
 
 影響: roadmap。
+
+user意見: 正しい。
