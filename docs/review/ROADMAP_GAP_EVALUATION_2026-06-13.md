@@ -23,8 +23,29 @@ discrete event simulation では「event handler が新 event を enqueue する
 
 1. window 内で解決される即時行動は global timeline に乗るのか、window-local 順序を持つのか (二層時間モデルの明示)。comparator は単純に保ち、window は scheduler state として表現する案を推奨。
 2. trace への反映: record kind に `window_opened` / `window_closed` を追加し、golden trace で window 構造ごと決定性を証明する。
-3. window open 中の snapshot/save 可否 (mid-turn save 問題)。
-4. nesting: 操作行動が他 entity の window を開く場合の深さ上限と cycle guard。
+3. window open 中の snapshot/save 可否 (mid-turn save 問題)。 -> base-operator window となる nest level を save 可能な nest level の上限とする。(base-operator となる nest lebel は 各 acceptance 側の game model において管理される)
+4. nesting: 操作行動が他 entity の window を開く場合の深さ上限と cycle guard。 -> cycle guardは不要だが、操作行動の可否を制限する "meta level/cost" paramater を operator について参照して nesting に制約を与える。ただし、各 acceptance 側の game model において required "meta level/cost" を表現する nest level に応じた 単調増加な関数 を定義して基準とする。このとき、定義した単調増加な関数は一つの基準であり、各 acceptance 側の実際の game ルールの実装上では、他entityの抵抗値などの未確定の変数を含んだ判定を含む形式で実際の nesting 可否に使用することも想定される。
+
+### 設計点 3 / 4 の検証 (2026-06-13, agent)
+
+**設計点 3 (save 上限 = base-operator window の nest level): 原理上成立。**
+「save 可能点 = 過渡的制御状態を schema が有限に表現できる quiescent boundary」という一般原則の具体化であり、base-operator level を acceptance 側 game model が定義することは policy 分離原則に合致する。深さが有界になることで save schema 側の open window stack 表現が有限になる — この規則自体が schema 単純化の根拠になる。成立条件:
+
+- (a) **snapshot-for-save** と **snapshot-for-rollback/prediction** (任意深度・in-memory、Phase 7 が要求) を区別し、本制約は save path にのみ適用する。
+- (b) save 時に open draft が残る場合の意味論を 1 つ選ぶ。推奨: draft を rollback して boundary 状態を保存 (rollback identity property と整合)。draft ごと serialize は schema 拡大として v1 では非推奨。
+- (c) save schema は base level までの open window stack (挿入権、残 AP、armed reactions) を明示 serialize する。
+- (d) 深い nest での save 試行は安定 error とし、`is_save_allowed()` 相当を core API に置く。
+
+**設計点 4 (cycle guard 不要、meta level/cost による nesting 制約): 原理上成立。**
+単調増加 cost + 有限 budget は well-founded order を与え、nesting chain の停止を保証する。成立条件:
+
+- (a) 単調増加は**狭義**であること (int 域なら f(n) >= f(0) + n となり depth <= budget が直ちに出る)。広義単調、特に cost 0 の plateau は停止保証を失う。core は宣言形式 (table / parametric) の cost 関数について狭義性を validation し、custom callable は consumer 責任 + (d) の backstop 適用とする (任意 callable の単調性検証は不可能なため)。
+- (b) chain 継続中 (祖先 window が open の間) は operator の meta budget が回復しないことを core invariant とする。回復を許す game 規則では (d) が唯一の停止保証になる。
+- (c) 抵抗値等の未確定変数を含む可否判定は deterministic RNG stream から引き、判定内容 (paid cost, roll, 結果) を trace に記録する。explanation-as-data で「なぜ割り込めなかったか」を提示できること。
+- (d) game rule とは別に engineering backstop (絶対 max depth + 安定 error) を core に置く。これは consumer 定義関数の誤りを explicit error にするためであり、game 設計への介入ではない。
+- (e) 「cycle guard 不要」は **window nesting については正しい** (cost が well-founded order を与えるため)。ただし EQM-062 の cycle guard は別層 — 同一 tick 内の trigger / rumination 連鎖 (window を開かない反応 ping-pong) — を対象とするため存置する。cross-tick の予約 ping-pong は game 時間上の loop であり合法 (AP 経済が律速)。
+
+両決定は `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` に Q01 / Q02 (DECIDED) として登録し、EQM-014 が上記条件ごと semantics に確定する。
 
 ### Risk
 
@@ -69,15 +90,19 @@ reducibility test は未 queue 化。EQM-014 の Scheduled task として採否�
 - CLAUDE.md (Claude Code 用入口) を追加。
 - UI_LAYOUT_METRIC_TEST_POLICY.md §5.11 State display modality を追加 (state は icon/checkbox 等の非文字 modality 優先、boolean の text 表示は P0)。
 
-## 5. 未反映 candidate (ユーザー採否待ち)
+## 5. candidate の task 化 (2026-06-13 ユーザー承認 -> 反映済み)
 
-1. G3: game-loop driver 契約の Phase 9 明示化。
-2. G4: snapshot schema version の EQM-012 acceptance 追加。
-3. G5: public API surface golden test。
-4. G6: runtime timeline HUD phase の新設。
-5. G7: dogfood vertical slice milestone。
-6. G9: error taxonomy の EQM-020 統合。
-7. G10: 性能予算の数値宣言。
-8. §2 policy reducibility test の acceptance 追加。
+1. G3: EQM-032 acceptance へ driver 契約を統合。roadmap Phase 9 produces へ明示。
+2. G4: EQM-012 acceptance へ `schema_version` + 安定 load error を追加。EQM-103 で compatibility stance 宣言。
+3. G5: EQM-023 (public API surface snapshot gate) を Phase 2 末尾に追加。
+4. G6: EQM-083 (runtime timeline HUD) を queue Phase 8b として追加。roadmap Phase 9 produces へ反映。
+5. G7: EQM-084 (dogfood vertical slice) を追加。milestone v0.6 Dogfood Slice を新設。
+6. G9: EQM-020 acceptance へ error taxonomy (`docs/design/ERROR_CONTRACT.md`) を統合。
+7. G10: EQM-102 acceptance を「予算宣言 -> 予算に対する benchmark 判定」へ変更。roadmap Phase 12 へ反映。
+8. reducibility: EQM-053 (policy reducibility proofs) を Phase 5 末尾に追加。
 
-採用する場合は ROADMAP_POLICY に従い roadmap を改訂し、IMPLEMENTATION_QUEUE_DESIGN_POLICY に従って task 化する。
+## 6. 第2回反映 (2026-06-13)
+
+- 設計点 3/4 のユーザー編集を検証し、§1 に成立条件を記録した (原理上いずれも成立)。
+- `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` を新設: Q01/Q02 (ユーザー決定済み) + Q03-Q15 (event model スケールの未決点、推奨つき)。EQM-014 の acceptance がこの全項目の解決を要求する。
+- §5 の全 candidate を queue / roadmap へ task 化した (上記)。

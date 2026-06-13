@@ -161,6 +161,7 @@ Produces:
 - `EQSnapshot` for current tick, sequence counter, actors, and entries.
 - Core tests for ordering, cancellation, invalidation, and snapshot roundtrip.
 - Canonical trace export and determinism harness: golden trace fixtures, insertion-permutation and snapshot-replay property tests per `DETERMINISM_TRACE_TEST_POLICY.md`.
+- Snapshot `schema_version` field; unknown versions fail with a stable load error.
 
 Why now: All later policies and reservations depend on this contract.
 
@@ -177,6 +178,8 @@ Produces:
 - `EQActorState` and actor registration contract.
 - `EQActionResult` and event finish contract.
 - Validation errors for missing policy, invalid actor id, negative delay, and ambiguous tie-breaker.
+- Error taxonomy: stable error codes, recoverability classes, and game/editor surfacing rules (`docs/design/ERROR_CONTRACT.md`).
+- Public API surface gate: public/internal naming convention and a deterministic API surface snapshot diffed in tests.
 
 Why now: Policies and editor tooling need stable public contracts.
 
@@ -219,6 +222,7 @@ Produces:
 - AP cost, resolution delay, tags, target descriptor, duration, rumination count, source actor, owner actor, and payload.
 - Action result pipeline that can schedule zero, one, or many follow-up reservations.
 - Tests for immediate action, prepared action, wait scheduling ready reservation, and operation action that causes another entity to reserve.
+- Policy reducibility proofs: CTB, energy, and wait-turn expressed as reservation-model configurations reproduce the dedicated policies' golden traces.
 
 Why now: This is the core of Action Resolution Turn-Based gameplay.
 
@@ -282,6 +286,9 @@ Produces:
 - Signal bridge for turn, reservation, trigger, effect, presentation, and invalid event.
 - Save/load adapter that stores ids and Resources, not live Nodes.
 - Tests or debug scenes for scene-local manager, actor deletion, and save/load rebind.
+- Game-loop driver contract: who advances the queue, suspend semantics awaiting player input, await boundary for action presentation.
+- Player-facing runtime timeline HUD rendering injected prediction (projection integrity in-game), with explicit stale state during deferred presentation.
+- Dogfood consumer slice: a minimal playable Action Resolution game built only on the public API, shipping its own golden trace and a friction report.
 
 Why now: Runtime integration should stabilize after the core semantics are proven.
 
@@ -336,6 +343,7 @@ Produces:
 
 - Binary heap backend.
 - Trigger subscription indexing.
+- Declared numeric performance budgets (actors, events, per-advance cost) that benchmarks are judged against.
 - Large simulation benchmarks.
 - Package manifest checks.
 - Clean project load smoke test.
@@ -353,6 +361,7 @@ Why last: Optimization and release packaging should follow stable semantics.
 | v0.3 Reservation MVP | Immediate/prepared/wait/ready reservations work. | Phase 5 |
 | v0.4 Reaction & Rollback | Reaction preparation, rumination, rollback, deterministic prediction. | Phase 6-7 |
 | v0.5 Presentation Control | Important/sensed/offscreen visual flush semantics. | Phase 8 |
+| v0.6 Dogfood Slice | Runtime timeline HUD and a real consumer slice prove API ergonomics. | Phase 9 (HUD, dogfood) |
 | v0.7 Godot Tooling | Editor timeline/debug/config workflows. | Phase 9-10 |
 | v0.9 Demo & Docs | Multiple genre demos and manual coverage. | Phase 11 |
 | v1.0 Release Candidate | Performance, packaging, release proof. | Phase 12 |
@@ -371,6 +380,7 @@ The roadmap succeeds when:
 - Tests cover core ordering, policies, resources, triggers, rollback, presentation flush, and package smoke.
 - Same-seed replays, insertion permutations, and prediction purity tests prove deterministic order; demos ship golden traces.
 - Editor UI passes layout metric P0 gates across the dock size / scale / locale / state scenario matrix without screenshot review.
+- A dogfood consumer slice built only on the public API ships with its own golden trace and friction report.
 
 ## 10. First queue-designed scope
 

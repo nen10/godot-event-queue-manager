@@ -31,6 +31,7 @@ Godot addon: Event Queue Manager — 行動順 (event / turn / action order) 管
 ```text
 docs/devflow/          開発プロセス (process / policy / profile / test index)
 docs/plan/<date>_<id>/ roadmap, implementation queue, task packets
+docs/design/           event model semantics, open questions, error/API contracts
 docs/review/           evaluation reports, self-reviews (autopilot/)
 docs/ui/               UI 契約文書 (EQM-086 以降に作成)
 addons/event_queue_manager/  addon 本体 (EQM-002 以降に作成)
