@@ -105,6 +105,11 @@ The addon author enables a debug-only calibration tab, adjusts layout parameters
 | Snapshot | Serializable scheduler and actor/reservation state for save/load, prediction, or rollback. |
 | Trace | Canonical, replayable record of resolved events used as an approval-tested artifact. |
 | Projection integrity | The editor UI displays exactly the values derived from injected headless state, never recomputed UI-side. |
+| Event-line | An acceptance-defined incremental integer progression variable. The global tick is the primary event-line; WT/CT, AP recovery, and effect-count counters are additional event-lines. Progression input only — never the resolution order itself. |
+| Master timeline | The single deterministic total order of resolved events produced by the int comparator (tick/priority/sequence). Event-lines feed it; it is the output. |
+| Solve / Invalidation conditions | A reservation resolves when its `solve_conditions` hold (AND default) and is dropped when any `invalidation_conditions` hold (OR default). OR-resolution is expressed as a race of event-lines; AND-invalidation as a decremental counter event-line. |
+| Composite resolution comparator | An acceptance-provided deterministic ordering key (from serializable state) for member/effect order inside a composite resolution. Out of the core ordering key; float allowed here only. |
+| Effect-processing chunk | The set of resolved-but-not-yet-flushed effects. A save is allowed only when it is empty; that empty point coincides with a sync barrier. |
 
 ## 6. Target architecture
 

@@ -42,14 +42,35 @@ status:
 | Q13 | CLUSTERED | timeline 単一性 → Q16 (event-line ≠ timeline) |
 | Q14 | SETTLED | 反芻経済 再徴収なし — user: 正しい |
 | Q15 | SETTLED | replay defer — user: 正しい |
-| Q16 | PIVOT | event-line 導入 |
-| Q17 | OPEN | event-line 前進方式と決定性 |
-| Q18 | OPEN | 多条件 解決 / 失効 (OR/AND, on-expiry) |
-| Q19 | OPEN | eager の責務分割 |
-| Q20 | OPEN | 同時解決 / 上位順序の拡張点 |
-| Q21 | OPEN | reentrancy 統一 (window nest / trigger nest) |
-| Q22 | OPEN | event-line × snapshot / actor lifecycle |
-| Q23 | META | 過剰一般化のガードレール |
+| Q16 | DECIDED(user) | event-line 導入 (A1) |
+| Q17 | DECIDED(user) | 前進方式 = tick polling 既定 / 予測深さは要 example 擦り合わせ |
+| Q18 | DECIDED(user) | solve=AND / invalidation=OR (race pattern) |
+| Q19 | DECIDED(user) | eager = invalidation の trigger 型条件 / sweep = 解決後 collection window |
+| Q20 | DECIDED(user) | composite comparator hook (B1) / fallback=発行順 |
+| Q21 | DECIDED(user) | window+trigger nest 共通 reentrancy / 交差ケース想定 |
+| Q22 | DECIDED(user) | event-line snapshot / save 境界 = effect 処理チャンク空 |
+| Q23 | DECIDED(user) | 過剰一般化ガードレール 合意 |
+| Q24 | DEFERRED | grouped / micro-event-line (RTS 補助線) |
+| Q25 | OPEN(support) | sync barrier — core 命名はしないが acceptance 支援は課題 |
+| Q26 | OPEN | event-line identity / granularity / lifecycle / 再帰召喚 scaling |
+
+---
+
+## Decisions 2026-06-14 (Cowork synthesis 反映)
+
+決定の根拠記録は `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-06-14.md`。本 registry はその確定結果を保持する。
+
+1. **進行モデル = event-line を v1 core に導入 (Cluster A = A1)**。global tick = primary event-line。event 側からの event-line 発行を許す。**per-entity event-line は acceptance 定義であり built-in 必須 field にしない** (意味論を 1 つの組込み挙動へ固定しないため)。契約・schema・trace record kind は Phase1/2 で予約し、backend 実装は Phase4/5 でも後方互換破壊しない。
+2. **solve / invalidation の分離 (Q18 訂正)**。解決条件 `solve_conditions` 既定 = **AND**、失効条件 `invalidation_conditions` 既定 = **OR**。AND 失効は decremental counter event-line へ回収。OR 解決は race pattern (同一 effect を異なる solve_conditions で持つ **event-line を条件にした複数 racing event** を発行し、勝者以外を OR invalidation) で表現する。発行されるのは event であって event-line そのものではない (概念整理 `docs/design/EVENT_MODEL_CONCEPTS.md` §3)。race group は EQM debug / game-dev debug / presentation の 3 表示を分離する概念契約を持つ。
+3. **composite comparator hook (Cluster B = B1)**。composite の「どれが次か」は core が int (tick/priority/sequence) で決める。composite **内部**順序と上限超過動作は acceptance 提供の deterministic comparator (serializable state 由来、float 可、live object 禁止、golden 必須) に委譲。最終 fallback = default event-line 上の **event 発行順**。同順 (並列) 発行は禁止。
+4. **sweep 点 = 各 event 解決後の collection window** (Q19 / Q09 first)。eager は invalidation の trigger 型条件として既存 trigger 機構に乗る。
+5. **reentrancy 統一 (Q21)**。window nest (meta-cost budget, Q02) と trigger nest (bounded round + cycle guard, EQM-062) は 1 つの reentrancy spec に統合記述。交差ケース (trigger が window を開く / window 内 trigger) は v1 想定、評価は暫定設計でよいが cost 設計の柔軟性を残す。
+6. **save 境界 = effect 処理チャンクが空であること (Q22)**。effect 処理チャンクへの追加は event-line **解決時** (発行時ではない)。window open は open 時点で effect 解消済みとみなし直後のチャンクは空。よって sync barrier は EQM が許容する save 境界に一致する。過渡的 rate 変化中の save は許容するが acceptance 向け十分な管理は提供しない (auto save 程度)。
+7. **trace record kind 命名 = `event_line_progressed`** (`event_line_advanced` 不採用)。`window_opened` / `window_closed` と同じ過去分詞形。
+8. **sync barrier を core named concept にはしない (Q25)**。event-line 同時性は sync barrier の一例だが全てではない。acceptance 側 game 開発は sync barrier 設計を要し、EQM がそれを支援することは継続課題として残す。
+9. **grouped / micro-event-line は deferred (Q24)**。RTS 規模の edge case 包摂性を確認する補助線。v1 実装対象外。
+
+残る要 example 擦り合わせ: **予測深さ N の定義** (Q17)。core 決定ではなく性能予算 (EQM-102) と prediction (EQM-033) の入力。
 
 ---
 
@@ -283,7 +304,7 @@ STGモデル: {
 
 問題が大きいためここではこれ以上の記述を避けます。いくつかの acceptance について少し具体化を進めましょう。
 予測深さの概念については何を意図しているのか分からずに返答しているため、実 game 例によるすり合わせが必要。
-
+-> 予測深さ : deterministicな戦闘結果/turn進行予測表示が扱う event 数
 
 
 ## Q18 — 多条件の解決 / 失効 (OR/AND, on-expiry) [OPEN]
@@ -292,9 +313,11 @@ STGモデル: {
 
 なぜ重要: 「3回 or 5ターンで消える buff」「eager と global tick のどちらか切れたら消滅」「反応回数で close(deadline=∞ 可)」を統一表現する(Q05/Q06/Q14 を吸収)。
 
-推奨: 解決条件・失効条件をそれぞれ「event-line 閾値 / reaction-count / predicate」の集合とし、既定 OR、AND は明示宣言。on-expiry effect を optional に持つ。条件成立・失効はすべて trace に記録する。
+推奨 (訂正前): 解決条件・失効条件をそれぞれ集合とし、既定 OR、AND は明示宣言。— この推奨は **解決と失効を 1 概念に混ぜていた誤り**であり、下記 user 決定により訂正された。
 
-擦り合わせたい点: AND 条件(全条件成立で初めて解決/失効)の実 game 需要があるか。なければ v1 は OR のみにして複雑性を抑えたい。
+→ 決定 (訂正): 解決 `solve_conditions` 既定 = **AND**、失効 `invalidation_conditions` 既定 = **OR**。両者は別概念。AND 失効は decremental counter event-line へ回収。OR 解決は race pattern (event-line を条件にした複数 racing event の発行。event-line そのものを複数発行するのではない) で表現。race group は 3 表示分離 (EQM debug / game-dev debug / presentation) の概念契約を持つ (Decisions 2026-06-14 §2, 概念整理 EVENT_MODEL_CONCEPTS.md §3)。
+
+擦り合わせたい点 (解決済み): AND 失効需要は grouped-event-line の全 member 消滅で存在するが、numeric (decremental) 入口へ回収して OR 結合のみを v1 規定とする。
 
 user意見: 推奨案を進める。解決と失効では既定が異なる。解決の既定は AND とし、失効の既定はORとする。ただし、失効においても AND の実 game 需要が存在する余地はある。具体的には grouped-event-line における menber entity が全て消滅した場合の event 失効を扱うなら、意味論的には AND 条件が直接的だが decrimental な設計により AND 条件を回避可能。結論、for-all 型の失効 AND 条件は numeric に扱う入り口に回収し、失効条件の各 term は OR 結合を規定として v1 実装を進める。一方このとき、解決の既定は AND としてよい。仮に OR 条件での実 game 需要時は、同一 effect の event-line を異なる解決条件でそれぞれ発行し、それらいずれかの解決を失効 OR 条件として一律に採用すれば OR 解決の event-line 発行を実現可能。ただし、同一効果 event-line の複数発行は、EQM向けのdebug表示と、実 game 開発向けの debug 表示及び、実 game 向けの presentation の適切な扱いをそれぞれ分離する必要があることに注意し、ゲーム開発者向けの出口管理設計に注意する。
 
@@ -348,6 +371,8 @@ user意見: draft-rollback 規則 は ゲーム体験上の任意 save 境界と
 
 effect 処理チャンク に追加されている項目がある状態では save しない。逆に言えば、sync barriar は EQM 上で許容する save 境界でもあるということになる。注意点は、effect 処理チャンクへの追加は event-line 解決時であって、event-line 発行時ではない。また window open は open 時点でeffect が解消されたものとし、open 直後 effect 処理チャンクには無いものとする。
 
+→ 決定: save 境界 = **effect 処理チャンクが空**。チャンク追加は event-line **解決時**(発行時ではない)。window open は effect 解消済みとみなす。sync barrier は許容 save 境界に一致 (Q25 と接続)。過渡的 rate 変化中 save は許容するが acceptance 向け十分管理は非提供 (auto save 程度)。draft-rollback は acceptance 推奨 save 境界。影響: EQM-012 snapshot に event-line table + effect-chunk 空判定、EQM-014 save 意味論。
+
 ## Q23 — 過剰一般化のガードレール [META]
 
 問い: event-line 一般化は、自分で定めた UX_PATH_REDUCTION_POLICY(過剰一般化=負価値)と矛盾しないか。
@@ -361,3 +386,51 @@ effect 処理チャンク に追加されている項目がある状態では sa
 擦り合わせたい点: なし(原則確認)。これに同意できれば event-line 導入と UX_PATH_REDUCTION は両立する。
 
 user意見: 問題ありません
+
+## Q24 — grouped / micro-event-line [DEFERRED]
+
+問い: RTS 規模の極大 entity / event-line を扱う grouped-event-line (group 代表進行) と micro-event-line (entity 個別・低コスト・tick 非依存) を v1 で扱うか。
+
+決定: **deferred**。v1 実装対象外。§8 の race pattern・event-line モデルが後付け可能な形であることを確認する **edge case 補助線** としてのみ使う。Q15 (replay) と同じ deferred 扱い。
+
+留意 (将来の写像点): grouped-event-line のみが micro-event-line を代表して順序解決の責務を負う (Q20 例外)。RTS では tick 計算コストから独立した EQM モデルを採る想定。実 acceptance としては今後も基本検討しない。
+
+影響: roadmap (deferred note のみ)。
+
+## Q25 — sync barrier の支援 [OPEN(support)]
+
+問い: 「event-line 同時性 / effect 処理チャンク境界」を core named concept (`resolution_chunk` / `sync_barrier` 等) として `EVENT_MODEL_SEMANTICS.md` に正式化するか。
+
+決定: **core named concept にはしない**。event-line 同時性は sync barrier の一例だが全てではないため、grand unifying concept への昇格は避ける。ただし:
+
+- EQM は具体機構として **effect 処理チャンク** を持ち、その空き=save 境界=sync barrier の一致 (Q22) は明記する。
+- acceptance 側 game 開発は sync barrier 設計を必要とし、**EQM がそれを支援することは継続課題**として残す (presentation flush barrier (Q12, Phase8) との接続を含む)。
+
+影響: EQM-014 (effect 処理チャンクは記載 / sync barrier は支援課題として注記), EQM-080/081 (presentation flush との接続)。
+
+## Q26 — event-line identity / granularity / lifecycle / 再帰召喚 scaling [OPEN]
+
+経緯: 「event-line 発行はインフラ的で低頻度」という当初の characterization は誤り。ユーザー指摘により撤回する。発行頻度は { design の granularity 方針 } × { runtime 動態 } の積で、gameplay/runtime に依存する。buff stacking と再帰召喚 (召喚対象がさらに召喚) が想定範囲にあるため要検討。
+
+確定済み (EVENT_MODEL_CONCEPTS.md §3/§4):
+
+- 進行の 2 表現: (1) first-class event-line (少数の独立軸) / (2) entity・effect 状態 + primary tick 上の sweep event (多数の同質進行)。多数 entity の同質進行は (2) を既定とし first-class event-line 数を O(1) に抑える。per-entity event-line は必須にしない (Q16)。
+- counter identity = 数えたい意味単位。id は deterministic 採番 (発行順一意, Q20)。
+- buff uses_left の「使い回し」は普遍規則ではない。stacking 意味論は acceptance 定義 (独立 stack / refresh / 共有 pool)。
+
+問い (擦り合わせたい点):
+
+1. **granularity 方針の所在**: (1)/(2) の選択を acceptance に委ねる API 形にするか、EQM が「多数同質なら (2)」を推奨/誘導する形にするか。
+2. **再帰召喚の v1 cost 目標**: 想定する同時 entity 数の概算と、polling cost を「watched かつ非 frozen な event-line のみ」に sparse 化する方針で v1 を賄えるか (full grouped/micro-event-line = Q24 は引き続き deferred)。
+3. **stacking 既定**: buff 再付与の既定意味論を refresh (単一 counter 再利用) とするか、独立 stack (個別 counter) とするか。どちらを default にしても他方は明示宣言で選べる、でよいか。
+4. **lifecycle**: 再帰召喚で生まれた entity/counter の cleanup を actor lifecycle (Q10) に完全従属させてよいか。中途 (window open 中等) で消えた entity の pending event は Q05 invalidation 経路で処理、で齟齬ないか。
+
+推奨方向: 1 → acceptance 選択だが EQM は (2) を natural path にし (1) の濫用を防ぐ (UX_PATH_REDUCTION と同趣旨)。2 → sparse polling + (2) で v1 を賄い、RTS 極大は Q24 deferred。3 → refresh を default、独立 stack を明示宣言。4 → 従属させる。
+
+影響: EQM-012 (snapshot の event-line table), EQM-014 (granularity/identity 契約), EQM-017相当 polling (EQM-053/102), EQM-021 (actor registry), Q10/Q17/Q22/Q24 と接続。
+
+user意見:
+1 -> 推奨案とする。ところで"多数同質"のような概念が自明に思えるほど明確化できるなら、それ自体価値がある結果である。
+2 -> 推奨案とする。ただし、watchedの範囲は何が定めるのか？予測深さに従属させるのか、独立な acceptance 選択に従うのか。
+3 -> 推奨案とする。どちらも選択できる。
+4 -> 推奨案とする。
