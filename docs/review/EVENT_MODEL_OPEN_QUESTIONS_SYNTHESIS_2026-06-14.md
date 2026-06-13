@@ -145,3 +145,113 @@ windoe nesting / trigger nesting が交差するケースでの cost 設計オ�
 1. Q13 の「1 manager = 1 primary event-line + N acceptance-defined event-line」という再定義方向で coverage matrix 検証に進めてよいか。
 判断 -> その定義で検証を進める。
 
+---
+
+## 8. 決定事項の反映 (2026-06-14 ユーザー回答)
+
+- Cluster A: **A1** で確定。EQM-014 スコープ内で event-line 関連の契約 (フィールド・schema・trace record kind) を予約する。
+- Cluster B: **B1** で確定。acceptance comparator hook を Q04/Q09/Q11 の回答として EQM-014 に明記する。
+- 用語: **"event-line"** を vocabulary として正式採用する。
+- trace record kind の命名 `event_line_advanced` は **不採用**。「advanced」は「進行した」と「高度な」のどちらにも読めて不明瞭。命名は §9 Q16 で再検討する。
+- Q13: 「1 manager = 1 primary event-line + N acceptance-defined event-line」の定義で coverage matrix 検証に進める。
+
+### 8.1 §3.2 の修正: solve condition (AND) と invalidation condition (OR) の分離
+
+ユーザー指摘により、§3.2 の "close condition (OR)" は **2 つの異なる概念を 1 つに混ぜていた** ことが判明した。修正版モデル:
+
+- **resolution (解決)**: event が本来の効果を発生させること。`solve_conditions` は **AND** で評価する (すべての条件が揃って初めて解決する)。
+- **invalidation/失効 (expiry)**: event が解決されずに消える/無効化されること。`invalidation_conditions` (旧 close condition) は **OR** で評価する。Q05 の eager cascade、tick 持続時間切れ、Q06 の反応回数切れは、すべて invalidation 側の条件として整理する。
+
+この分離により、Q05 の「lazy 判定 + eager」の区別は **invalidation_conditions の評価方法 (lazy=参照時 / eager=trigger即時)** という narrow な実装選択に縮小される。
+
+### 8.2 OR 型 solve condition の表現パターン (race pattern)
+
+solve_conditions が AND のみだと、「いずれかの条件が満たされたら解決」という OR 型の解決需要 (ユーザー: 実 game 需要時) を表現できない。ユーザー提案の解法:
+
+> 同一 effect に対し、異なる solve_conditions を持つ event-line を複数発行する。いずれか 1 つが解決した時点で、残りの event-line を invalidation_conditions (OR) によって一律に失効させる。
+
+これにより OR 型解決は「複数 event-line の race + 勝者以外を OR invalidation」という標準形に還元できる。
+
+**新たな要請 (debug/presentation 分離)**: 同一 effect に対する複数 event-line の発行は、以下 3 種の表示を区別しなければ「同じ効果が複数回起きたように見える」混乱を生む。
+
+1. EQM 内部 debug 表示 (race の全候補を見せる)
+2. 実 game 開発者向け debug 表示 (race を「1 つの解決候補群」として要約)
+3. 実 game 向け presentation (勝者のみを 1 回提示する)
+
+これは Phase 8 (EQM-080/081, 効果・presentation pipeline) と Phase 9 (EQM-091, debug inspector) の両方に影響する設計要請であり、EQM-014 では **概念契約のみ** (race group をまとめる id、3 種表示の責務分離方針) を記録し、実装詳細は該当 phase に委ねる。
+
+### 8.3 grouped-event-line / micro-event-line (将来拡張・補助線)
+
+ユーザーは、上記 race pattern が RTS 規模の極大 entity 数・event-line 数を扱う "grouped-event-line" / "micro-event-line" 概念への入口になり得ると指摘した。ただし:
+
+- v1 (本 roadmap の対象ジャンル群) では RTS acceptance は不要であり、**実装は検討しない**。
+- これは「edge case を包摂できる設計になっているか」を確認するための **補助線** としてのみ扱う — つまり、§8.1/8.2 のモデルが grouped/micro-event-line を後付けできる形であれば十分で、それ自体を今 設計・実装する必要はない。
+
+`docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` には OPEN/deferred として 1 行記録する程度に留める (Q15 の replay 同様の扱い)。
+
+### 8.4 Q09 (second) の追記反映
+
+meta-cost/budget (Q02) は trigger nesting にも適用してよい、と回答された。追加の注意点: **window nesting と trigger nesting が交差するケース** での cost 設計オプションの柔軟性。具体的には、ある反応連鎖が「window を開く trigger」と「window を開かない trigger」を混在させる場合、budget を共有 (同一 cost 計算に統合) するか分離 (window 用 budget と trigger-nesting 用 budget を独立に持つ) するかが未決。EQM-061/062 設計時の narrow 項目として記録する。
+
+### 8.5 §4.3 追記の反映: event-line 同時性 = 処理チャンク境界
+
+ユーザーは、event-line の「同時性」(複数 entity が同一 event-line の同一 threshold に到達する) を、composite resolution の枠を超えて **「ゲーム進行上の処理チャンク境界」** という大きな acceptance 側 invariant の枠組みとして捉えられる可能性を指摘した。
+
+これは Cluster B の comparator hook (composite **内部**の順序付け) よりも上位の概念で、以下を統一的に説明できる可能性がある:
+
+- Q04/Q09 の composite resolution 境界
+- Q12 (感知分類) の flush barrier 境界 (Phase 8)
+- §8.1 の AND solve_conditions が「複数 event-line が同時に閾値へ到達した」状態の特殊ケースである
+
+EQM-014 でこの一般化を正式な named concept ("resolution chunk" / "sync barrier" 等、命名は要検討) として `EVENT_MODEL_SEMANTICS.md` に含めるかどうかは、§9 Q21 として候補化する。
+
+---
+
+## 9. 派生する設計点候補 (Round 2)
+
+### Q16 — trace record kind の命名
+
+`event_line_advanced` は不採用。候補:
+
+- `event_line_progressed` — 「進行した」を明示。`window_opened`/`window_closed` と同じ過去分詞形で既存 trace 命名規則と整合。
+- `event_line_stepped` — incremental な一歩を強調。
+- `event_line_updated` — 汎用的だが「進行」のニュアンスが弱い。
+
+推奨: `event_line_progressed` (既存命名規則との整合性、意味の明確さを優先)。
+
+判断 -> 推奨案で進める。
+
+### Q17 — solve condition (AND) / invalidation condition (OR) の分離を EQM-014 acceptance に明記するか
+
+§8.1 のモデル修正を EQM-014 の正式な設計判断として記録する。Q05 の status は `DECIDED(user)` の narrow 版 (invalidation_conditions の評価方法のみ残る) に更新する。
+
+判断 -> そのようにしてください。
+
+### Q18 — race pattern + 3 種表示分離の概念契約を EQM-014 に含めるか
+
+§8.2 の「race group id」「3 種表示の責務分離方針」を `EVENT_MODEL_SEMANTICS.md` の概念契約として記録するか、Phase 8/9 の該当 task (EQM-080/081/091) acceptance への追記候補として先送りするか。
+
+判断 -> 概念契約に含めます。
+
+### Q19 — grouped-event-line / micro-event-line を OPEN item として記録するか
+
+`docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` に deferred (RTS 向け補助線) として 1 行追加するのみで良いか。
+
+判断 -> deferred とする。
+
+### Q20 — window nesting / trigger nesting 交差時の budget 共有・分離
+
+EQM-061/062 設計時の narrow 項目として記録するのみで良いか、または EQM-014 で「budget は entity 単位で共有 (default) / acceptance 側で分離可能」という方向性だけ先に宣言するか。
+
+判断 -> EQM-061/062 設計時の narrow 項目とする。
+
+### Q21 — event-line 同時性 = 処理チャンク境界 (sync barrier) の一般化
+
+§8.5 の一般化を `EVENT_MODEL_SEMANTICS.md` に named concept として含めるか。含める場合、命名候補: `resolution_chunk` / `sync_barrier` / `event_line_barrier`。
+
+判断 -> 含めない。 event-line 同時の際は sync barrier の一例となる可能性が高いが、その全てとは言えないため。とはいえ acceptance 側 game 開発 においては sync barrier 設計の必要があり、EQMとしてもそれを支援することは課題である。
+
+---
+
+このRound 2 候補への判断が揃った時点で、`docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` の Q16/Q17 (Round1 §6 で予告した event-line scoping / composite comparator) に加えて Q18-Q21 相当の項目を統合し、EQM-014 の acceptance 文言案を次の report で提示する。
+
