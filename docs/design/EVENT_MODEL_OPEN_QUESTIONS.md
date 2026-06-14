@@ -11,6 +11,39 @@ status:
 - `RECOMMENDED` / `OPEN` — agent 推奨あり / ユーザー判断待ち。
 - `META` — 原則確認。
 
+## Finalization (EQM-014.03, 2026-06-15)
+
+semantics は確定し `docs/design/EVENT_MODEL_SEMANTICS.md` (契約) と `docs/design/ORDERING_MODEL_COVERAGE.md` (≥8 system 写像) に記述された。この 2 文書が **v1 authoritative** であり、本 registry の各項目はそこへの **pointer**(本 file 冒頭の目的どおり「決定への pointer に置き換える」)。下表は adopted/rejected の記録先。索引 status 表 (下記) が status-of-record で、全 Q は settled。Phase 2 API freeze は本 task 完了で gate 解除 (EQM-020 依存充足)。
+
+| Q | 決定の記録先 (SEM = EVENT_MODEL_SEMANTICS.md, COV = ORDERING_MODEL_COVERAGE.md) |
+|---|---|
+| Q01 save 境界 | SEM §10 |
+| Q02 window nesting | SEM §8 |
+| Q03 window deadline | SEM §9 (frozen = deadline ∞) |
+| Q04 同時性/batch | SEM §7 (composite) |
+| Q05 無効化 timing | SEM §5 / §5.3 (lazy/eager) |
+| Q06 duration expiry | SEM §5 (invalidation, reaction-count) |
+| Q07 遡及時間変更 | SEM §3 (reschedule-only) / §4 (event-line) |
+| Q08 priority 不変 | SEM §3 |
+| Q09 effect 順序/trigger 収集 | SEM §6 (sweep) / §7 (composite) |
+| Q10 actor lifecycle | SEM §13 |
+| Q11 数値域 | SEM §12 |
+| Q12 感知分類 | SEM §11 (presentation reserved; impl Phase 8) |
+| Q13 timeline 単一性 | SEM §15 + COV row 5 (4X) |
+| Q14 反芻経済 | SEM §16 (reservation field reserved; impl EQM-050/062) |
+| Q15 replay 製品化 | deferred (registry; post-v1) |
+| Q16 event-line 導入 | SEM §4 |
+| Q17 前進方式/決定性 | SEM §4.4 — per-tick polling 既定。**予測深さ N は v1 defer (EQM-033 prediction / EQM-102 perf 予算の入力)** |
+| Q18 多条件 solve/invalidation | SEM §5 (solve AND / invalidation OR / race pattern) |
+| Q19 eager 責務分割 | SEM §5.3 / §6 |
+| Q20 同時解決/上位順序 | SEM §7 (comparator hook, fallback=発行順) |
+| Q21 reentrancy 統一 | SEM §8 |
+| Q22 event-line×snapshot/save | SEM §10 |
+| Q23 過剰一般化ガードレール | SEM §15 |
+| Q24 grouped/micro-event-line | COV deferred (RTS 補助線、v1 実装外) |
+| Q25 sync barrier | SEM §10 / §15 (core named concept にしない、acceptance 支援は継続課題) |
+| Q26 identity/granularity/lifecycle/scaling | SEM §4.2 (2 表現) / §4.5 (identity・lifecycle・stacking) |
+
 ## Synthesis 2026-06-13: 進行モデル (progression model) が crux
 
 ユーザー注釈を総合すると、推奨案とのズレの大半は個別 Q ではなく単一の core 判断に収束する。原因は「行動解決ターン制が要求する進行(progression)の多様性」が初期 roadmap で single global tick に圧縮されていたこと。

@@ -1,7 +1,7 @@
 # Event Model — Conceptual Foundations
 
-status: confirmed 2026-06-14 (three-plane model). EQM-014 の `EVENT_MODEL_SEMANTICS.md` への確定入力。
-未決の identity/scaling 判断は `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` Q26 が持つ。
+status: confirmed 2026-06-14 (three-plane model)。EQM-014.01 で `docs/design/EVENT_MODEL_SEMANTICS.md` に確定記述済み (2026-06-15)。
+identity/scaling 判断は Q26 で `DECIDED(user)` 確定済み → `EVENT_MODEL_SEMANTICS.md` §4.2 (2 表現) / §4.5 (identity・lifecycle・stacking)。
 根拠記録: `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-06-14.md`。
 
 ---
@@ -62,7 +62,7 @@ per-entity WT/CT は (1) を*必須にしない* (Q16 決定)。多数 entity �
 
 ## 4. event-line / counter の identity と lifecycle
 
-進行を数える単位の identity は、**ゲームが数えたい意味単位に一致させる**。これが唯一の不変条件。具体的な granularity 方針 (どこまで first-class にするか、stacking 意味論、再帰召喚の cost) は未決として Q26 が持つ。
+進行を数える単位の identity は、**ゲームが数えたい意味単位に一致させる**。これが唯一の不変条件。具体的な granularity 方針 (どこまで first-class にするか、stacking 意味論、再帰召喚の cost) は Q26 で確定済み (`DECIDED(user)` 2026-06-14): 多数同質は pattern (2) sweep を既定、stacking は refresh default / 独立 stack 明示宣言、lifecycle は actor lifecycle 従属。詳細は `EVENT_MODEL_SEMANTICS.md` §4.2 / §4.5。
 
 確定している点:
 
