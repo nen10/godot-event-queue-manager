@@ -162,6 +162,33 @@
     }
   },
   "L1": {
+    "EQCTBPolicy": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "delay_of",
+          "params": "cost: int, speed: int",
+          "returns": "-> int"
+        },
+        {
+          "name": "on_turn_finished",
+          "params": "runtime, actor_id: StringName, result",
+          "returns": "-> void"
+        },
+        {
+          "name": "seed",
+          "params": "runtime, actor_ids: Array",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "base_cost",
+        "scale",
+        "speed_key"
+      ]
+    },
     "EQConfig": {
       "consts": [
         "TIE_BREAKS"
