@@ -17,6 +17,7 @@ extends RefCounted
 const EQEntry := preload("eq_entry.gd")
 const EQBackend := preload("backends/eq_backend.gd")
 const EQSortedArrayBackend := preload("backends/eq_sorted_array_backend.gd")
+const EQSnapshot := preload("eq_snapshot.gd")
 
 ## Event-driven clock. Advances to a popped entry's due_tick, never backwards.
 var current_tick: int = 0
@@ -125,6 +126,53 @@ func size() -> int:
 ## True when no live event remains (stale backend entries do not count).
 func is_empty() -> bool:
 	return _generation.is_empty()
+
+
+## Captures live scheduler state as a plain, serializable Dictionary (no Node
+## references). Only live entries are stored: stale lazy-deletion artifacts carry
+## no observable semantics, so the snapshot compacts them away. Counters and the
+## clock are stored explicitly (they cannot be derived from live entries alone,
+## since they reflect popped/cancelled events too).
+func snapshot() -> Dictionary:
+	var entries: Array = []
+	for e in _backend.ordered():
+		if _is_live(e):
+			entries.append(e.to_dict())
+	return {
+		"schema_version": EQSnapshot.SCHEMA_VERSION,
+		"current_tick": current_tick,
+		"next_event_id": _next_event_id,
+		"next_sequence": _next_sequence,
+		"entries": entries,
+	}
+
+
+## Restores state from a snapshot Dictionary. Returns an EQSnapshot.Load code.
+## On any non-OK code the scheduler is left exactly as it was (validate and the
+## entry rebuild happen before any mutation). On OK, the generation map is
+## rebuilt from the entries, re-establishing the liveness invariant by
+## construction.
+func restore(data) -> int:
+	var code := EQSnapshot.validate(data)
+	if code != EQSnapshot.Load.OK:
+		return code
+	# Build off to the side first so a malformed entry cannot half-apply.
+	var rebuilt: Array[EQEntry] = []
+	for d in data["entries"]:
+		var e := EQEntry.from_dict(d)
+		if e == null:
+			return EQSnapshot.Load.MALFORMED
+		rebuilt.append(e)
+	# Commit.
+	_backend.clear()
+	_generation.clear()
+	current_tick = int(data["current_tick"])
+	_next_event_id = int(data["next_event_id"])
+	_next_sequence = int(data["next_sequence"])
+	for e in rebuilt:
+		_generation[e.event_id] = e.generation
+		_backend.insert(e)
+	return EQSnapshot.Load.OK
 
 
 func _is_live(entry: EQEntry) -> bool:
