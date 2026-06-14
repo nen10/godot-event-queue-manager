@@ -38,6 +38,11 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.config.tie_break_ambiguous` | RESOURCE_INVALID | ERROR | editor, game | `tie_break` is unset (no deterministic total tie-break chosen) |
 | `eqm.config.tie_break_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | `tie_break` names an unrecognised rule |
 | `eqm.policy.name_empty` | RESOURCE_INVALID | WARNING | editor | `policy_name` is empty (authoring hint) |
+| `eqm.actor.duplicate_id` | CONTRACT_VIOLATION | ERROR | editor, game | registering an already-active actor_id |
+| `eqm.actor.id_reused` | CONTRACT_VIOLATION | ERROR | editor, game | re-registering a retired actor_id (reuse forbidden, §13) |
+| `eqm.actor.empty_id` | RESOURCE_INVALID | ERROR | editor, game | registering an empty actor_id |
+| `eqm.action.negative_delay` | CONTRACT_VIOLATION | ERROR | editor, game | `EQActionResult.delay < 0` (would schedule into the past) |
+| `eqm.action.negative_cost` | RESOURCE_INVALID | ERROR | editor, game | `EQActionResult.cost < 0` without `allow_negative_cost` (§12 policy-declared) |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

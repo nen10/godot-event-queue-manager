@@ -46,8 +46,8 @@ Process references:
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
 | EQM-020 | COMPLETE | EQM-014.03 | `docs/plan/2026-06-09_event_queue_manager/EQM-020_config_policy_resources/` | `EQConfig` and `EQPolicy` base Resources with validation, plus error taxonomy. | `resources/eq_config.gd`, `resources/policies/eq_policy.gd`, `docs/design/ERROR_CONTRACT.md`, `tests/resource/` | Resource can be saved/loaded; missing policy and ambiguous tie-breaker produce explicit validation results; contracts follow `docs/design/EVENT_MODEL_SEMANTICS.md`; error taxonomy (stable codes, recoverability classes, game/editor surfacing rules) documented in `ERROR_CONTRACT.md` and used by validation; recoverability classes map to the dev fail-fast / shipped fail-safe two modes of `docs/devflow/policy/RUNTIME_RESILIENCE_POLICY.md`. |
-| EQM-021 | READY | EQM-020 | `docs/plan/2026-06-09_event_queue_manager/EQM-021_actor_action_contract/` | Actor state and action result public API. | `runtime/eq_actor_state.gd`, `runtime/eq_action_result.gd`, `runtime/eq_actor_registry.gd`, `tests/resource/` | Actor id registration, duplicate rejection, weak binding placeholder, action cost/delay result validation tested. |
-| EQM-022 | BACKLOG | EQM-021 | `docs/plan/2026-06-09_event_queue_manager/EQM-022_manager_headless_facade/` | Headless facade that coordinates scheduler, policy, actors, and action finish. | `runtime/eq_runtime.gd`, `tests/core/` | Register actors, start queue, pop ready event, finish action, and schedule next event without Godot scene tree; exposes the dev/shipped resilience mode toggle, with normal-input traces byte-identical across modes (`RUNTIME_RESILIENCE_POLICY.md`). |
+| EQM-021 | COMPLETE | EQM-020 | `docs/plan/2026-06-09_event_queue_manager/EQM-021_actor_action_contract/` | Actor state and action result public API. | `runtime/eq_actor_state.gd`, `runtime/eq_action_result.gd`, `runtime/eq_actor_registry.gd`, `tests/resource/` | Actor id registration, duplicate rejection, weak binding placeholder, action cost/delay result validation tested. |
+| EQM-022 | READY | EQM-021 | `docs/plan/2026-06-09_event_queue_manager/EQM-022_manager_headless_facade/` | Headless facade that coordinates scheduler, policy, actors, and action finish. | `runtime/eq_runtime.gd`, `tests/core/` | Register actors, start queue, pop ready event, finish action, and schedule next event without Godot scene tree; exposes the dev/shipped resilience mode toggle, with normal-input traces byte-identical across modes (`RUNTIME_RESILIENCE_POLICY.md`). |
 | EQM-023 | BACKLOG | EQM-022 | `docs/plan/2026-06-09_event_queue_manager/EQM-023_api_surface_gate/` | Layer-aware public API surface snapshot gate. | `tools/check_api_surface.py`, `tests/golden/api_surface.json`, `docs/design/API_SURFACE.md` | Public/internal naming convention documented; the API surface is tagged by layer (L0 turn order / L1 policy / L2 reservation / L3 event-line) per roadmap §3.1; deterministic export; a change that leaks an L3 symbol into the L0/L1 surface, or any surface diff without a doc note, fails `./tools/test.sh`; golden update follows the explicit approval procedure. |
 
 ## Phase 3 — Basic policy MVP and runtime Node
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-021` (Phase 2 autonomous run, user-approved 2026-06-15; 020 COMPLETE → 021 → 022 → 023 = Phase 2 milestone)
+Current: `EQM-022` (Phase 2 autonomous run; 020/021 COMPLETE → 022 → 023 = Phase 2 milestone)
 
 ## Proof log
 
@@ -343,3 +343,21 @@ proof:
 ```
 
 Dependency sweep: EQM-020 COMPLETE → EQM-021 READY. Current pointer → EQM-021.
+
+### EQM-021 — COMPLETE (2026-06-15)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-021_actor_action_contract/
+  review: docs/review/autopilot/EQM-021_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=11 checks=167 failures=0
+  gate: §4 resource/API (registration/duplicate/reuse/empty rejection + weak binding + action validation)
+  major files:
+    - addons/event_queue_manager/runtime/{eq_actor_state.gd,eq_action_result.gd,eq_actor_registry.gd} (new); eq_error.gd (+5 codes)
+    - docs/design/ERROR_CONTRACT.md (+5 codes)
+    - test_project/tests/resource/{test_eq_actor_registry.gd,test_eq_action_result.gd} (new)
+```
+
+Dependency sweep: EQM-021 COMPLETE → EQM-022 READY. Current pointer → EQM-022.

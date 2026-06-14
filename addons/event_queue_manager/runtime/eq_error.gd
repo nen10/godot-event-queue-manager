@@ -28,6 +28,11 @@ const POLICY_BASE_INSTANCE := &"eqm.config.policy_base_instance"
 const TIE_BREAK_AMBIGUOUS := &"eqm.config.tie_break_ambiguous"
 const TIE_BREAK_UNKNOWN := &"eqm.config.tie_break_unknown"
 const POLICY_NAME_EMPTY := &"eqm.policy.name_empty"
+const ACTOR_DUPLICATE_ID := &"eqm.actor.duplicate_id"
+const ACTOR_ID_REUSED := &"eqm.actor.id_reused"
+const ACTOR_EMPTY_ID := &"eqm.actor.empty_id"
+const ACTION_NEGATIVE_DELAY := &"eqm.action.negative_delay"
+const ACTION_NEGATIVE_COST := &"eqm.action.negative_cost"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -36,6 +41,11 @@ const _META := {
 	TIE_BREAK_AMBIGUOUS: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	TIE_BREAK_UNKNOWN: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	POLICY_NAME_EMPTY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.WARNING, "surface": ["editor"]},
+	ACTOR_DUPLICATE_ID: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	ACTOR_ID_REUSED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	ACTOR_EMPTY_ID: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	ACTION_NEGATIVE_DELAY: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	ACTION_NEGATIVE_COST: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 }
 
 
