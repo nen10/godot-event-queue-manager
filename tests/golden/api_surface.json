@@ -177,6 +177,27 @@
         "policy"
       ]
     },
+    "EQPrediction": {
+      "consts": [
+        "EQActionResult",
+        "EQRuntime"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "branch",
+          "params": "runtime",
+          "returns": "-> EQRuntime"
+        },
+        {
+          "name": "predict_turns",
+          "params": "runtime, n: int, default_cost: int = 0",
+          "returns": "-> Array"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
     "EQRuntime": {
       "consts": [
         "EQActionResult",
@@ -549,6 +570,11 @@
           "name": "describe",
           "params": "code: int",
           "returns": "-> String"
+        },
+        {
+          "name": "equals",
+          "params": "a, b",
+          "returns": "-> bool"
         },
         {
           "name": "is_supported_version",

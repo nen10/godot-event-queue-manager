@@ -42,6 +42,13 @@ static func validate(data) -> int:
 	return Load.OK
 
 
+## Deep value-equality of two snapshots. Used to assert prediction purity
+## (live snapshot before == after). snapshot() emits entries in deterministic
+## order, so a recursive Dictionary compare is exact.
+static func equals(a, b) -> bool:
+	return a == b
+
+
 static func describe(code: int) -> String:
 	match code:
 		Load.OK:

@@ -57,8 +57,8 @@ Process references:
 | EQM-030 | COMPLETE | EQM-022 | `docs/plan/2026-06-09_event_queue_manager/EQM-030_fixed_round_policy/` | Fixed round policy with initiative and tie-breaker options. | `resources/policies/eq_fixed_round_policy.gd`, `tests/policy/` | Tests cover battle-start ordering, round refresh, equal initiative tie-break, actor removal skip. |
 | EQM-031 | COMPLETE | EQM-030 | `docs/plan/2026-06-09_event_queue_manager/EQM-031_ctb_policy/` | CTB policy with speed and action cost. | `resources/policies/eq_ctb_policy.gd`, `tests/policy/` | Tests cover faster actor extra turns, heavy action delay, wait action shorter delay, haste/slow next-turn behavior. |
 | EQM-032 | COMPLETE | EQM-031 | `docs/plan/2026-06-09_event_queue_manager/EQM-032_eq_manager_node/` | Godot `EQManager` Node, signal integration, and game-loop driver contract. | `runtime/eq_manager.gd`, `addons/event_queue_manager/plugin.gd`, `tests/runtime/` | Scene-local manager emits `queue_changed`, `event_ready`, `turn_ready`, `event_resolved`; invalid actor policy tested; game-loop driver contract (who advances the queue, suspend semantics awaiting player input, await boundary for action presentation) documented in `EVENT_MODEL_SEMANTICS.md` and covered by tests; the driver offers a frame-budget / time-sliced advance mode (resolve up to a per-frame budget to avoid large-battle hitches) and coexists with Godot idioms (`SceneTree` pause, and `EditorUndoRedoManager` for editor-side mutations) without breaking determinism. |
-| EQM-033 | READY | EQM-032 | `docs/plan/2026-06-09_event_queue_manager/EQM-033_prediction_preview/` | Next-N prediction as a pure hypothetical API (for HUD and AI planning). | `runtime/eq_prediction.gd`, `runtime/eq_snapshot.gd`, `tests/core/` | Prediction returns expected order; live queue remains unchanged (snapshot before == after, prediction purity); deterministic seed state preserved; exposes a hypothetical-branch API (branch snapshot → virtual advance with a candidate action → discard) so AI/players can compare act-now vs wait without mutating live state (roadmap principle 17); watched-set is re-evaluated per simulated step, independent of prediction depth N (Q26). |
-| EQM-034 | BACKLOG | EQM-033 | `docs/plan/2026-06-09_event_queue_manager/EQM-034_ctb_sample_battle/` | Minimal CTB sample battle and quickstart docs. | `demos/ctb_battle/`, `docs/manual/quickstart.md`, `tests/debug_scene/` | Sample is explicitly learning path; quickstart uses project-created config; sample scene runs or is marked `BLOCKED_BY_TEST_ENV` with proof. |
+| EQM-033 | COMPLETE | EQM-032 | `docs/plan/2026-06-09_event_queue_manager/EQM-033_prediction_preview/` | Next-N prediction as a pure hypothetical API (for HUD and AI planning). | `runtime/eq_prediction.gd`, `runtime/eq_snapshot.gd`, `tests/core/` | Prediction returns expected order; live queue remains unchanged (snapshot before == after, prediction purity); deterministic seed state preserved; exposes a hypothetical-branch API (branch snapshot → virtual advance with a candidate action → discard) so AI/players can compare act-now vs wait without mutating live state (roadmap principle 17); watched-set is re-evaluated per simulated step, independent of prediction depth N (Q26). |
+| EQM-034 | READY | EQM-033 | `docs/plan/2026-06-09_event_queue_manager/EQM-034_ctb_sample_battle/` | Minimal CTB sample battle and quickstart docs. | `demos/ctb_battle/`, `docs/manual/quickstart.md`, `tests/debug_scene/` | Sample is explicitly learning path; quickstart uses project-created config; sample scene runs or is marked `BLOCKED_BY_TEST_ENV` with proof. |
 | EQM-035 | BACKLOG | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-035_v0_1_milestone_evaluation/` | v0.1 milestone evaluation (API friction, semantics drift, queue adjustment, value metrics). | `docs/review/` | Evaluation report exists; semantics spec vs implementation drift is audited; API friction findings and gaps become queue candidates or explicit no-change records; product-value north-star metrics defined and baselined (e.g. simple-path completion without L3, dogfood friction count, layer-leak count); roadmap updated or confirmed unchanged. |
 
 ## Phase 4 — Energy and Wait Turn policies
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-033` (Phase 3 autonomous run; 030/031/032 COMPLETE → 033 → 034 → 035 = v0.1 MVP milestone)
+Current: `EQM-034` (Phase 3 autonomous run; 030/031/032/033 COMPLETE → 034 → 035 = v0.1 MVP milestone)
 
 ## Proof log
 
@@ -458,3 +458,22 @@ proof:
 ```
 
 Dependency sweep: EQM-032 COMPLETE → EQM-033 READY. Current pointer → EQM-033.
+
+### EQM-033 — COMPLETE (2026-06-15)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-033_prediction_preview/
+  review: docs/review/autopilot/EQM-033_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=16 checks=230 failures=0; [api-surface] ok
+  gate: §4 core (prediction purity snapshot before==after + predict==actual + branch independence + act-now-vs-wait) + API surface (EQPrediction L0)
+  surface: api_surface.json re-baselined (+EQPrediction L0, +EQSnapshot.equals) via explicit --update
+  major files:
+    - addons/event_queue_manager/runtime/eq_prediction.gd (new); eq_snapshot.gd (+equals)
+    - tools/check_api_surface.py, docs/design/API_SURFACE.md, tests/golden/api_surface.json
+    - test_project/tests/core/test_eq_prediction.gd (new)
+```
+
+Dependency sweep: EQM-033 COMPLETE → EQM-034 READY. Current pointer → EQM-034.
