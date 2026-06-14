@@ -1,41 +1,54 @@
 # Devflow Test Index
 
-This file describes how Autopilot should verify work in this repository. Replace placeholders before executing implementation tasks.
+This file describes how Autopilot verifies work in this repository.
 
 ## Standard verification command
 
 ```sh
-<standard test command, for example ./tools/test.sh>
+./tools/test.sh
 ```
 
-Autopilot must run this command, or record why it cannot run.
+Autopilot must run this command, or record why it cannot run. The script exits:
+
+- `0` — all runnable checks passed.
+- `1` — a check failed.
+- `3` — `BLOCKED_BY_TEST_ENV` (a required tool such as Godot is missing).
 
 ## Environment requirements
 
 | requirement | expected value | how to check |
 |---|---|---|
-| runtime / framework | `<fill>` | `<command>` |
-| package manager | `<fill>` | `<command>` |
-| test runner | `<fill>` | `<command>` |
-| build tools | `<fill>` | `<command>` |
+| runtime / framework | Godot 4.x (headless) | `godot --version` (or `$GODOT --version`) |
+| test runner | Godot headless GDScript runner | `godot --headless --path test_project --script res://tests/run_all.gd` |
+| scripting helper | Python 3 (static audits, manifest/link checks) | `python3 --version` |
+| build tools | none (GDScript addon) | — |
 
-If a required tool is missing, record `BLOCKED_BY_TEST_ENV` with the exact command and error output.
+If a required tool is missing, `./tools/test.sh` exits `3` and Autopilot records `BLOCKED_BY_TEST_ENV` with the exact command and output, instead of marking product implementation complete.
+
+The Godot binary is discovered via the `GODOT` environment variable, else `godot`, else `godot4` on `PATH`.
 
 ## Test paths
 
 | path / command | category | what it proves | when to run |
 |---|---|---|---|
-| `<command>` | Unit / Core | `<contract>` | `<tasks>` |
-| `<command>` | Integration | `<contract>` | `<tasks>` |
-| `<command>` | UI / workflow | `<contract>` | `<tasks>` |
-| `<command>` | Package / release | `<contract>` | `<tasks>` |
+| `godot --headless --path test_project --script res://tests/run_all.gd` | Core / Policy / Trigger / Transaction / Presentation | scheduler ordering, policy contracts, reactions, rollback, flush | EQM-010 以降 |
+| Godot golden-trace tests under `tests/golden/` | Determinism trace | same-seed replay byte-identical, permutation/prediction purity | EQM-013 以降 |
+| Godot UI-headless tests under `tests/ui_headless/` | UI / metric | layout metric P0, state matrix, interaction contract, projection integrity | EQM-090 以降 |
+| `python3 tools/ui_static_audit.py` | UI static audit | source 上の no-op button / debug leakage / generic picker pattern | EQM-087 以降 |
+| Godot package/clean-load smoke | Package / release | addon enables in a clean project; sample isolation | EQM-002 / EQM-103 |
+
+未作成の test target / tool は `./tools/test.sh` が存在チェックして skip する (欠落は失敗にしない)。Godot 自体の欠如のみ `BLOCKED_BY_TEST_ENV`。
+
+## Golden fixture rule
+
+`tests/golden/` の fixture は自動更新しない。`./tools/test.sh --update-golden <case>` の明示 flag + self-review への diff 理由記載が必須 (`docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md`)。
 
 ## Completion proof rules
 
 A task may be marked `COMPLETE` only when:
 
 - Acceptance in `IMPLEMENTATION_QUEUE.md` is satisfied.
-- Relevant test paths above passed, or an environment-blocking result was documented.
+- Relevant test paths above passed, or an environment-blocking result (`BLOCKED_BY_TEST_ENV`) was documented.
 - `docs/devflow/TEST.md` was updated if tests were added or changed.
 - Self-review has no `repair-now` items.
 

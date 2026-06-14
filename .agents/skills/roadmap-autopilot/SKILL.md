@@ -1,7 +1,7 @@
 ---
 name: roadmap-autopilot
-summary: Turn concepts, feedback, evaluations, and approved brainstorms into roadmaps, implementation queues, and iterative implementation tasks.
-description: Use this skill to create roadmaps, design implementation queues, execute queue tasks, repair failed tasks, or evaluate completed addon development batches.
+summary: Turn concepts, feedback, evaluations, and approved brainstorms into roadmaps, implementation queues, and iterative implementation tasks for the Event Queue Manager Godot addon.
+description: Use this skill to create roadmaps, design implementation queues, execute Event Queue Manager queue tasks (linear autopilot), repair failed tasks, or evaluate completed batches. For non-linear execution (parallel / delegate / dual-run / spar), see docs/devflow/QUEUE_EXECUTION_PATTERNS.md and the orchestrate-eqm-agents skill.
 ---
 
 # Roadmap Autopilot Skill

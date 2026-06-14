@@ -25,8 +25,8 @@ Process references:
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-001 | READY | — | `docs/plan/2026-06-09_event_queue_manager/EQM-001_devflow_profile/` | Event Queue Manager-specific devflow profile and test command skeleton. | `docs/devflow/PROJECT_PROFILE.md`, `docs/devflow/TEST.md`, `tools/test.sh`, `.agents/skills/roadmap-autopilot/SKILL.md` | Profile no longer references unrelated Hex domain; `TEST.md` defines standard commands; `tools/test.sh` exits clearly when Godot is missing; self-review notes missing-process-file fix. |
-| EQM-002 | BACKLOG | EQM-001 | `docs/plan/2026-06-09_event_queue_manager/EQM-002_addon_scaffold/` | Minimal Godot addon scaffold that loads in a clean project. | `addons/event_queue_manager/plugin.cfg`, `addons/event_queue_manager/plugin.gd`, `addons/event_queue_manager/runtime/`, `test_project/` | Clean project load smoke path documented; addon can be enabled; `./tools/test.sh` reaches scaffold checks; target Godot version declared in `plugin.cfg`/`project.godot` and pinned by the clean-load smoke test (roadmap §3.2). |
+| EQM-001 | COMPLETE | — | `docs/plan/2026-06-09_event_queue_manager/EQM-001_devflow_profile/` | Event Queue Manager-specific devflow profile and test command skeleton. | `docs/devflow/PROJECT_PROFILE.md`, `docs/devflow/TEST.md`, `tools/test.sh`, `.agents/skills/roadmap-autopilot/SKILL.md` | Profile no longer references unrelated Hex domain; `TEST.md` defines standard commands; `tools/test.sh` exits clearly when Godot is missing; self-review notes missing-process-file fix. |
+| EQM-002 | READY | EQM-001 | `docs/plan/2026-06-09_event_queue_manager/EQM-002_addon_scaffold/` | Minimal Godot addon scaffold that loads in a clean project. | `addons/event_queue_manager/plugin.cfg`, `addons/event_queue_manager/plugin.gd`, `addons/event_queue_manager/runtime/`, `test_project/` | Clean project load smoke path documented; addon can be enabled; `./tools/test.sh` reaches scaffold checks; target Godot version declared in `plugin.cfg`/`project.godot` and pinned by the clean-load smoke test (roadmap §3.2). |
 
 ## Phase 1 — Core scheduler MVP
 
@@ -138,8 +138,23 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-001`
+Current: `EQM-002`
 
 ## Proof log
 
-No task has been executed yet.
+### EQM-001 — COMPLETE (2026-06-14)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-001_devflow_profile/
+  review: docs/review/autopilot/EQM-001_SELF_REVIEW_2026-06-14.md
+  tests:
+    - ./tools/test.sh  -> exit 3 BLOCKED_BY_TEST_ENV (Godot absent); harness behaves as specified
+  docs:
+    - docs/devflow/TEST.md (filled), docs/devflow/PROJECT_PROFILE.md (EQM-specialized)
+  major files:
+    - tools/test.sh (new, executable), .gitignore (+.godot_user/)
+    - .agents/skills/roadmap-autopilot/SKILL.md (wording)
+```
+
+Dependency sweep: EQM-001 COMPLETE → EQM-002 READY. Current pointer → EQM-002.

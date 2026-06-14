@@ -2,3 +2,6 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+
+# Test harness run output (tools/test.sh)
+.godot_user/

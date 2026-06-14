@@ -1,41 +1,58 @@
-# Project Profile: <Project Name>
+# Project Profile: Event Queue Manager
 
-This file contains project-specific settings. Replace placeholders before running Autopilot in a real repository.
+This file specializes the reusable addon devflow for the Event Queue Manager Godot addon. It is the authoritative profile; `examples/PROJECT_PROFILE_EVENT_QUEUE_MANAGER.md` is kept only as a porting reference.
 
 ## Project identity
 
 | item | value |
 |---|---|
-| project kind | `<addon / app / library / game / tool / service>` |
-| primary user | `<who this project serves>` |
-| primary workflow | `<workflow the roadmap should improve>` |
-| main runtime / framework | `<Godot / Unity / Web / Python / ...>` |
-| standard test command | `<for example: ./tools/test.sh>` |
+| project kind | Godot addon (event / turn / action order management) |
+| primary user | Godot game developers needing deterministic turn/event ordering |
+| primary workflow | add a turn-order system, swap policies, model reservations/reactions, debug ordering |
+| main runtime / framework | Godot 4.x (GDScript; core behind a backend-portable contract) |
+| standard test command | `./tools/test.sh` |
 | review output directory | `docs/review/autopilot/` |
+| development role | the addon is the deliverable; the gameplay-unproven Action Resolution Turn-Based system is a demanding test case, not a product to ship (roadmap §1.1) |
 
-## Recommended Domain 
+## Domain boundaries
 
-| 領域 | 現在の責務 |
-|---|---|
-| Core | -- |
-| Resource / API | -- |
-| Adapter / Integration | -- |
-| UI / Workflow | -- |
-| Tests | -- |
-| Docs | -- |
+| 領域 | 責務 | 判断基準 |
+|---|---|---|
+| Core Scheduler | tick、priority、sequence、event lifecycle、deterministic ordering、snapshot。 | Godot scene なしで動く。順序が再現可能で、同tick衝突が明示規則で解ける。 |
+| Resource / API | EQConfig、EQPolicy、EQEventTemplate、EQActionDefinition、condition、tag、validation。 | canonical schema、typed Resource、明確な public API。暗黙default/sample-only を通常導線にしない。 |
+| Policy | Fixed round、CTB、Energy、Wait Turn、Action Resolution、Tactics、Phase、Stack の順序規則。 | Core を汚さず差し替え可能。policy ごとに検証可能な契約を持つ。 |
+| Progression (event-line) | global tick / WT・CT / AP 回復 / 効果回数を統一する進行指標。 | event-line = 進行入力、master timeline = 解決順。両者を分離する (`docs/design/EVENT_MODEL_CONCEPTS.md`)。 |
+| Trigger / Reaction | 条件成立、イベント監視、反応準備、持続時間、反芻、cancel/expire。 | 条件評価と効果実行を混ぜない。無限反応や循環予約を検出できる。 |
+| Simulation Transaction | player turn 中の仮行動、rollback、commit、snapshot、deterministic RNG。 | 試行錯誤を許しつつ commit 後の event order を再現可能にする。 |
+| Presentation Pipeline | status 反映と画面エフェクト反映の分離、visibility、importance、flush barrier。 | simulation correctness を UI 都合で歪めない。表示矛盾を flush policy で防ぐ。 |
+| Adapter / Integration | Core/Resource と Godot Node/Scene/signal/Autoload(任意) を接続する。 | Node 参照を保存形式に混ぜない。WeakRef / actor_id / event_id で橋渡しする。 |
+| Editor UI | Timeline Preview、Config editor、Debug inspector、template generator。 | injected headless state の projection。project asset selection を主導線にし、sample は learning path へ隔離する。 |
+| Tests | 採用した API / policy / UX が壊れていないことを確認する。 | test 都合で UX/API を歪めない。sample preset だけで完了扱いにしない。 |
+| Docs / Demos | 判断、使い方、制約、demo scene を残す。 | manual は採用済み UX/API の説明であり、仕様決定の代替ではない。 |
 
 ## Product principles
 
-- clean Resource / clean API / clean UI を優先する。
-  - コードベースやドキュメント記載の fallback / hack / legacy / compatibility は仕様根拠にしない。
-- ゲーム開発上の UX合理性を UI / API 設計の根拠にする。
-  - headless API availability だけで UI task を完了扱いにしない。 UI 設計をの根拠をheadless test の都合で決めない
-  - manual は仕様書ではなく、採用済み UX を使うための説明である。
-  - No sample-only completion: sample preset だけで成立する editor-facing 機能は `sample-only prototype` と分類し、production feature completion とは扱わない。
-  - production feature completion は、任意 project asset selection または明示的な未設定/validation state を持つことで判断する。bundled sample は learning / onboarding path であり、silent default ではない。
-- 自動テストを、採用した UX / API の完了判断に使える Test path として設計する。
-  - 原則に反する機能を温存するテストは更新または削除する。
-- Commit は作業途中の保存ではなく、task completion proof である。
+- Event-first / order-first: actor turn は event の一種。tick・priority・condition・phase・sequence で順序を決める。time-first にしない。
+- Deterministic order: 順序 key は int (tick, priority, sequence)。float を ordering key に使わない。同順は明示規則で解く。暗黙 random 禁止。
+- Progression vs order separation: event-line は進行入力、master timeline は単一 comparator の全順序 (`docs/design/EVENT_MODEL_CONCEPTS.md`)。`due_tick` 直接書換禁止 (reschedule のみ)。
+- Headless / serializable core: core は scene 無しで test 可能、snapshot 可能。
+- Simulation/presentation split: status 反映と画面エフェクト反映を分離する。
+- Transactional player turns: wait/end-turn commit 前の rollback を first-class とする。
+- Projection-first editor UI: editor は injected headless state の projection。UI acceptance は metric/state/interaction contract であり screenshot ではない。
+- Layered API (L0-L3): 簡易 turn-order と深層 reservation/event-line を両方 first-class にし、L3 を L0/L1 surface に leak させない (roadmap §3.1)。
+- Resilience modes: dev fail-fast / shipped fail-safe。shipped は consumer の game を crash させない。正常 trace は mode 不変。
+- No sample-only completion: sample scene は learning path。production 完了は project asset selection か明示 unset/validation state で判断する。
+- Autoload は任意。標準導線は scene-local `EQManager` node。
+- 旧互換は新規 addon では原則扱わない。必要時のみ roadmap source で明示する。
+- 負の価値を生む UX 経路 (hack path) は fallback として温存せず削除する。
+
+### Referenced policies
+
+- 進行 / 意味論: `docs/design/EVENT_MODEL_CONCEPTS.md`, `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`
+- 順序決定性: `docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md`
+- UI: `docs/devflow/policy/UI_TESTABILITY_POLICY.md`, `UI_LAYOUT_METRIC_TEST_POLICY.md`, `UI_LAYOUT_CALIBRATION_POLICY.md`
+- 入力縮約: `docs/devflow/policy/UX_PATH_REDUCTION_POLICY.md`
+- runtime 堅牢性: `docs/devflow/policy/RUNTIME_RESILIENCE_POLICY.md`
 
 ## Implementation policy
 
@@ -43,49 +60,48 @@ This file contains project-specific settings. Replace placeholders before runnin
 
 - task の acceptance を満たすために必要な code / tests / docs を同じ作業で更新する。
 - task 外の大規模 redesign は sub-task に分ける。
-- 作業中により清潔な仕様が必要だと判明した場合、互換維持ではなく plan / queue を更新して進める。
+- より清潔な仕様が必要だと判明したら、互換維持ではなく plan/queue を更新して進める。
 
 ### Compatibility policy
 
-Choose one per roadmap or task packet:
-
-| stance | use when |
-|---|---|
-| `preserve` | Existing saved data/API is a public contract. Add migration or compatibility tests. |
-| `migrate` | Old data/API should load but be rewritten or normalized into the new contract. |
-| `replace` | The old behavior is not a public contract or blocks the accepted product direction. |
-| `defer` | Compatibility is not in scope; document as a follow-up-ready task. |
+新規 addon の既定は `replace`。saved snapshot は `schema_version` を持ち、未知 version は stable load error にする。pre-1.0 migration は `defer` (roadmap deferred)。
 
 ### UI / workflow policy
 
-- Describe UI work as operation steps, not widget lists.
-- Visual feel and manual operation observations can be captured as analog tests, but analog tests do not replace the standard verification command.
-- 古い UI test が変更を妨げる場合、test を新 UX の state contract へ更新する。
+- UI work は operation steps で記述する (widget 列挙でない)。
+- visual feel / 操作観察は analog test として捕捉してよいが、標準検証コマンドの代替にしない。
+- 旧 UI test が変更を妨げる場合、新 UX の state contract へ更新する。
 
 ## Test categories
 
-| category | responsibility |
+| category | 責務 |
 |---|---|
-| Unit / Core | Domain logic, algorithms, data contracts. |
-| Resource / API | Save/load, schema, compatibility, public methods. |
-| Integration | Framework/runtime/editor/CLI integration. |
-| UI headless / workflow | User-goal state transitions, not pixel-perfect layout. |
-| Package / release | Manifest, distribution artifact, clean consumer project. |
-| Performance / scale | Measured behavior and visible progress where relevant. |
-| Analog / manual | Human-observed usability, viewport, visual, or multi-tool flow. |
+| Core Scheduler | push/pop/peek/cancel/reschedule/tie-break/snapshot。 |
+| Determinism trace | canonical trace 出力、golden fixture、permutation/replay/prediction purity の property tests。 |
+| Policy | Fixed/CTB/Energy/Wait Turn/Action Resolution の順序契約、reducibility 証明。 |
+| Resource/API | `.tres` roundtrip、validation、public method contract、layer-aware API surface。 |
+| Trigger/Reaction | condition matching、reaction arming、duration、rumination、cycle guard。 |
+| Transaction | rollback/commit、player turn draft、snapshot restore、deterministic random。 |
+| Presentation | visibility classification、importance barrier、effect flush ordering。 |
+| UI headless / metric | editor dock state、selected asset、validation state、layout metric P0、state matrix、interaction contract。 |
+| Runtime / integration | node bridge、save/load rebind、dev/shipped resilience 二相。 |
+| Debug scene | sample battle / wait-turn / action-resolution scene の状態切替。 |
+| Package | addon-only manifest、clean project load、sample asset isolation。 |
+
 ## Verification
 
-- Standard verification command: `<fill from project, e.g. ./tools/test.sh>`.
-- Test docs: `docs/devflow/TEST.md`.
-- Test output should go under an ignored, run-specific directory when possible.
-- If the required environment is missing, record `BLOCKED_BY_TEST_ENV` and the exact command/error instead of marking product implementation complete.
+- Standard verification command: `./tools/test.sh`。
+- Test docs: `docs/devflow/TEST.md`。
+- Test output は run 固有の ignored directory (`.godot_user/test-runs/<run-id>/`) へ。
+- 必須環境 (Godot 等) が無い場合、product implementation を完了扱いにせず `BLOCKED_BY_TEST_ENV` と正確な command/error を記録する。`tools/test.sh` は env 欠如を専用 exit code (3) で示す。
 
 ## Test Design Policy
 
 ### Parallel execution
 
-- test output は `.godot_user/test-runs/<run-id>/` 以下へ置く。
+- test 出力は `.godot_user/test-runs/<run-id>/` 以下へ置く。
 - 固定 resource path や共有 log へ直接書き込まない。
+- 非線形実行 (`docs/devflow/QUEUE_EXECUTION_PATTERNS.md`) でも queue/proof/golden は orchestrator のみが書く。
 
 ## Autopilot commit policy
 
@@ -99,11 +115,11 @@ Choose one per roadmap or task packet:
 | `SPLIT_REQUIRED` | docs/state commit only |
 | `SUPERSEDED` | docs/state commit only |
 
-Do not commit product work while status is `RUNNING`, `VERIFYING`, `REPAIR_NOW`, `BACKLOG`, or `READY`.
+`RUNNING`、`VERIFYING`、`REPAIR_NOW`、`BACKLOG`、`READY` の間は product work を commit しない。
 
 ### Before commit
 
-- queue status が commit 可能状態である。
+- queue status が commit 可能状態。
 - task 実行中に作成した Scheduled task が `IMPLEMENTATION_QUEUE.md` に追加済み。
 - self-review がある。
 - test result または environment-blocking result がある。
@@ -117,7 +133,7 @@ Do not commit product work while status is `RUNNING`, `VERIFYING`, `REPAIR_NOW`,
 autopilot(<TASK_ID>): <summary>
 ```
 
-For docs/state commits:
+docs/state commit:
 
 ```text
 autopilot-state(<TASK_ID>): <summary>
@@ -127,13 +143,13 @@ Status: BLOCKED_BY_TEST_ENV | SPLIT_REQUIRED | SUPERSEDED
 
 ### Rollback
 
-Use a revert commit rather than history rewrite. Record rollback in the queue and review log.
+履歴 rewrite ではなく revert commit を使い、queue と review log に記録する。
 
 ## Stop conditions
 
 Stop only for:
 
-- Missing required test/build/runtime environment.
-- External credentials, secrets, signing, deployment, or public release upload.
-- Destructive action outside the repository.
-- Direct contradiction between the user instruction and active roadmap/profile.
+- 必須の Godot / test / build 環境が無い。
+- 外部 credential、secret、署名、deploy、公開 upload。
+- repo 外の破壊的操作。
+- ユーザー指示と active roadmap/profile の直接矛盾。
