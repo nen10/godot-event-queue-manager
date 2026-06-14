@@ -26,6 +26,19 @@
 - Claude Code subagent (`Agent` tool, `isolation: "worktree"`, 並列時は `run_in_background: true`)。
 - 外部 CLI agent (Codex / opencode 等)。external run はユーザー確認後。
 
+### 1.1 External executor roster (記録 2026-06-14)
+
+| executor | 位置づけ | 備考 |
+|---|---|---|
+| Codex / GPT-5.5 xhigh | 信頼 + 野心寄りの executor | 能力高い。bounded〜integrated 向き。 |
+| Codex / GPT-5.3-Codex-Spark xhigh | code 特化 executor | 現状この account で最も使われている。委譲の default 候補。 |
+| opencode / DeepSeek v4 Pro | explorer / sparring | 隔離 + 全 gate 必須。 |
+
+- 問題に応じて**任意に選択してよい (per-problem)**。1 つに固定しない。
+- 任意数を並列起動できるが、**agent 数が増えるほど worktree/branch/merge/conflict の管理コストと実装難易度が上がる**。必要な並列度だけ使う (§8.2「迷ったら保守的」)。
+- 線形 spine は P0 直接 / 小規模 P2 委譲。fan-out (EQM-022 / EQM-034 以降) で external agent を並列・競争に割り当てる。
+- external run は billed。autonomous 実行ではユーザーが起動許可済みなら §8.3 の billed checkpoint は当該ランで免除。Claude Code subagent (Agent tool, worktree) は in-environment executor で billed external とは別。
+
 ## 2. Contract (どの agent を動かす前にも orchestrator が書く)
 
 1. **acceptance**: 当該 queue row の acceptance / test path をそのまま literal pass condition にする。
