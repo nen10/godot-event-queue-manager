@@ -1,0 +1,5 @@
+{"actor":"hero","cause":"timer","event_id":3,"i":0,"kind":"resolved","priority":0,"seq":2,"tick":4,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"mage","cause":"timer","event_id":4,"i":1,"kind":"resolved","priority":0,"seq":5,"tick":6,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"orc","cause":"timer","event_id":2,"i":2,"kind":"resolved","priority":5,"seq":1,"tick":10,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"sequence"}}
+{"actor":"goblin","cause":"timer","event_id":5,"i":3,"kind":"resolved","priority":5,"seq":4,"tick":10,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"priority"}}
+{"actor":"hero","cause":"timer","event_id":1,"i":4,"kind":"resolved","priority":0,"seq":0,"tick":10,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"terminal"}}

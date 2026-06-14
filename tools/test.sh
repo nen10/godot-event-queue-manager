@@ -82,7 +82,9 @@ if [[ -f "$RUNNER" ]]; then
     > "${OUT_DIR}/godot_import.log" 2>&1 || true
 
   log "running Godot headless test runner"
-  GODOT_UPDATE_GOLDEN="$UPDATE_GOLDEN" "$GODOT_BIN" --headless \
+  # EQ_RUN_OUT (absolute) lets trace tests dump produced traces under traces/
+  # for diff reporting on a golden mismatch (DETERMINISM_TRACE_TEST_POLICY §2/§6).
+  GODOT_UPDATE_GOLDEN="$UPDATE_GOLDEN" EQ_RUN_OUT="${REPO_ROOT}/${OUT_DIR}" "$GODOT_BIN" --headless \
     --path test_project --script res://tests/run_all.gd \
     2>&1 | tee "${OUT_DIR}/godot_tests.log"
   if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then GODOT_FAIL=1; fi
