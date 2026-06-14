@@ -6,6 +6,8 @@
 
 Roadmap 作成は `docs/devflow/policy/ROADMAP_POLICY.md`、queue 作成は `docs/devflow/policy/IMPLEMENTATION_QUEUE_DESIGN_POLICY.md` に従う。
 
+これは単独・線形の既定パターン (P0)。並列 / 委譲 / 競争 / 探索の非線形実行は `docs/devflow/QUEUE_EXECUTION_PATTERNS.md` を参照する。
+
 ## Inputs
 
 - `docs/plan/<YYYY-MM-DD>_<ROADMAP_ID>/ROADMAP.md`

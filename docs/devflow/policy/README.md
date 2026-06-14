@@ -13,3 +13,4 @@
 - 人間 layout feedback の構造化取り込み (tweak-and-bake): `docs/devflow/policy/UI_LAYOUT_CALIBRATION_POLICY.md`
 - 負価値 UX 経路と過剰一般化の排除基準: `docs/devflow/policy/UX_PATH_REDUCTION_POLICY.md`
 - golden trace / property test による順序決定性の証明: `docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md`
+- shipped game を crash させない resilience 二相 (dev fail-fast / shipped fail-safe): `docs/devflow/policy/RUNTIME_RESILIENCE_POLICY.md`

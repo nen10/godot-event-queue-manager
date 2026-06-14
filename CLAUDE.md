@@ -23,6 +23,8 @@ Godot addon: Event Queue Manager — 行動順 (event / turn / action order) 管
 - No sample-only completion。silent fallback chain 禁止。入力クラスは狭める (`docs/devflow/policy/UX_PATH_REDUCTION_POLICY.md`)。
 - golden trace fixture を自動更新しない。明示 flag + self-review 記載が必須 (`docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md`)。
 - Editor UI は injected headless state の projection。UI acceptance は metric / state / interaction contract であり screenshot ではない (`docs/devflow/policy/UI_TESTABILITY_POLICY.md`)。
+- runtime は dev fail-fast / shipped fail-safe の二相。shipped mode は consumer の game を crash させず、正常 trace は mode 不変 (`docs/devflow/policy/RUNTIME_RESILIENCE_POLICY.md`)。
+- 簡易 turn-order パス (L0/L1) と深層 reservation/event-line パス (L2/L3) は両方 first-class。L3 を L0/L1 surface に leak させない (ROADMAP §3.1)。
 - state 表示は icon / checkbox 等の非文字 modality を優先する (`UI_LAYOUT_METRIC_TEST_POLICY.md` §5.11)。
 - commit message: `autopilot(<TASK_ID>): <summary>`。commit 可能 status のみ (`docs/devflow/PROJECT_PROFILE.md`)。
 

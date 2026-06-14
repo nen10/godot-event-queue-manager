@@ -16,7 +16,8 @@
 
 | file | 責務 |
 |---|---|
-| `docs/devflow/LINEAR_AUTOPILOT_QUEUE.md` | implementation queue を連続実行する手順。 |
+| `docs/devflow/LINEAR_AUTOPILOT_QUEUE.md` | implementation queue を単独・線形に連続実行する既定手順。 |
+| `docs/devflow/QUEUE_EXECUTION_PATTERNS.md` | 並列 / 委譲 / 競争 / 探索の非線形 queue 実行パターンと gate 規律。 |
 | `docs/devflow/PROJECT_PROFILE.md` | project 固有の価値観、test command、禁止default、停止条件。 |
 | `docs/devflow/QUEUE_OPERATION_RULES.md` | queue status、proof、dependency sweep の規則。 |
 | `docs/devflow/TASK_PACKET.md` | queue task ごとの `UX.md` / `POLICY.md` / `IMPLEMENTATION_PLAN.md` の書き方。 |
@@ -29,6 +30,7 @@
 | `docs/devflow/policy/UI_LAYOUT_CALIBRATION_POLICY.md` | 人間 layout feedback の構造化取り込み (tweak-and-bake)。 |
 | `docs/devflow/policy/UX_PATH_REDUCTION_POLICY.md` | 負価値 UX 経路と入力クラス過剰一般化の排除基準。 |
 | `docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md` | golden trace / property test による順序決定性の証明。 |
+| `docs/devflow/policy/RUNTIME_RESILIENCE_POLICY.md` | dev fail-fast / shipped fail-safe の二相 runtime resilience。 |
 | `docs/devflow/PORTING_CHECKLIST.md` | 他プロジェクトへ移植するときの初期設定チェックリスト。 |
 
 

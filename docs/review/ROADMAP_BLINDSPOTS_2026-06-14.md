@@ -100,4 +100,32 @@ roadmap は network rollback を defer 済み。だが我々が作っている *
 
 各項目の `判断 ->` にユーザー判断を記入後、ROADMAP_POLICY / IMPLEMENTATION_QUEUE_DESIGN_POLICY に従って roadmap・queue へ反映する。
 
+---
+
+## 反映 (2026-06-14, ユーザー判断後)
+
+ユーザー判断の重要 nuance:
+- B1: 簡易パスは hack でないが**唯一の first-class ではない**。簡易・深層の両方が first-class。progressive disclosure の leak は「コスト(支払可)か設計不能か」を区別して管理する。
+- B2: 本 addon は未実証の行動解決ターン制の実現可能性を small step で検証する **vehicle**。test-case game 自体の出荷は非目標。着実な進行は妨げない。**モデルごとの独立再実装は禁止しない**(reducibility は証明であって強制ではない)。
+
+| id | 反映先 |
+|---|---|
+| B1 | ROADMAP §3.1 (層と公開境界), 原則15。EQM-023 を layer-aware 化。success criteria に simple-path 非leak。 |
+| B2 | ROADMAP §1.1 (開発 role 再フレーム), §1.2 (positioning)。EQM-053 を「証明であり強制でない」へ。success criteria を「検証可能 capability」基準に。 |
+| B3 | ROADMAP §3.2 (runtime/version), 原則19。EQM-002 (version 宣言), EQM-011 (backend 契約)。 |
+| B4 | ROADMAP 原則17, success criteria。EQM-033 を pure hypothetical API へ。 |
+| B5 | 新 policy `RUNTIME_RESILIENCE_POLICY.md`, 原則16。EQM-020 (recoverability→mode), EQM-022 (mode toggle)。 |
+| B6 | ROADMAP 原則18, deferred 節 (non-preclusion), success criteria。determinism policy が既に value を保護。 |
+| B7 | EQM-020 (library 規模 validation は将来), Phase10 候補として保持。 |
+| B8 | EQM-032 (SceneTree pause / EditorUndoRedoManager 共存)。 |
+| B9 | EQM-032 (frame-budget time-sliced advance)。 |
+| B10 | EQM-083 (consumer 向け runtime debug overlay)。 |
+| B11 | EQM-083 (HUD l10n + non-text modality)。 |
+| B12 | EQM-103 (LICENSE / AssetLib / clean-room)。 |
+| B13 | ROADMAP §1.2 positioning。 |
+| B14 | EQM-035 (north-star metrics)。 |
+| B15 | EQM-100 (concepts 章 = three-plane mental model)。 |
+
+未反映(将来 phase で吸収): B7 の content library 管理 UI は Phase10 editor の独立 task 候補として残す(現状は EQM-020 validation の将来拡張注記のみ)。
+
 user追記: Tier 2 も任意のタイミングで進めて構いません。

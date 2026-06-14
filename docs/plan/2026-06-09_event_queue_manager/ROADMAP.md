@@ -27,6 +27,17 @@ The expanded goal is to support both common game systems and the specific target
 - Action Resolution Turn-Based system where entities reserve actions with AP, time, condition triggers, reaction preparation, wait, ready reservation, rollback, and staged visual effects.
 - RPG, roguelike, tactics, 4X, card/board game, cooldown/status, and stack-like event ordering.
 
+### 1.1 Development role and scope reframe (2026-06-14)
+
+The addon is the deliverable. The gameplay-unproven Action Resolution Turn-Based system is adopted as a demanding **test case** that drives the addon's feasibility forward in small, verifiable steps; the test-case/demo games are not products to ship on their own (`No sample-only completion`). Two consequences:
+
+- A milestone is "done" when it produces a **verifiable capability** (golden trace / metric / contract), not when it ships a game.
+- Reducibility (EQM-053) proves the common genres *can* be expressed through the reservation + event-line model, validating its generality. It does **not** mandate that every ordering model be implemented by reduction — independent per-model implementations as `EQPolicy` are permitted (the core stays genre-agnostic; policies may be standalone).
+
+### 1.2 Positioning / differentiation
+
+The killer differentiators over hand-rolled turn loops and existing addons are: deterministic total order with a canonical, replayable trace; the event-line progression substrate that unifies tick / WT / CT / AP / counters without `due_tick` recalculation; and projection-first, screenshot-free editor testability. These shape priority: anything that protects determinism, trace, or the simple-path experience ranks above breadth.
+
 ## 2. User and developer workflows improved
 
 ### Workflow A: Add a normal turn-order system to a Godot game
@@ -69,6 +80,27 @@ The addon author enables a debug-only calibration tab, adjusts layout parameters
 12. Structural UI acceptance: editor UI is gated by layout metric, state matrix, and interaction contract tests, not screenshots (`docs/devflow/policy/UI_TESTABILITY_POLICY.md`).
 13. Trace as artifact: resolved event order is exported as a canonical trace and approval-tested against golden fixtures (`docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md`).
 14. Path reduction: input classes for primary features are narrowed so that no flow can be entered but not completed (`docs/devflow/policy/UX_PATH_REDUCTION_POLICY.md`).
+15. Layered, progressively disclosed API: the simple turn-order path (L0/L1) and the deep reservation/event-line path (L2/L3) are both first-class; the simple path is not a hack, and the deep path is not subordinate (see §3.1). When the simple path cannot avoid a tax, classify it explicitly as a cost (payable) vs a design impossibility, and manage the two distinctly.
+16. Resilience modes: a dev assertion mode fails fast; a shipped resilient mode never crashes the consumer's game, skipping/logging instead (`docs/devflow/policy/RUNTIME_RESILIENCE_POLICY.md`).
+17. Prediction as a pure hypothetical API: prediction branches a snapshot, advances virtually, and is discarded, so AI and players can evaluate "act now vs wait" without mutating live state.
+18. Multiplayer non-preclusion: the deterministic, serializable, seeded, replayable core must not foreclose future lockstep, even though netcode is out of v1 scope.
+19. Language-agnostic core: the scheduler is defined by a backend-portable contract so the ordering backend can move (sorted-array → binary heap → future native/GDExtension) without a public API break.
+
+### 3.1 Layering and public boundaries
+
+```text
+L0 turn order  : register actor → turn_ready signal → finish. Usable without knowing event-lines or reservations.
+L1 policy      : Fixed / CTB / Energy / Wait-Turn via Resource swap.
+L2 reservation : reservations, AP, resolution delay; opt-in, does not break L0/L1.
+L3 event-line / window / reentrancy : full Action Resolution semantics.
+```
+
+Each milestone declares the highest layer that stays simple to use. EQM-023 (API surface gate) is layer-aware: a change that leaks L3 complexity into the L0/L1 surface fails. The A1 decision (L3 contracts reserved in Phase1/2, implemented in Phase4/5) is what keeps early milestones from being held hostage by deep semantics.
+
+### 3.2 Target runtime and version
+
+- Godot 4.x; the exact minimum is declared in `addons/event_queue_manager/plugin.cfg` and `project.godot`, and the clean-load smoke test pins it.
+- Default implementation is GDScript. The core ordering backend is isolated behind a contract so a native/GDExtension backend can be substituted later for large-battle / recursive-summoning scale (connects to Q17/Q26 polling cost and EQM-102).
 
 ## 4. Rejected or deferred principles
 
@@ -82,11 +114,13 @@ The addon author enables a debug-only calibration tab, adjusts layout parameters
 
 ### Deferred
 
-- Network rollback / multiplayer lockstep.
+- Network rollback / multiplayer lockstep — deferred as implementation, but kept as a non-preclusion constraint (principle 18): the determinism/serialization work must not foreclose it.
 - Full visual scripting graph editor for action definitions.
 - Asset Library release automation.
 - Binary heap optimization beyond the first scalable backend milestone.
-- Formal migration support for pre-1.0 schemas.
+- Native / GDExtension ordering backend — deferred, but the core contract must allow it without a public API break (principle 19).
+- Grouped / micro-event-line for RTS-scale entity counts (`EVENT_MODEL_OPEN_QUESTIONS.md` Q24) — deferred; the v1 model must not preclude it.
+- Formal migration support for pre-1.0 schemas (but `schema_version` and a stable unknown-version load error ship from v0.x).
 
 ## 5. Vocabulary
 
@@ -386,6 +420,9 @@ The roadmap succeeds when:
 - Same-seed replays, insertion permutations, and prediction purity tests prove deterministic order; demos ship golden traces.
 - Editor UI passes layout metric P0 gates across the dock size / scale / locale / state scenario matrix without screenshot review.
 - A dogfood consumer slice built only on the public API ships with its own golden trace and friction report.
+- The L0/L1 simple turn-order path is usable without touching reservations or event-lines, and the API surface gate proves no L3 leakage into it (§3.1).
+- Prediction can evaluate hypothetical branches (act-now vs wait) without mutating live state, supporting AI and player planning.
+- In shipped resilient mode, injected runtime anomalies skip-and-log instead of crashing, while normal-input traces stay byte-identical across modes (`RUNTIME_RESILIENCE_POLICY.md`).
 
 ## 10. First queue-designed scope
 

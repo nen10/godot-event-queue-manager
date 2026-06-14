@@ -15,7 +15,8 @@ Read the smallest relevant set.
 | Decide a roadmap from feedback / brainstorm | `docs/devflow/policy/ROADMAP_POLICY.md` |
 | Convert a roadmap to implementation queue | `docs/devflow/policy/IMPLEMENTATION_QUEUE_DESIGN_POLICY.md` |
 | Write task-level UX / POLICY / IMPLEMENTATION_PLAN | `docs/devflow/TASK_PACKET.md` |
-| Execute an existing queue | `docs/devflow/LINEAR_AUTOPILOT_QUEUE.md` |
+| Execute an existing queue (single, linear) | `docs/devflow/LINEAR_AUTOPILOT_QUEUE.md` |
+| Execute non-linearly (parallel / delegate / dual-run / spar) | `docs/devflow/QUEUE_EXECUTION_PATTERNS.md` + `.agents/skills/orchestrate-eqm-agents/SKILL.md` |
 | Update queue status | `docs/devflow/QUEUE_OPERATION_RULES.md` |
 | Design or test editor UI | `docs/devflow/policy/UI_TESTABILITY_POLICY.md` |
 | Prove ordering / trace determinism | `docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md` |

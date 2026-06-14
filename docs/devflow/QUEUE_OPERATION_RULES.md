@@ -47,6 +47,10 @@ proof:
     - ...
 ```
 
+## Execution patterns
+
+既定は単独・線形 (`LINEAR_AUTOPILOT_QUEUE.md`)。並列 / 委譲 / 競争 / 探索の非線形実行は `QUEUE_EXECUTION_PATTERNS.md` に従う。非線形実行でも本 file の status・proof・dependency sweep をそのまま使い、queue / proof / golden の編集は orchestrator のみが行う。
+
 ## Dependency sweep
 
 Task を閉じたら、queue 全体を一度確認する。
