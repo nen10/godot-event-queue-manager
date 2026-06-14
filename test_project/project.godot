@@ -1,0 +1,14 @@
+; Clean consumer project for Event Queue Manager.
+; Purpose: headless smoke + test runner target for tools/test.sh.
+
+config_version=5
+
+[application]
+
+config/name="EQM Test Project"
+config/description="Clean consumer project for Event Queue Manager smoke and headless tests."
+config/features=PackedStringArray("4.2")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/event_queue_manager/plugin.cfg")

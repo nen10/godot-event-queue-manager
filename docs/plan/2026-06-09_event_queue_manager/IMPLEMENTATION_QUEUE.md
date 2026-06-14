@@ -26,13 +26,13 @@ Process references:
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
 | EQM-001 | COMPLETE | — | `docs/plan/2026-06-09_event_queue_manager/EQM-001_devflow_profile/` | Event Queue Manager-specific devflow profile and test command skeleton. | `docs/devflow/PROJECT_PROFILE.md`, `docs/devflow/TEST.md`, `tools/test.sh`, `.agents/skills/roadmap-autopilot/SKILL.md` | Profile no longer references unrelated Hex domain; `TEST.md` defines standard commands; `tools/test.sh` exits clearly when Godot is missing; self-review notes missing-process-file fix. |
-| EQM-002 | READY | EQM-001 | `docs/plan/2026-06-09_event_queue_manager/EQM-002_addon_scaffold/` | Minimal Godot addon scaffold that loads in a clean project. | `addons/event_queue_manager/plugin.cfg`, `addons/event_queue_manager/plugin.gd`, `addons/event_queue_manager/runtime/`, `test_project/` | Clean project load smoke path documented; addon can be enabled; `./tools/test.sh` reaches scaffold checks; target Godot version declared in `plugin.cfg`/`project.godot` and pinned by the clean-load smoke test (roadmap §3.2). |
+| EQM-002 | COMPLETE | EQM-001 | `docs/plan/2026-06-09_event_queue_manager/EQM-002_addon_scaffold/` | Minimal Godot addon scaffold that loads in a clean project. | `addons/event_queue_manager/plugin.cfg`, `addons/event_queue_manager/plugin.gd`, `addons/event_queue_manager/runtime/`, `test_project/` | Clean project load smoke path documented; addon can be enabled; `./tools/test.sh` reaches scaffold checks; target Godot version declared in `plugin.cfg`/`project.godot` and pinned by the clean-load smoke test (roadmap §3.2). |
 
 ## Phase 1 — Core scheduler MVP
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-010 | BACKLOG | EQM-002 | `docs/plan/2026-06-09_event_queue_manager/EQM-010_core_event_contract/` | Core event entry and ordering contract. | `runtime/eq_entry.gd`, `runtime/eq_ordering.gd`, `tests/core/` | Tests prove due_tick asc, priority desc, sequence asc, stable tie-breaking, invalid negative tick rejection. |
+| EQM-010 | READY | EQM-002 | `docs/plan/2026-06-09_event_queue_manager/EQM-010_core_event_contract/` | Core event entry and ordering contract. | `runtime/eq_entry.gd`, `runtime/eq_ordering.gd`, `tests/core/` | Tests prove due_tick asc, priority desc, sequence asc, stable tie-breaking, invalid negative tick rejection. |
 | EQM-011 | BACKLOG | EQM-010 | `docs/plan/2026-06-09_event_queue_manager/EQM-011_scheduler_operations/` | Scheduler push/pop/peek/cancel/reschedule with sorted-array backend behind a backend contract. | `runtime/eq_scheduler.gd`, `runtime/backends/eq_backend.gd`, `runtime/backends/eq_sorted_array_backend.gd`, `tests/core/` | Tests cover push/pop, peek N, cancel by event_id, lazy invalidation/generation, reschedule, empty queue behavior; the backend is accessed through a language-agnostic contract interface so it can be swapped (sorted-array → binary heap → future native) without a public API change (roadmap §3.2, principle 19). |
 | EQM-012 | BACKLOG | EQM-011 | `docs/plan/2026-06-09_event_queue_manager/EQM-012_snapshot_roundtrip/` | Serializable snapshot for scheduler state. | `runtime/eq_snapshot.gd`, `runtime/eq_scheduler.gd`, `tests/core/` | Snapshot roundtrip reproduces current_tick, sequence counter, entries, generations, and subsequent pop order; snapshot carries `schema_version` and unknown versions produce a stable load error. |
 | EQM-013 | BACKLOG | EQM-012 | `docs/plan/2026-06-09_event_queue_manager/EQM-013_trace_determinism_harness/` | Canonical trace export and determinism harness (golden + property tests). | `runtime/eq_trace.gd`, `tests/core/`, `tests/golden/`, `tools/test.sh` | Same-seed replay reproduces byte-identical trace; insertion permutation with identical keys preserves pop order; snapshot continuity holds; golden update only via explicit flag per `DETERMINISM_TRACE_TEST_POLICY.md`; the trace-record-kind schema is open/extensible so later phases (EQM-014 `event_line_progressed`/`window_opened`/`window_closed`, EQM-061 invalidation `closed_by`) add kinds without rewriting the harness. |
@@ -138,7 +138,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-002`
+Current: `EQM-010`
 
 ## Proof log
 
@@ -158,3 +158,20 @@ proof:
 ```
 
 Dependency sweep: EQM-001 COMPLETE → EQM-002 READY. Current pointer → EQM-002.
+
+### EQM-002 — COMPLETE (2026-06-14)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-002_addon_scaffold/
+  review: docs/review/autopilot/EQM-002_SELF_REVIEW_2026-06-14.md
+  pattern: P0 (orchestrator-direct)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); Godot 4.6.2 headless ran test_project smoke
+  major files:
+    - addons/event_queue_manager/{plugin.cfg,plugin.gd,runtime/eq_version.gd} (new)
+    - test_project/{project.godot,tests/run_all.gd} (new)
+    - test_project/addons/event_queue_manager -> ../../addons/event_queue_manager (symlink)
+```
+
+Dependency sweep: EQM-002 COMPLETE → EQM-010 READY. Current pointer → EQM-010.
