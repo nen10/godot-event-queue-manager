@@ -38,8 +38,8 @@ Process references:
 | EQM-013 | COMPLETE | EQM-012 | `docs/plan/2026-06-09_event_queue_manager/EQM-013_trace_determinism_harness/` | Canonical trace export and determinism harness (golden + property tests). | `runtime/eq_trace.gd`, `tests/core/`, `tests/golden/`, `tools/test.sh` | Same-seed replay reproduces byte-identical trace; insertion permutation with identical keys preserves pop order; snapshot continuity holds; golden update only via explicit flag per `DETERMINISM_TRACE_TEST_POLICY.md`; the trace-record-kind schema is open/extensible so later phases (EQM-014 `event_line_progressed`/`window_opened`/`window_closed`, EQM-061 invalidation `closed_by`) add kinds without rewriting the harness. |
 | EQM-014 | SPLIT_REQUIRED | EQM-013 | `docs/plan/2026-06-09_event_queue_manager/EQM-014_event_model_semantics/` | Event model semantics spec, progression (event-line) model, and ordering coverage matrix. | `docs/design/EVENT_MODEL_SEMANTICS.md`, `docs/design/ORDERING_MODEL_COVERAGE.md`, `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`, `docs/design/EVENT_MODEL_CONCEPTS.md` | Builds on the confirmed three-plane model (`docs/design/EVENT_MODEL_CONCEPTS.md`: event-line = progression input / event = ordered output / `event_line_progressed` = trace observation) and records adopted/rejected for all `EVENT_MODEL_OPEN_QUESTIONS.md` items per the 2026-06-14 decisions (`docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-06-14.md`), including the Q26 event-line identity/granularity/lifecycle resolution. Reserves these contracts in Phase1/2 (backend impl may defer to Phase4/5 with no later backward-incompat break): (1) **event-line** = acceptance-defined incremental integer progression; global tick = primary event-line; event-side issuance allowed; per-entity event-line is acceptance-defined, not a built-in required field; invariant: event-line = progression input, master timeline = resolution output via single int comparator (tick/priority/sequence), due_tick rewrite forbidden (reschedule-only). (2) **solve_conditions (AND default) / invalidation_conditions (OR default)**; AND-invalidation via decremental counter event-line; OR-resolution via race pattern with a race-group id and the 3-display separation concept contract (EQM debug / game-dev debug / presentation). (3) **composite resolution comparator hook**: acceptance-provided deterministic key from serializable state (float allowed here only, never in core ordering key; live-object refs forbidden; golden-covered); final fallback = event issuance order on the default event-line; simultaneous/parallel issuance forbidden. (4) **sweep point** = post-event-resolution collection window; eager = trigger-type invalidation condition. (5) **reentrancy spec** unifying window nest (meta-cost budget, Q02) and trigger nest (bounded round + cycle guard, EQM-062), crossing cases in scope with provisional cost design. (6) **save boundary** = empty effect-processing-chunk (chunk added at resolution not issuance; window-open clears); equals an allowed sync barrier. (7) trace record kinds incl. `event_line_progressed`, `window_opened`, `window_closed`, invalidation `closed_by`. Coverage matrix maps >= 8 systems (CTB, energy, wait-turn TO/FFT-CT, FE phase, 4X phase, stack/LIFO, Pokemon-style speed turn, ATB, 行動解決ターン制); grouped/micro-event-line (Q24) and sync-barrier naming (Q25) recorded as deferred/support; unmappable cases become queue candidates before the Phase 2 API freeze. Planning note: this is a C5 task — split into SUB_TASKS at planning time (e.g. event-line + conditions contract / reentrancy + save + trace-kind / coverage matrix) per `docs/devflow/TASK_PACKET.md`. **Split 2026-06-15 (user-approved) into EQM-014.01/.02/.03** (umbrella row; `SPLIT_REQUIRED`. COMPLETE-equivalent when all three are COMPLETE). |
 | EQM-014.01 | COMPLETE | EQM-013 | `docs/plan/2026-06-09_event_queue_manager/EQM-014.01_semantics_spec/` | Event model semantics spec: three-plane model + the 7 reserved contract groups + driver/await reservation + Q03 deadline window. | `docs/design/EVENT_MODEL_SEMANTICS.md` | Records the 7 contract groups (event-line; solve AND/invalidation OR + race pattern + race-group/3-display; composite comparator hook; sweep/eager; unified reentrancy; save boundary; trace kinds) consistently with `EVENT_MODEL_CONCEPTS.md`; states Phase1/2 reservation with no Phase4/5 backward-incompat break; layer L0–L3 separation noted. Docs-only acceptance (no Godot run); gate = contract consistency + `./tools/test.sh` unaffected (green). |
-| EQM-014.02 | READY | EQM-014.01 | `docs/plan/2026-06-09_event_queue_manager/EQM-014.02_ordering_coverage/` | Ordering coverage matrix mapping >= 8 systems to the model. | `docs/design/ORDERING_MODEL_COVERAGE.md` | Every matrix row resolves to mapped-or-queue-candidate; 4X (Q13) and 行動解決ターン制 shown mappable; grouped/micro-event-line (Q24) deferred and sync-barrier (Q25) support recorded; any unmappable case recorded as a Phase-2-freeze-gating queue candidate. Docs-only. |
-| EQM-014.03 | BACKLOG | EQM-014.02 | `docs/plan/2026-06-09_event_queue_manager/EQM-014.03_registry_concepts/` | Open-questions registry finalization + concepts reconciliation. | `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`, `docs/design/EVENT_MODEL_CONCEPTS.md` | adopted/rejected for all Q01–Q26 present at a settled status per the 2026-06-14 decisions; Q17/Q24/Q25 recorded as defer/support; CONCEPTS Q26 pointer reconciled to the now-settled decision. **Phase 2 API freeze gates on this task** (terminal of the EQM-014 group). Docs-only. |
+| EQM-014.02 | COMPLETE | EQM-014.01 | `docs/plan/2026-06-09_event_queue_manager/EQM-014.02_ordering_coverage/` | Ordering coverage matrix mapping >= 8 systems to the model. | `docs/design/ORDERING_MODEL_COVERAGE.md` | Every matrix row resolves to mapped-or-queue-candidate; 4X (Q13) and 行動解決ターン制 shown mappable; grouped/micro-event-line (Q24) deferred and sync-barrier (Q25) support recorded; any unmappable case recorded as a Phase-2-freeze-gating queue candidate. Docs-only. |
+| EQM-014.03 | READY | EQM-014.02 | `docs/plan/2026-06-09_event_queue_manager/EQM-014.03_registry_concepts/` | Open-questions registry finalization + concepts reconciliation. | `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`, `docs/design/EVENT_MODEL_CONCEPTS.md` | adopted/rejected for all Q01–Q26 present at a settled status per the 2026-06-14 decisions; Q17/Q24/Q25 recorded as defer/support; CONCEPTS Q26 pointer reconciled to the now-settled decision. **Phase 2 API freeze gates on this task** (terminal of the EQM-014 group). Docs-only. |
 
 ## Phase 2 — Resource/API contract
 
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-014.02` (EQM-014 split 2026-06-15, user-approved; 014.01 COMPLETE → 014.02 → 014.03)
+Current: `EQM-014.03` (EQM-014 split 2026-06-15, user-approved; 014.01/.02 COMPLETE → 014.03 → Phase 2 freeze)
 
 ## Proof log
 
@@ -286,3 +286,20 @@ proof:
 ```
 
 Dependency sweep: EQM-014.01 COMPLETE → EQM-014.02 READY. Current pointer → EQM-014.02.
+
+### EQM-014.02 — COMPLETE (2026-06-15)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-014.02_ordering_coverage/ (+ umbrella SUB_TASKS.md)
+  review: docs/review/autopilot/EQM-014.02_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct, decision-depth docs); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=7 checks=92 failures=0
+  gate: docs-only; 9 systems all mapped, no unmappable case -> no new Phase-2-freeze candidate
+  finding: 4X (Q13) maps via N event-lines + shared primary tick; 行動解決ターン制 maps via AP-recovery line + ready reservation + reaction-count decremental invalidation; WT next-threshold trace-equality deferred to EQM-053
+  major files:
+    - docs/design/ORDERING_MODEL_COVERAGE.md (new)
+```
+
+Dependency sweep: EQM-014.02 COMPLETE → EQM-014.03 READY. Current pointer → EQM-014.03.
