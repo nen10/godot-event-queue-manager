@@ -1,0 +1,574 @@
+{
+  "L0": {
+    "EQActionResult": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "validate",
+          "params": "",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "allow_negative_cost",
+        "cost",
+        "delay"
+      ]
+    },
+    "EQActorRegistry": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "actor_ids",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "get_state",
+          "params": "actor_id: StringName",
+          "returns": "-> EQActorState"
+        },
+        {
+          "name": "is_registered",
+          "params": "actor_id: StringName",
+          "returns": "-> bool"
+        },
+        {
+          "name": "register",
+          "params": "actor_id: StringName",
+          "returns": "-> EQActorState"
+        },
+        {
+          "name": "size",
+          "params": "",
+          "returns": "-> int"
+        },
+        {
+          "name": "unregister",
+          "params": "actor_id: StringName",
+          "returns": "-> bool"
+        },
+        {
+          "name": "validate_register",
+          "params": "actor_id: StringName",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQActorState": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "bind",
+          "params": "obj: Object",
+          "returns": "-> void"
+        },
+        {
+          "name": "bound",
+          "params": "",
+          "returns": "-> Object"
+        },
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> EQActorState"
+        },
+        {
+          "name": "is_bound",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "actor_id",
+        "data"
+      ]
+    },
+    "EQRuntime": {
+      "consts": [
+        "EQActionResult",
+        "EQActorRegistry",
+        "EQEntry",
+        "EQScheduler",
+        "EQTrace"
+      ],
+      "enums": [
+        "Mode"
+      ],
+      "methods": [
+        {
+          "name": "advance",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "finish_action",
+          "params": "actor_id: StringName, result: EQActionResult",
+          "returns": "-> int"
+        },
+        {
+          "name": "register_actor",
+          "params": "actor_id: StringName",
+          "returns": "-> EQActorState"
+        },
+        {
+          "name": "schedule",
+          "params": "actor_id: StringName, due_tick: int, priority: int = 0, kind: StringName = &\"turn\"",
+          "returns": "-> int"
+        },
+        {
+          "name": "set_mode",
+          "params": "m: int",
+          "returns": "-> void"
+        },
+        {
+          "name": "start",
+          "params": "",
+          "returns": "-> EQValidation"
+        },
+        {
+          "name": "trace",
+          "params": "",
+          "returns": "-> EQTrace"
+        },
+        {
+          "name": "trace_jsonl",
+          "params": "",
+          "returns": "-> String"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "config",
+        "emit_engine_diagnostics",
+        "faults",
+        "halted",
+        "mode",
+        "registry",
+        "scheduler"
+      ]
+    }
+  },
+  "L1": {
+    "EQConfig": {
+      "consts": [
+        "TIE_BREAKS"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "validate",
+          "params": "",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "policy",
+        "schema_version",
+        "tie_break"
+      ]
+    },
+    "EQPolicy": {
+      "consts": [],
+      "enums": [],
+      "methods": [],
+      "signals": [],
+      "vars": [
+        "policy_name"
+      ]
+    }
+  },
+  "core": {
+    "EQBackend": {
+      "consts": [
+        "EQEntry"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "clear",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "insert",
+          "params": "entry: EQEntry",
+          "returns": "-> void"
+        },
+        {
+          "name": "is_empty",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "ordered",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "peek_min",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "pop_min",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "size",
+          "params": "",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQEntry": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "make",
+          "params": "event_id: int, due_tick: int, priority: int, sequence: int, kind: StringName = &\"\", actor_id: StringName = &\"\", payload: Dictionary = {}",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "actor_id",
+        "due_tick",
+        "event_id",
+        "generation",
+        "kind",
+        "payload",
+        "priority",
+        "sequence"
+      ]
+    },
+    "EQError": {
+      "consts": [
+        "ACTION_NEGATIVE_COST",
+        "ACTION_NEGATIVE_DELAY",
+        "ACTOR_DUPLICATE_ID",
+        "ACTOR_EMPTY_ID",
+        "ACTOR_ID_REUSED",
+        "POLICY_BASE_INSTANCE",
+        "POLICY_MISSING",
+        "POLICY_NAME_EMPTY",
+        "RUNTIME_SCHEDULE_UNREGISTERED_ACTOR",
+        "RUNTIME_UNREGISTERED_ACTOR_EVENT",
+        "TIE_BREAK_AMBIGUOUS",
+        "TIE_BREAK_UNKNOWN"
+      ],
+      "enums": [
+        "Recoverability",
+        "Severity"
+      ],
+      "methods": [
+        {
+          "name": "is_known",
+          "params": "code: StringName",
+          "returns": "-> bool"
+        },
+        {
+          "name": "recoverability_of",
+          "params": "code: StringName",
+          "returns": "-> int"
+        },
+        {
+          "name": "severity_of",
+          "params": "code: StringName",
+          "returns": "-> int"
+        },
+        {
+          "name": "surfaces_in",
+          "params": "code: StringName, where: String",
+          "returns": "-> bool"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQOrdering": {
+      "consts": [
+        "EQEntry"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "less_than",
+          "params": "a: EQEntry, b: EQEntry",
+          "returns": "-> bool"
+        },
+        {
+          "name": "sort",
+          "params": "entries: Array",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQScheduler": {
+      "consts": [
+        "EQBackend",
+        "EQEntry",
+        "EQSnapshot",
+        "EQSortedArrayBackend"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "cancel",
+          "params": "event_id: int",
+          "returns": "-> bool"
+        },
+        {
+          "name": "is_empty",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "peek",
+          "params": "n: int",
+          "returns": "-> Array"
+        },
+        {
+          "name": "peek_next",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "pop",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "push",
+          "params": "due_tick: int, priority: int = 0, kind: StringName = &\"\", actor_id: StringName = &\"\", payload: Dictionary = {}",
+          "returns": "-> int"
+        },
+        {
+          "name": "reschedule",
+          "params": "event_id: int, new_due_tick: int, new_priority = null",
+          "returns": "-> bool"
+        },
+        {
+          "name": "restore",
+          "params": "data",
+          "returns": "-> int"
+        },
+        {
+          "name": "size",
+          "params": "",
+          "returns": "-> int"
+        },
+        {
+          "name": "snapshot",
+          "params": "",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "current_tick"
+      ]
+    },
+    "EQSnapshot": {
+      "consts": [
+        "SCHEMA_VERSION"
+      ],
+      "enums": [
+        "Load"
+      ],
+      "methods": [
+        {
+          "name": "describe",
+          "params": "code: int",
+          "returns": "-> String"
+        },
+        {
+          "name": "is_supported_version",
+          "params": "v: int",
+          "returns": "-> bool"
+        },
+        {
+          "name": "validate",
+          "params": "data",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQSortedArrayBackend": {
+      "consts": [
+        "EQOrdering"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "clear",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "insert",
+          "params": "entry: EQEntry",
+          "returns": "-> void"
+        },
+        {
+          "name": "is_empty",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "ordered",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "peek_min",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "pop_min",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "size",
+          "params": "",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQTrace": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "record",
+          "params": "fields: Dictionary",
+          "returns": "-> void"
+        },
+        {
+          "name": "record_resolved",
+          "params": "entry: EQEntry, cause: String, decided_by: String",
+          "returns": "-> void"
+        },
+        {
+          "name": "records",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "size",
+          "params": "",
+          "returns": "-> int"
+        },
+        {
+          "name": "to_jsonl",
+          "params": "",
+          "returns": "-> String"
+        },
+        {
+          "name": "trace_run",
+          "params": "scheduler",
+          "returns": "-> EQTrace"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQValidation": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "add",
+          "params": "code: StringName, message: String = \"\", context: Dictionary = {}",
+          "returns": "-> void"
+        },
+        {
+          "name": "codes",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "errors",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "has_code",
+          "params": "code: StringName",
+          "returns": "-> bool"
+        },
+        {
+          "name": "is_valid",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "warnings",
+          "params": "",
+          "returns": "-> Array"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "issues"
+      ]
+    },
+    "EQVersion": {
+      "consts": [
+        "ADDON_VERSION",
+        "MIN_GODOT_MAJOR",
+        "MIN_GODOT_MINOR"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "engine_string",
+          "params": "",
+          "returns": "-> String"
+        },
+        {
+          "name": "is_supported_engine",
+          "params": "",
+          "returns": "-> bool"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    }
+  }
+}

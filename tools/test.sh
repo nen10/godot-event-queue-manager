@@ -57,6 +57,15 @@ if command -v python3 >/dev/null 2>&1; then
   else
     log "skip ui_static_audit.py (not present yet)"
   fi
+  if [[ -f tools/check_api_surface.py ]]; then
+    log "running tools/check_api_surface.py (layer-aware API surface gate)"
+    python3 tools/check_api_surface.py --self-test | tee "${OUT_DIR}/api_surface_selftest.log" || PY_FAIL=1
+    if [[ "$UPDATE_GOLDEN" == "api_surface" ]]; then
+      python3 tools/check_api_surface.py --update | tee "${OUT_DIR}/api_surface.log" || PY_FAIL=1
+    else
+      python3 tools/check_api_surface.py | tee "${OUT_DIR}/api_surface.log" || PY_FAIL=1
+    fi
+  fi
 else
   log "skip python checks (python3 not found)"
 fi

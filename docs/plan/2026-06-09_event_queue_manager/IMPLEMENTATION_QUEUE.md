@@ -48,13 +48,13 @@ Process references:
 | EQM-020 | COMPLETE | EQM-014.03 | `docs/plan/2026-06-09_event_queue_manager/EQM-020_config_policy_resources/` | `EQConfig` and `EQPolicy` base Resources with validation, plus error taxonomy. | `resources/eq_config.gd`, `resources/policies/eq_policy.gd`, `docs/design/ERROR_CONTRACT.md`, `tests/resource/` | Resource can be saved/loaded; missing policy and ambiguous tie-breaker produce explicit validation results; contracts follow `docs/design/EVENT_MODEL_SEMANTICS.md`; error taxonomy (stable codes, recoverability classes, game/editor surfacing rules) documented in `ERROR_CONTRACT.md` and used by validation; recoverability classes map to the dev fail-fast / shipped fail-safe two modes of `docs/devflow/policy/RUNTIME_RESILIENCE_POLICY.md`. |
 | EQM-021 | COMPLETE | EQM-020 | `docs/plan/2026-06-09_event_queue_manager/EQM-021_actor_action_contract/` | Actor state and action result public API. | `runtime/eq_actor_state.gd`, `runtime/eq_action_result.gd`, `runtime/eq_actor_registry.gd`, `tests/resource/` | Actor id registration, duplicate rejection, weak binding placeholder, action cost/delay result validation tested. |
 | EQM-022 | COMPLETE | EQM-021 | `docs/plan/2026-06-09_event_queue_manager/EQM-022_manager_headless_facade/` | Headless facade that coordinates scheduler, policy, actors, and action finish. | `runtime/eq_runtime.gd`, `tests/core/` | Register actors, start queue, pop ready event, finish action, and schedule next event without Godot scene tree; exposes the dev/shipped resilience mode toggle, with normal-input traces byte-identical across modes (`RUNTIME_RESILIENCE_POLICY.md`). |
-| EQM-023 | READY | EQM-022 | `docs/plan/2026-06-09_event_queue_manager/EQM-023_api_surface_gate/` | Layer-aware public API surface snapshot gate. | `tools/check_api_surface.py`, `tests/golden/api_surface.json`, `docs/design/API_SURFACE.md` | Public/internal naming convention documented; the API surface is tagged by layer (L0 turn order / L1 policy / L2 reservation / L3 event-line) per roadmap §3.1; deterministic export; a change that leaks an L3 symbol into the L0/L1 surface, or any surface diff without a doc note, fails `./tools/test.sh`; golden update follows the explicit approval procedure. |
+| EQM-023 | COMPLETE | EQM-022 | `docs/plan/2026-06-09_event_queue_manager/EQM-023_api_surface_gate/` | Layer-aware public API surface snapshot gate. | `tools/check_api_surface.py`, `tests/golden/api_surface.json`, `docs/design/API_SURFACE.md` | Public/internal naming convention documented; the API surface is tagged by layer (L0 turn order / L1 policy / L2 reservation / L3 event-line) per roadmap §3.1; deterministic export; a change that leaks an L3 symbol into the L0/L1 surface, or any surface diff without a doc note, fails `./tools/test.sh`; golden update follows the explicit approval procedure. |
 
 ## Phase 3 — Basic policy MVP and runtime Node
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-030 | BACKLOG | EQM-022 | `docs/plan/2026-06-09_event_queue_manager/EQM-030_fixed_round_policy/` | Fixed round policy with initiative and tie-breaker options. | `resources/policies/eq_fixed_round_policy.gd`, `tests/policy/` | Tests cover battle-start ordering, round refresh, equal initiative tie-break, actor removal skip. |
+| EQM-030 | READY | EQM-022 | `docs/plan/2026-06-09_event_queue_manager/EQM-030_fixed_round_policy/` | Fixed round policy with initiative and tie-breaker options. | `resources/policies/eq_fixed_round_policy.gd`, `tests/policy/` | Tests cover battle-start ordering, round refresh, equal initiative tie-break, actor removal skip. |
 | EQM-031 | BACKLOG | EQM-030 | `docs/plan/2026-06-09_event_queue_manager/EQM-031_ctb_policy/` | CTB policy with speed and action cost. | `resources/policies/eq_ctb_policy.gd`, `tests/policy/` | Tests cover faster actor extra turns, heavy action delay, wait action shorter delay, haste/slow next-turn behavior. |
 | EQM-032 | BACKLOG | EQM-031 | `docs/plan/2026-06-09_event_queue_manager/EQM-032_eq_manager_node/` | Godot `EQManager` Node, signal integration, and game-loop driver contract. | `runtime/eq_manager.gd`, `addons/event_queue_manager/plugin.gd`, `tests/runtime/` | Scene-local manager emits `queue_changed`, `event_ready`, `turn_ready`, `event_resolved`; invalid actor policy tested; game-loop driver contract (who advances the queue, suspend semantics awaiting player input, await boundary for action presentation) documented in `EVENT_MODEL_SEMANTICS.md` and covered by tests; the driver offers a frame-budget / time-sliced advance mode (resolve up to a per-frame budget to avoid large-battle hitches) and coexists with Godot idioms (`SceneTree` pause, and `EditorUndoRedoManager` for editor-side mutations) without breaking determinism. |
 | EQM-033 | BACKLOG | EQM-032 | `docs/plan/2026-06-09_event_queue_manager/EQM-033_prediction_preview/` | Next-N prediction as a pure hypothetical API (for HUD and AI planning). | `runtime/eq_prediction.gd`, `runtime/eq_snapshot.gd`, `tests/core/` | Prediction returns expected order; live queue remains unchanged (snapshot before == after, prediction purity); deterministic seed state preserved; exposes a hypothetical-branch API (branch snapshot → virtual advance with a candidate action → discard) so AI/players can compare act-now vs wait without mutating live state (roadmap principle 17); watched-set is re-evaluated per simulated step, independent of prediction depth N (Q26). |
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-023` (Phase 2 autonomous run; 020/021/022 COMPLETE → 023 = Phase 2 milestone, then CHECKPOINT)
+Current: `EQM-030` (Phase 2 COMPLETE. CHECKPOINT — Phase 2/3 milestone boundary, §8.3; autonomous run paused for user direction before Phase 3)
 
 ## Proof log
 
@@ -379,3 +379,23 @@ proof:
 ```
 
 Dependency sweep: EQM-022 COMPLETE → EQM-023 READY. Current pointer → EQM-023.
+
+### EQM-023 — COMPLETE (2026-06-15) — Phase 2 milestone
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-023_api_surface_gate/
+  review: docs/review/autopilot/EQM-023_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=12 checks=191 failures=0
+    - [api-surface] self-test ok; surface matches golden; no untagged; no L3 leak
+    - negative (source-unmodified): untagged + leak detectors both fire
+  gate: §4 resource/API (layer-aware surface snapshot + L3-leak gate)
+  golden: tests/golden/api_surface.json (16 classes: core 10 / L0 4 / L1 2), initial baseline via --update
+  major files:
+    - tools/check_api_surface.py (new), tools/test.sh (wired), docs/design/API_SURFACE.md (new)
+```
+
+Dependency sweep: EQM-023 COMPLETE → **Phase 2 (resource/API) milestone reached** (EQM-020..023 COMPLETE). EQM-030 READY (dep EQM-022). Current pointer → EQM-030.
+CHECKPOINT: Phase 2/3 milestone boundary (§8.3). Autonomous run paused for user direction before Phase 3 (EQM-030: fixed round policy — first concrete EQPolicy).
