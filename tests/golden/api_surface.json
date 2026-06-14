@@ -181,10 +181,41 @@
         "tie_break"
       ]
     },
+    "EQFixedRoundPolicy": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "on_turn_finished",
+          "params": "runtime, actor_id: StringName, _result",
+          "returns": "-> void"
+        },
+        {
+          "name": "seed",
+          "params": "runtime, actor_ids: Array",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "initiative_key"
+      ]
+    },
     "EQPolicy": {
       "consts": [],
       "enums": [],
-      "methods": [],
+      "methods": [
+        {
+          "name": "on_turn_finished",
+          "params": "_runtime, _actor_id: StringName, _result",
+          "returns": "-> void"
+        },
+        {
+          "name": "seed",
+          "params": "_runtime, _actor_ids: Array",
+          "returns": "-> void"
+        }
+      ],
       "signals": [],
       "vars": [
         "policy_name"
