@@ -59,13 +59,13 @@ Process references:
 | EQM-032 | COMPLETE | EQM-031 | `docs/plan/2026-06-09_event_queue_manager/EQM-032_eq_manager_node/` | Godot `EQManager` Node, signal integration, and game-loop driver contract. | `runtime/eq_manager.gd`, `addons/event_queue_manager/plugin.gd`, `tests/runtime/` | Scene-local manager emits `queue_changed`, `event_ready`, `turn_ready`, `event_resolved`; invalid actor policy tested; game-loop driver contract (who advances the queue, suspend semantics awaiting player input, await boundary for action presentation) documented in `EVENT_MODEL_SEMANTICS.md` and covered by tests; the driver offers a frame-budget / time-sliced advance mode (resolve up to a per-frame budget to avoid large-battle hitches) and coexists with Godot idioms (`SceneTree` pause, and `EditorUndoRedoManager` for editor-side mutations) without breaking determinism. |
 | EQM-033 | COMPLETE | EQM-032 | `docs/plan/2026-06-09_event_queue_manager/EQM-033_prediction_preview/` | Next-N prediction as a pure hypothetical API (for HUD and AI planning). | `runtime/eq_prediction.gd`, `runtime/eq_snapshot.gd`, `tests/core/` | Prediction returns expected order; live queue remains unchanged (snapshot before == after, prediction purity); deterministic seed state preserved; exposes a hypothetical-branch API (branch snapshot → virtual advance with a candidate action → discard) so AI/players can compare act-now vs wait without mutating live state (roadmap principle 17); watched-set is re-evaluated per simulated step, independent of prediction depth N (Q26). |
 | EQM-034 | COMPLETE | EQM-033 | `docs/plan/2026-06-09_event_queue_manager/EQM-034_ctb_sample_battle/` | Minimal CTB sample battle and quickstart docs. | `demos/ctb_battle/`, `docs/manual/quickstart.md`, `tests/debug_scene/` | Sample is explicitly learning path; quickstart uses project-created config; sample scene runs or is marked `BLOCKED_BY_TEST_ENV` with proof. |
-| EQM-035 | READY | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-035_v0_1_milestone_evaluation/` | v0.1 milestone evaluation (API friction, semantics drift, queue adjustment, value metrics). | `docs/review/` | Evaluation report exists; semantics spec vs implementation drift is audited; API friction findings and gaps become queue candidates or explicit no-change records; product-value north-star metrics defined and baselined (e.g. simple-path completion without L3, dogfood friction count, layer-leak count); roadmap updated or confirmed unchanged. |
+| EQM-035 | COMPLETE | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-035_v0_1_milestone_evaluation/` | v0.1 milestone evaluation (API friction, semantics drift, queue adjustment, value metrics). | `docs/review/` | Evaluation report exists; semantics spec vs implementation drift is audited; API friction findings and gaps become queue candidates or explicit no-change records; product-value north-star metrics defined and baselined (e.g. simple-path completion without L3, dogfood friction count, layer-leak count); roadmap updated or confirmed unchanged. |
 
 ## Phase 4 — Energy and Wait Turn policies
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-040 | BACKLOG | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-040_energy_policy/` | Roguelike energy policy. | `resources/policies/eq_energy_policy.gd`, `tests/policy/` | Threshold readiness, action cost, speed differences, wait, and energy carry-over tested. |
+| EQM-040 | READY | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-040_energy_policy/` | Roguelike energy policy. | `resources/policies/eq_energy_policy.gd`, `tests/policy/` | Threshold readiness, action cost, speed differences, wait, and energy carry-over tested. |
 | EQM-041 | BACKLOG | EQM-040 | `docs/plan/2026-06-09_event_queue_manager/EQM-041_wait_turn_policy/` | Tactics Ogre-style wait-turn policy. | `resources/policies/eq_wait_turn_policy.gd`, `tests/policy/`, `demos/wait_turn_tactics/` | Units with wait values resolve instantly to next ready unit; action cost modifies next wait; equal wait tie-break explained. |
 
 ## Phase 5 — Action Reservation model
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-035` (Phase 3 autonomous run; 030..034 COMPLETE → 035 = v0.1 MVP milestone evaluation)
+Current: `EQM-040` (Phase 3 COMPLETE — v0.1 MVP milestone. CHECKPOINT — milestone boundary, §8.3; autonomous run paused for user direction before Phase 4)
 
 ## Proof log
 
@@ -497,3 +497,20 @@ proof:
 ```
 
 Dependency sweep: EQM-034 COMPLETE → EQM-035 READY. Current pointer → EQM-035.
+
+### EQM-035 — COMPLETE (2026-06-15) — v0.1 MVP milestone
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-035_v0_1_milestone_evaluation/
+  review: docs/review/autopilot/EQM-035_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct, evaluation); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=17 checks=234 failures=0; [api-surface] ok
+  gate: docs-only evaluation (no code change; green build confirms)
+  finding: no semantics drift; 0 blocking friction (4 minor → EQM-100 docs / no-change); north-star baselined (simple-path-without-L3 achieved, layer-leak 0); roadmap confirmed unchanged
+  deliverable: docs/review/V0_1_MILESTONE_EVALUATION_2026-06-15.md
+```
+
+Dependency sweep: EQM-035 COMPLETE → **Phase 3 COMPLETE = v0.1 MVP milestone reached** (EQM-030..035 COMPLETE). EQM-040 READY (dep EQM-034). Current pointer → EQM-040.
+CHECKPOINT: v0.1 MVP milestone boundary (§8.3). Autonomous run paused for user direction before Phase 4 (EQM-040 energy / EQM-041 wait-turn).
