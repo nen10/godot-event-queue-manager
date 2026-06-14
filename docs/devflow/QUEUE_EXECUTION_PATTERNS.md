@@ -109,3 +109,59 @@ EQM の利点: **UI task は UI metric P0 が客観 gate** (`UI_LAYOUT_METRIC_TE
 - 複数 task が同時に `RUNNING` になり得る (disjoint なら)。各 worktree が 1 task を占有。
 - `VERIFYING` = gate 実行中。`ACCEPT`→`COMPLETE` / `COMPLETE_WITH_BACKLOG`、`REJECT`→`REPAIR_NOW`。
 - Current pointer は線形時のみ意味を持つ。並列時は「並列可能 READY 集合」を proof log に記す。
+
+## 8. Autonomous orchestration loop (自律実行サイクル)
+
+orchestrator (Opus) が、その時点の queue に応じて §3 のパターンを自動選択し、gate と queue state 更新まで含めて次 task へ進む。承認待ちで止まらず、明示された checkpoint と stop 条件でのみ止まる。
+
+### 8.1 1 反復の手順
+
+```text
+1. SWEEP   : dependency sweep を回し、READY frontier F = {依存が満たされた task} を得る。
+2. STOP?   : F が空なら停止 (§8.4)。残りが全て blocked なら理由を報告して停止。
+3. CLASSIFY: F の各 task を分類する — type(→§4 gate) / depth(surface|integrated|decision) / target files。
+4. SELECT  : §8.2 の決定規則でパターンを 1 つ選ぶ。
+5. CHECK?  : §8.3 の checkpoint に該当するなら、実行せずユーザーへ escalate して停止。
+6. CONTRACT: §2 の contract を書く (acceptance/depth/scope/gate/isolation)。
+7. PLAN    : `TASK_PACKET.md` に従い task packet を作る (complexity 相応)。
+8. RUN     : 選んだパターンを実行 (P0 直接 / P2 委譲 / P1 並列 / P3 競争 / P4 探索)。
+9. GATE    : `./tools/test.sh` が §4 の当該 gate を緑にする。ACCEPT→10、REJECT→REPAIR_NOW で 8 へ (§8.4 の repair 上限)。
+10. RECORD : self-review を書き、queue status を更新、Scheduled task を queue へ追加、proof log を記す。
+11. COMMIT : commit 可能 status のみ `PROJECT_PROFILE.md` に従い commit。
+12. LOOP   : 1 へ。
+```
+
+shared state (`IMPLEMENTATION_QUEUE.md`・proof・golden・統合ブランチ) を書くのは常に orchestrator (§0)。
+
+### 8.2 パターン自動選択 (決定規則・上から評価)
+
+1. F 内に depth=`decision` の task がある、または acceptance が未記録の product/UX 判断を要する → **§8.3 checkpoint** (実行しない)。
+2. それ以外で |F| ≥ 2 かつ target files が disjoint な独立部分集合がある → **P1 parallel**(各 task は P2 で worktree 委譲)。
+3. 単一 task:
+   - core/policy/trace かつ high-value + ambiguous (実装の自由度が高く golden で裁定可能) → **P3 dual-run**。
+   - UI/editor かつ contract 未確定 or 過去に難航 → **P4 spar**(UI metric で裁定)。
+   - bounded かつ小さい (1-2 file, surface) → **P0**(orchestrator が直接実装)。
+   - bounded だが手数が多い (integrated) → **P2 delegation**。
+
+迷ったら保守的に倒す: 委譲より直接 (P0)、競争より委譲 (P2)。「executor が臆病」と感じたら contract の depth を直す (bolder と言わない)。
+
+### 8.3 Checkpoint (実行せず止まり、ユーザー判断を仰ぐ)
+
+- depth=`decision` の設計/意味論 task (例: EQM-014 event model semantics)。
+- acceptance を満たすのに未記録の product/UX 決定が要るとき。
+- billed/external agent run が必要なとき。
+- protected branch (`main` 等) への merge。
+- milestone 境界 (v0.1, v0.2, …) — 自然なレビュー点。
+- gate REJECT が §8.4 の repair 上限を超えたとき。
+
+checkpoint では「現在 frontier・選んだパターン・止まった理由・必要な判断」を 1 メッセージで提示する。
+
+### 8.4 Stop / repair 規律
+
+- 通常 stop 条件 (`PROJECT_PROFILE.md`): 必須環境欠如 / 外部 credential・公開 upload / repo 外破壊操作 / ユーザー指示と roadmap の直接矛盾。
+- gate REJECT は同 task で repair (`REPAIR_NOW`)。**repair 上限 = 3 反復**。超えたら checkpoint で止め、findings を提示する。`REPAIR_NOW` を backlog に動かさない。
+- 環境不足は `BLOCKED_BY_TEST_ENV` (docs/state commit のみ)。`SPLIT_REQUIRED` は task を分割して queue へ。
+
+### 8.5 この repo の現況での自動進行 (参考)
+
+v0.1 spine (EQM-002→010→011→012→013) は bounded・linear・Godot/golden gated なので **P0/P2 で自律進行**でき、**EQM-014 (depth=decision) で checkpoint** に当たって止まる。以降は editor/demo の fan-out で P1/P4 が効く。

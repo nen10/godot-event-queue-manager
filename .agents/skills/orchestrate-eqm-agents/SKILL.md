@@ -28,6 +28,10 @@ for the linear spine.
 5. **Gate (never skip)**: `./tools/test.sh` green for the task-type gate (golden trace / UI metric P0 / resilience two-mode / layer-aware API surface). `ACCEPT` → merge; `REJECT` → relay findings for repair.
 6. **Merge + record** only after `ACCEPT`. Only the orchestrator edits the queue, proof log, and golden fixtures; agents never write shared state.
 
+## Autonomous loop
+
+To self-drive multiple tasks (select a pattern per task, gate, update queue state, advance), run the loop in `QUEUE_EXECUTION_PATTERNS.md` §8: sweep → classify → auto-select pattern (§8.2) → contract → run → gate → record → commit → repeat. Do not wait for approval between tasks; stop only at the §8.3 checkpoints (decision-depth/design tasks, unrecorded product-UX decisions, billed runs, protected-branch merges, milestone boundaries, repair-limit) and the §8.4 stop conditions.
+
 ## Hard rules
 
 - Completion is gate-decided, never self-attested.
