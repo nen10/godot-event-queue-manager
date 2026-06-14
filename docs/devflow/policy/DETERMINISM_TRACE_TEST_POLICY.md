@@ -55,6 +55,7 @@ resolved event 1 件 = 1 record:
 ```
 
 - CI / 通常 run での自動更新は禁止。
+- 並列実行下: 通常 run の golden は read-only (比較のみ) で並列安全。`--update-golden` は serial・単一プロセスで、異なる golden file のみを書く (`PROJECT_PROFILE.md` Test Design Policy)。並列でだけ起きる golden diff は hermeticity bug であり retry で隠さない。
 
 ## 3. Property / metamorphic tests
 

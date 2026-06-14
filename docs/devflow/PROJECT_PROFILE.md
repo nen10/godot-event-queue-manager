@@ -99,9 +99,25 @@ This file specializes the reusable addon devflow for the Event Queue Manager God
 
 ### Parallel execution
 
+2 つの並列を区別する:
+
+- **task 並列** (`QUEUE_EXECUTION_PATTERNS.md` P1): task ごとに worktree を分け、各々が独立に `./tools/test.sh` を回す。queue/proof/golden は orchestrator のみが書く。
+- **test 内並列** (sharded multi-process): 1 回の `./tools/test.sh` 内で suite を複数プロセスへ分割する。下記前提を満たすときのみ。
+
+共通の出力規律:
+
 - test 出力は `.godot_user/test-runs/<run-id>/` 以下へ置く。
 - 固定 resource path や共有 log へ直接書き込まない。
-- 非線形実行 (`docs/devflow/QUEUE_EXECUTION_PATTERNS.md`) でも queue/proof/golden は orchestrator のみが書く。
+
+test 内並列の前提 (EQM 固有):
+
+- **shard 分離**: 同一 project dir に複数 Godot プロセスを同時起動すると `.godot/` import cache を競合し race/破損し得る。shard ごとに project を分離する (worktree/コピー、または分離 cache dir)。run-id 出力分離だけでは不十分。in-process thread 並列は使わない (SceneTree は単一スレッド)。
+- **hermeticity**: 各 test は自分の scheduler/seed/snapshot/output を持ち、global 可変状態 (static / autoload / singleton) を共有しない。test は isolation・serial・parallel で同一結果になること。
+- **golden は通常 read-only**: 比較のみなら並列安全。`--update-golden` は serial・単一プロセスで、異なる golden file のみを書く (`policy/DETERMINISM_TRACE_TEST_POLICY.md`)。
+- **parallel == serial 不変**: 並列結果は serial と同じ pass/fail・同じ golden diff。並列でだけ落ちる test は flake ではなく hermeticity bug。retry で隠さず修正する。
+- **決定的 sharding**: sorted test id でパーティションし、どの shard が何を走らせたか記録する。個別 test は単独再現可能にする。
+- **適用条件**: total test time が `Godot 起動 × shard 数` を上回るときのみ採用。小規模 suite は serial 既定。
+- **実装の段階**: `tools/test.sh` の `--jobs`/`--shard` 化は suite が育ってから追加する (現状は premature)。それまで本節は契約のみ。
 
 ## Autopilot commit policy
 
