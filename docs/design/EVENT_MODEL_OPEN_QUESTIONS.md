@@ -52,7 +52,7 @@ status:
 | Q23 | DECIDED(user) | 過剰一般化ガードレール 合意 |
 | Q24 | DEFERRED | grouped / micro-event-line (RTS 補助線) |
 | Q25 | OPEN(support) | sync barrier — core 命名はしないが acceptance 支援は課題 |
-| Q26 | OPEN | event-line identity / granularity / lifecycle / 再帰召喚 scaling |
+| Q26 | DECIDED(user) | event-line identity / granularity / lifecycle / 再帰召喚 scaling |
 
 ---
 
@@ -434,3 +434,11 @@ user意見:
 2 -> 推奨案とする。ただし、watchedの範囲は何が定めるのか？予測深さに従属させるのか、独立な acceptance 選択に従うのか。
 3 -> 推奨案とする。どちらも選択できる。
 4 -> 推奨案とする。
+
+→ 決定 (2026-06-14, status: DECIDED(user)): 4 点とも採用。追加明確化:
+
+- **「多数同質 (homogeneous)」の定義**: 進行規則の *shape* が同一で per-entity parameter のみ異なるもの。例: 「毎 tick 自速度ぶん CT 加算、閾値で行動」は速度の値だけ違い shape は同一 → 1 つの sweep event が全員を前進できる (pattern 2)。条件・効果の *構造* が個別に違えば heterogeneous → pattern (1)。判定は「規則を共通 callable + per-entity param に分離できるか」で機械的に下せる。この定義を `EVENT_MODEL_CONCEPTS.md` §3.1 に明文化する (ユーザー指摘どおり、定義自体が成果)。
+- **watched の範囲**: event-line が watched = 未解決 event の solve/invalidation 条件が 1 つ以上それを参照していること。current pending 条件から導出される **state 由来の性質**で、予測深さには従属しない。予測は前進の各 step で watched-set を再評価するだけ。frozen (rate 0) と非 watched は polling 対象外 (sparse polling)。
+- stacking は refresh default / 独立 stack 明示宣言の両選択可。lifecycle は actor lifecycle 従属、中途消滅 entity の pending は Q05 invalidation 経路。
+
+影響: EVENT_MODEL_CONCEPTS.md §3.1 (homogeneity 定義), EQM-014 (watched-set / sparse polling 契約), EQM-053/102 (polling cost)。

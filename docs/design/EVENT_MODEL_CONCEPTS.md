@@ -56,6 +56,10 @@ race pattern (OR 解決) で発行されるのは **event-line を条件にし�
 
 per-entity WT/CT は (1) を*必須にしない* (Q16 決定)。多数 entity が同じ規則で進むなら (2) を採るのが既定で、これにより first-class event-line 数は entity 数に依存せず O(1) に抑えられる。(1) は規則が個別に独立な軸にのみ使う。
 
+**「多数同質 (homogeneous)」の定義**: 進行規則の *shape* が同一で、per-entity parameter のみ異なるもの。例:「毎 tick 自速度ぶん CT 加算、閾値で行動」は速度の値だけ違い shape は同一。機械判定基準は「規則を共通 callable + per-entity param に分離できるか」。分離できれば homogeneous (pattern 2)、条件・効果の構造が個別なら heterogeneous (pattern 1)。
+
+**watched / sparse polling**: event-line が watched = 未解決 event の solve/invalidation 条件が 1 つ以上それを参照している状態。これは現在の pending 条件から導出される state 由来の性質で、予測深さに従属しない。polling 対象は watched かつ rate≠0 (非 frozen) の event-line のみ。これにより event-line 総数が大きくても前進コストは「実際に監視されている軸」に比例する。
+
 ## 4. event-line / counter の identity と lifecycle
 
 進行を数える単位の identity は、**ゲームが数えたい意味単位に一致させる**。これが唯一の不変条件。具体的な granularity 方針 (どこまで first-class にするか、stacking 意味論、再帰召喚の cost) は未決として Q26 が持つ。
