@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8eqmctbbattle01"]
+
+[ext_resource type="Script" path="res://demos/ctb_battle/ctb_battle.gd" id="1_ctb"]
+
+[node name="CTBBattle" type="Node"]
+script = ExtResource("1_ctb")
