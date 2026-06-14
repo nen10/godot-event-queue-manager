@@ -43,6 +43,8 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.actor.empty_id` | RESOURCE_INVALID | ERROR | editor, game | registering an empty actor_id |
 | `eqm.action.negative_delay` | CONTRACT_VIOLATION | ERROR | editor, game | `EQActionResult.delay < 0` (would schedule into the past) |
 | `eqm.action.negative_cost` | RESOURCE_INVALID | ERROR | editor, game | `EQActionResult.cost < 0` without `allow_negative_cost` (§12 policy-declared) |
+| `eqm.runtime.unregistered_actor_event` | CONTRACT_VIOLATION | ERROR | editor, game | advancing an event whose actor was removed (dev halts; shipped skips + `invalid_event_skipped`) |
+| `eqm.runtime.schedule_unregistered_actor` | CONTRACT_VIOLATION | ERROR | editor, game | schedule / finish_action for an unregistered actor |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

@@ -33,6 +33,8 @@ const ACTOR_ID_REUSED := &"eqm.actor.id_reused"
 const ACTOR_EMPTY_ID := &"eqm.actor.empty_id"
 const ACTION_NEGATIVE_DELAY := &"eqm.action.negative_delay"
 const ACTION_NEGATIVE_COST := &"eqm.action.negative_cost"
+const RUNTIME_UNREGISTERED_ACTOR_EVENT := &"eqm.runtime.unregistered_actor_event"
+const RUNTIME_SCHEDULE_UNREGISTERED_ACTOR := &"eqm.runtime.schedule_unregistered_actor"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -46,6 +48,8 @@ const _META := {
 	ACTOR_EMPTY_ID: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	ACTION_NEGATIVE_DELAY: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	ACTION_NEGATIVE_COST: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RUNTIME_UNREGISTERED_ACTOR_EVENT: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RUNTIME_SCHEDULE_UNREGISTERED_ACTOR: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 }
 
 
