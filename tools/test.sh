@@ -74,10 +74,26 @@ log "godot: $($GODOT_BIN --version 2>/dev/null || echo unknown)"
 GODOT_FAIL=0
 RUNNER="test_project/tests/run_all.gd"
 if [[ -f "$RUNNER" ]]; then
+  # Import pass: class_name resolution requires the project to be imported once
+  # to build .godot/global_script_class_cache.cfg. .godot/ is gitignored, so a
+  # clean checkout must import every run before the script run can resolve globals.
+  log "import pass (register global classes)"
+  "$GODOT_BIN" --headless --path test_project --import \
+    > "${OUT_DIR}/godot_import.log" 2>&1 || true
+
   log "running Godot headless test runner"
   GODOT_UPDATE_GOLDEN="$UPDATE_GOLDEN" "$GODOT_BIN" --headless \
     --path test_project --script res://tests/run_all.gd \
-    | tee "${OUT_DIR}/godot_tests.log" || GODOT_FAIL=1
+    2>&1 | tee "${OUT_DIR}/godot_tests.log"
+  if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then GODOT_FAIL=1; fi
+
+  # Guard against masked failures: a broken test can exit 0 while a compile /
+  # script error scrolled past. Treat those as failures. (Intentional invalid-
+  # input checks must not emit these patterns; they use null returns, not errors.)
+  if grep -qE "SCRIPT ERROR|Compile Error|Parse Error|Failed to load script" "${OUT_DIR}/godot_tests.log"; then
+    log "Godot script/compile error detected in test output"
+    GODOT_FAIL=1
+  fi
 else
   log "skip Godot tests (${RUNNER} not present yet)"
 fi

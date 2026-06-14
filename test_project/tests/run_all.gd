@@ -1,36 +1,50 @@
 extends SceneTree
 ## Headless test runner for tools/test.sh.
-## Exit 0 = pass, non-zero = fail.
 ##
-## Scaffold phase (EQM-002): a clean-load smoke that proves the addon is
-## reachable from this consumer project and the engine meets the declared
-## minimum. Test suites are registered here in later phases.
+## Discovers res://tests/**/test_*.gd in sorted (deterministic) order, calls
+## each file's `static func run(t)`, and aggregates. Exit 0 = pass.
+
+const EQTest := preload("res://tests/eq_test.gd")
+
 
 func _initialize() -> void:
 	var info := Engine.get_version_info()
 	print("[run_all] engine %s.%s.%s" % [info["major"], info["minor"], info["patch"]])
 
-	var failures: Array[String] = []
+	var t := EQTest.new()
+	var files := _discover("res://tests")
+	files.sort()
+	for path in files:
+		var script: GDScript = load(path)
+		if script == null:
+			t.ok(false, "failed to load %s" % path)
+			continue
+		script.run(t)
 
-	# 1. addon is reachable from this clean consumer project (via addons symlink).
-	if not FileAccess.file_exists("res://addons/event_queue_manager/plugin.cfg"):
-		failures.append("addon plugin.cfg not reachable from test_project")
-
-	# 2. runtime version helper loads and the engine meets the declared minimum.
-	var version_path := "res://addons/event_queue_manager/runtime/eq_version.gd"
-	if not ResourceLoader.exists(version_path):
-		failures.append("eq_version.gd not found at %s" % version_path)
-	else:
-		var eq_version: GDScript = load(version_path)
-		if not eq_version.is_supported_engine():
-			failures.append("engine below declared minimum %d.%d" % [eq_version.MIN_GODOT_MAJOR, eq_version.MIN_GODOT_MINOR])
-		else:
-			print("[run_all] addon %s on engine %s" % [eq_version.ADDON_VERSION, eq_version.engine_string()])
-
-	if failures.is_empty():
-		print("[run_all] PASS (scaffold smoke)")
+	print("[run_all] files=%d checks=%d failures=%d" % [files.size(), t.checks, t.failures.size()])
+	if t.failures.is_empty():
+		print("[run_all] PASS")
 		quit(0)
 	else:
-		for f in failures:
+		for f in t.failures:
 			printerr("[run_all] FAIL: %s" % f)
 		quit(1)
+
+
+func _discover(dir_path: String) -> Array[String]:
+	var out: Array[String] = []
+	var d := DirAccess.open(dir_path)
+	if d == null:
+		return out
+	d.list_dir_begin()
+	var entry := d.get_next()
+	while entry != "":
+		var full := dir_path.path_join(entry)
+		if d.current_is_dir():
+			if not entry.begins_with("."):
+				out.append_array(_discover(full))
+		elif entry.begins_with("test_") and entry.ends_with(".gd"):
+			out.append(full)
+		entry = d.get_next()
+	d.list_dir_end()
+	return out

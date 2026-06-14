@@ -32,8 +32,8 @@ Process references:
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-010 | READY | EQM-002 | `docs/plan/2026-06-09_event_queue_manager/EQM-010_core_event_contract/` | Core event entry and ordering contract. | `runtime/eq_entry.gd`, `runtime/eq_ordering.gd`, `tests/core/` | Tests prove due_tick asc, priority desc, sequence asc, stable tie-breaking, invalid negative tick rejection. |
-| EQM-011 | BACKLOG | EQM-010 | `docs/plan/2026-06-09_event_queue_manager/EQM-011_scheduler_operations/` | Scheduler push/pop/peek/cancel/reschedule with sorted-array backend behind a backend contract. | `runtime/eq_scheduler.gd`, `runtime/backends/eq_backend.gd`, `runtime/backends/eq_sorted_array_backend.gd`, `tests/core/` | Tests cover push/pop, peek N, cancel by event_id, lazy invalidation/generation, reschedule, empty queue behavior; the backend is accessed through a language-agnostic contract interface so it can be swapped (sorted-array → binary heap → future native) without a public API change (roadmap §3.2, principle 19). |
+| EQM-010 | COMPLETE | EQM-002 | `docs/plan/2026-06-09_event_queue_manager/EQM-010_core_event_contract/` | Core event entry and ordering contract. | `runtime/eq_entry.gd`, `runtime/eq_ordering.gd`, `tests/core/` | Tests prove due_tick asc, priority desc, sequence asc, stable tie-breaking, invalid negative tick rejection. |
+| EQM-011 | READY | EQM-010 | `docs/plan/2026-06-09_event_queue_manager/EQM-011_scheduler_operations/` | Scheduler push/pop/peek/cancel/reschedule with sorted-array backend behind a backend contract. | `runtime/eq_scheduler.gd`, `runtime/backends/eq_backend.gd`, `runtime/backends/eq_sorted_array_backend.gd`, `tests/core/` | Tests cover push/pop, peek N, cancel by event_id, lazy invalidation/generation, reschedule, empty queue behavior; the backend is accessed through a language-agnostic contract interface so it can be swapped (sorted-array → binary heap → future native) without a public API change (roadmap §3.2, principle 19). |
 | EQM-012 | BACKLOG | EQM-011 | `docs/plan/2026-06-09_event_queue_manager/EQM-012_snapshot_roundtrip/` | Serializable snapshot for scheduler state. | `runtime/eq_snapshot.gd`, `runtime/eq_scheduler.gd`, `tests/core/` | Snapshot roundtrip reproduces current_tick, sequence counter, entries, generations, and subsequent pop order; snapshot carries `schema_version` and unknown versions produce a stable load error. |
 | EQM-013 | BACKLOG | EQM-012 | `docs/plan/2026-06-09_event_queue_manager/EQM-013_trace_determinism_harness/` | Canonical trace export and determinism harness (golden + property tests). | `runtime/eq_trace.gd`, `tests/core/`, `tests/golden/`, `tools/test.sh` | Same-seed replay reproduces byte-identical trace; insertion permutation with identical keys preserves pop order; snapshot continuity holds; golden update only via explicit flag per `DETERMINISM_TRACE_TEST_POLICY.md`; the trace-record-kind schema is open/extensible so later phases (EQM-014 `event_line_progressed`/`window_opened`/`window_closed`, EQM-061 invalidation `closed_by`) add kinds without rewriting the harness. |
 | EQM-014 | BACKLOG | EQM-013 | `docs/plan/2026-06-09_event_queue_manager/EQM-014_event_model_semantics/` | Event model semantics spec, progression (event-line) model, and ordering coverage matrix. | `docs/design/EVENT_MODEL_SEMANTICS.md`, `docs/design/ORDERING_MODEL_COVERAGE.md`, `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`, `docs/design/EVENT_MODEL_CONCEPTS.md` | Builds on the confirmed three-plane model (`docs/design/EVENT_MODEL_CONCEPTS.md`: event-line = progression input / event = ordered output / `event_line_progressed` = trace observation) and records adopted/rejected for all `EVENT_MODEL_OPEN_QUESTIONS.md` items per the 2026-06-14 decisions (`docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-06-14.md`), including the Q26 event-line identity/granularity/lifecycle resolution. Reserves these contracts in Phase1/2 (backend impl may defer to Phase4/5 with no later backward-incompat break): (1) **event-line** = acceptance-defined incremental integer progression; global tick = primary event-line; event-side issuance allowed; per-entity event-line is acceptance-defined, not a built-in required field; invariant: event-line = progression input, master timeline = resolution output via single int comparator (tick/priority/sequence), due_tick rewrite forbidden (reschedule-only). (2) **solve_conditions (AND default) / invalidation_conditions (OR default)**; AND-invalidation via decremental counter event-line; OR-resolution via race pattern with a race-group id and the 3-display separation concept contract (EQM debug / game-dev debug / presentation). (3) **composite resolution comparator hook**: acceptance-provided deterministic key from serializable state (float allowed here only, never in core ordering key; live-object refs forbidden; golden-covered); final fallback = event issuance order on the default event-line; simultaneous/parallel issuance forbidden. (4) **sweep point** = post-event-resolution collection window; eager = trigger-type invalidation condition. (5) **reentrancy spec** unifying window nest (meta-cost budget, Q02) and trigger nest (bounded round + cycle guard, EQM-062), crossing cases in scope with provisional cost design. (6) **save boundary** = empty effect-processing-chunk (chunk added at resolution not issuance; window-open clears); equals an allowed sync barrier. (7) trace record kinds incl. `event_line_progressed`, `window_opened`, `window_closed`, invalidation `closed_by`. Coverage matrix maps >= 8 systems (CTB, energy, wait-turn TO/FFT-CT, FE phase, 4X phase, stack/LIFO, Pokemon-style speed turn, ATB, 行動解決ターン制); grouped/micro-event-line (Q24) and sync-barrier naming (Q25) recorded as deferred/support; unmappable cases become queue candidates before the Phase 2 API freeze. Planning note: this is a C5 task — split into SUB_TASKS at planning time (e.g. event-line + conditions contract / reentrancy + save + trace-kind / coverage matrix) per `docs/devflow/TASK_PACKET.md`. |
@@ -138,7 +138,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-010`
+Current: `EQM-011`
 
 ## Proof log
 
@@ -175,3 +175,20 @@ proof:
 ```
 
 Dependency sweep: EQM-002 COMPLETE → EQM-010 READY. Current pointer → EQM-010.
+
+### EQM-010 — COMPLETE (2026-06-14)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-010_core_event_contract/
+  review: docs/review/autopilot/EQM-010_SELF_REVIEW_2026-06-14.md
+  pattern: P0 (orchestrator-direct); repair 1/3 (headless class_name → import pass + guard)
+  tests:
+    - ./tools/test.sh (clean) -> RESULT: PASS (exit 0); files=2 checks=9 failures=0
+  major files:
+    - addons/event_queue_manager/runtime/{eq_entry.gd,eq_ordering.gd} (new)
+    - test_project/tests/{eq_test.gd,run_all.gd,core/test_scaffold.gd,core/test_eq_ordering.gd}
+    - tools/test.sh (import pass + masked-failure guard)
+```
+
+Dependency sweep: EQM-010 COMPLETE → EQM-011 READY. Current pointer → EQM-011.
