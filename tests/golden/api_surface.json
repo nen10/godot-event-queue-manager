@@ -96,6 +96,87 @@
         "data"
       ]
     },
+    "EQManager": {
+      "consts": [
+        "EQActionResult",
+        "EQEntry",
+        "EQRuntime"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "advance_frame",
+          "params": "budget: int, auto_result = null",
+          "returns": "-> int"
+        },
+        {
+          "name": "configure",
+          "params": "config",
+          "returns": "-> EQValidation"
+        },
+        {
+          "name": "finish_action",
+          "params": "actor_id: StringName, result",
+          "returns": "-> void"
+        },
+        {
+          "name": "is_awaiting_turn",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "register_actor",
+          "params": "actor_id: StringName",
+          "returns": "-> EQActorState"
+        },
+        {
+          "name": "runtime",
+          "params": "",
+          "returns": "-> EQRuntime"
+        },
+        {
+          "name": "seed",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "set_mode",
+          "params": "mode: int",
+          "returns": "-> void"
+        },
+        {
+          "name": "set_policy",
+          "params": "p",
+          "returns": "-> void"
+        },
+        {
+          "name": "step",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "trace_jsonl",
+          "params": "",
+          "returns": "-> String"
+        },
+        {
+          "name": "validate",
+          "params": "",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [
+        "event_ready",
+        "event_resolved",
+        "invalid_event_skipped",
+        "queue_changed",
+        "timeline_advanced",
+        "turn_ready"
+      ],
+      "vars": [
+        "policy"
+      ]
+    },
     "EQRuntime": {
       "consts": [
         "EQActionResult",

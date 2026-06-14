@@ -212,14 +212,14 @@ Determinism rules (unchanged from EQM-013): ordering keys are int only; fixed ke
 
 ---
 
-## 14. Driver / await contract (EQM-032 reference)
+## 14. Driver / await contract (EQM-032)
 
-The headless core resolves events; a driver advances it. v1 reserves the driver contract that EQM-032 implements:
+The headless core resolves events; a driver advances it. EQM-032 realizes this contract as the `EQManager` node:
 
-- **Who advances**: the consumer (game loop or `EQManager` node) calls advance; the core never self-drives.
-- **Suspend semantics**: when an event requires player input, the queue **suspends** at a well-defined boundary (an open window / awaiting reservation) rather than blocking; the driver resumes it.
-- **Await boundary for presentation**: action presentation happens at an await boundary between resolution and the next advance, so the simulation order is never distorted by presentation timing (Simulation/presentation split).
-- **Frame-budget advance**: the driver offers a time-sliced mode (resolve up to a per-frame budget) to avoid large-battle hitches, **without changing determinism** (the order is identical regardless of how many events a frame resolves). Coexists with `SceneTree` pause and `EditorUndoRedoManager` for editor mutations.
+- **Who advances**: the consumer (game loop or `EQManager`) calls `step()` / `advance_frame()`; the core never self-drives (the node does not implicitly drive every frame).
+- **Suspend semantics**: when a turn becomes ready the node emits `turn_ready` and **suspends** (`step()` returns null) until the consumer calls `finish_action` — the player-input await boundary. (For deeper L3 cases the same suspend point is an open window / awaiting reservation.)
+- **Await boundary for presentation**: action presentation happens between `event_resolved` and the next `step()`, so the simulation order is never distorted by presentation timing (Simulation/presentation split).
+- **Frame-budget advance**: `advance_frame(budget)` resolves up to a per-frame budget (auto-finishing turns) to avoid large-battle hitches, **without changing determinism** — the order/trace is identical regardless of how many events a frame resolves. Coexists with `SceneTree` pause and `EditorUndoRedoManager` for editor mutations.
 
 ---
 

@@ -2,12 +2,16 @@
 extends EditorPlugin
 ## Event Queue Manager editor entry point.
 ##
-## Scaffold only (EQM-002). Editor docks (timeline preview, config inspector,
-## debug inspector, template generator) are added in later phases.
+## Registers the scene-local EQManager node type. Editor docks (timeline
+## preview, config inspector, debug inspector, template generator) are added in
+## later phases.
+
+const _MANAGER_SCRIPT := preload("runtime/eq_manager.gd")
+
 
 func _enter_tree() -> void:
-	pass
+	add_custom_type("EQManager", "Node", _MANAGER_SCRIPT, null)
 
 
 func _exit_tree() -> void:
-	pass
+	remove_custom_type("EQManager")

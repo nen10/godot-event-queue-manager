@@ -35,7 +35,7 @@ LAYER_MAP = {
     "EQError": "core", "EQValidation": "core", "EQVersion": "core",
     # L0 turn order
     "EQRuntime": "L0", "EQActorRegistry": "L0",
-    "EQActorState": "L0", "EQActionResult": "L0",
+    "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0",
     # L1 policy
     "EQConfig": "L1", "EQPolicy": "L1", "EQFixedRoundPolicy": "L1", "EQCTBPolicy": "L1",
     # L2 reservation / L3 event-line: added in Phase 5+
