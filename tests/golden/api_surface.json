@@ -431,6 +431,35 @@
         "tags"
       ]
     },
+    "EQActionResolutionPolicy": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "on_turn_finished",
+          "params": "runtime, actor_id: StringName, result",
+          "returns": "-> void"
+        },
+        {
+          "name": "ready_reservation_for",
+          "params": "runtime, actor_id: StringName, spent: int = -1",
+          "returns": "-> EQReservation"
+        },
+        {
+          "name": "seed",
+          "params": "runtime, actor_ids: Array",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "action_ap_cost",
+        "ap_key",
+        "ap_max",
+        "recovery_key",
+        "recovery_per_tick"
+      ]
+    },
     "EQReservation": {
       "consts": [
         "EQActionDefinition"
