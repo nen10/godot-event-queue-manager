@@ -72,8 +72,8 @@ Process references:
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-050 | READY | EQM-041 | `docs/plan/2026-06-09_event_queue_manager/EQM-050_reservation_schema/` | Reservation Resource/API schema. | `resources/eq_action_definition.gd`, `runtime/eq_reservation.gd`, `tests/resource/` | Immediate, prepared, reaction preparation, wait, ready reservation, operation action, tags, duration, rumination fields validate. |
-| EQM-051 | BACKLOG | EQM-050 | `docs/plan/2026-06-09_event_queue_manager/EQM-051_reservation_resolution/` | Reservation scheduling and resolution pipeline. | `runtime/eq_reservation_runtime.gd`, `tests/core/` | Immediate action resolves at delay 0; prepared action resolves after delay; wait schedules ready reservation; operation action causes target reservation. |
+| EQM-050 | COMPLETE | EQM-041 | `docs/plan/2026-06-09_event_queue_manager/EQM-050_reservation_schema/` | Reservation Resource/API schema. | `resources/eq_action_definition.gd`, `runtime/eq_reservation.gd`, `tests/resource/` | Immediate, prepared, reaction preparation, wait, ready reservation, operation action, tags, duration, rumination fields validate. |
+| EQM-051 | READY | EQM-050 | `docs/plan/2026-06-09_event_queue_manager/EQM-051_reservation_resolution/` | Reservation scheduling and resolution pipeline. | `runtime/eq_reservation_runtime.gd`, `tests/core/` | Immediate action resolves at delay 0; prepared action resolves after delay; wait schedules ready reservation; operation action causes target reservation. |
 | EQM-052 | BACKLOG | EQM-051 | `docs/plan/2026-06-09_event_queue_manager/EQM-052_ap_ready_model/` | AP and ready reservation model for Action Resolution Turn-Based. | `resources/policies/eq_action_resolution_policy.gd`, `tests/policy/` | Ready reservation grants turn after AP recovery delay; AP spending and recovery are deterministic; turn closes through wait. |
 | EQM-053 | BACKLOG | EQM-052 | `docs/plan/2026-06-09_event_queue_manager/EQM-053_policy_reducibility_proofs/` | Policy reducibility proofs (dedicated policies as reservation/event-line degenerate cases). | `tests/policy/`, `tests/golden/` | CTB, energy, and wait-turn (TO/FFT-CT) configurations expressed via the reservation + event-line model reproduce the dedicated policies' golden traces across tie-break / speed / delay matrices; per-tick event-line polling (Q17) and any optimized backend produce identical traces; reducibility proves the model's generality but does not mandate that every model reduce — independent `EQPolicy` implementations remain permitted (roadmap §1.1); divergences are recorded as model gaps feeding the next evaluation. |
 
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-050` (Phase 4 COMPLETE. CHECKPOINT — Phase 4/5 milestone boundary, §8.3; autonomous run paused for user direction before Phase 5)
+Current: `EQM-051` (Phase 5 autonomous run, user-approved 2026-06-15; 050 COMPLETE → 051 → 052 → 053 = Phase 5 milestone. EQM-053 candidate for Codex delegation.)
 
 ## Proof log
 
@@ -556,3 +556,23 @@ proof:
 
 Dependency sweep: EQM-041 COMPLETE → **Phase 4 (energy + wait-turn) milestone reached** (EQM-040, EQM-041 COMPLETE). EQM-050 READY. Current pointer → EQM-050.
 CHECKPOINT: Phase 4/5 milestone boundary (§8.3). Autonomous run paused for user direction before Phase 5 (EQM-050 reservation schema — first L2 surface).
+User direction 2026-06-15: proceed autonomously through Phase 5; may delegate clear low-design-shrink-risk tasks to the conservative Codex 5.5 executor (billed checkpoint waived for those per §1.1). Conductor decision: EQM-050/051/052 orchestrator-direct (design core); EQM-053 (reducibility = reproduce existing goldens) candidate for Codex.
+
+### EQM-050 — COMPLETE (2026-06-15) — first L2 surface
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-050_reservation_schema/
+  review: docs/review/autopilot/EQM-050_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=22 checks=291 failures=0; [api-surface] ok
+  gate: §4 resource/API (per-kind validation + .tres roundtrip) + API surface (L2 populated, no L3 leak)
+  surface: api_surface.json re-baselined (L2: EQActionDefinition, EQReservation) via explicit --update
+  major files:
+    - addons/event_queue_manager/resources/eq_action_definition.gd, runtime/eq_reservation.gd (new); eq_error.gd (+8 codes)
+    - docs/design/ERROR_CONTRACT.md, API_SURFACE.md; tools/check_api_surface.py; tests/golden/api_surface.json
+    - test_project/tests/resource/{test_eq_action_definition.gd,test_eq_reservation.gd} (new)
+```
+
+Dependency sweep: EQM-050 COMPLETE → EQM-051 READY. Current pointer → EQM-051.

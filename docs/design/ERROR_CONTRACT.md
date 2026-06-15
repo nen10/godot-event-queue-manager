@@ -45,6 +45,14 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.action.negative_cost` | RESOURCE_INVALID | ERROR | editor, game | `EQActionResult.cost < 0` without `allow_negative_cost` (§12 policy-declared) |
 | `eqm.runtime.unregistered_actor_event` | CONTRACT_VIOLATION | ERROR | editor, game | advancing an event whose actor was removed (dev halts; shipped skips + `invalid_event_skipped`) |
 | `eqm.runtime.schedule_unregistered_actor` | CONTRACT_VIOLATION | ERROR | editor, game | schedule / finish_action for an unregistered actor |
+| `eqm.reservation.negative_delay` | CONTRACT_VIOLATION | ERROR | editor, game | `EQActionDefinition.delay < 0` |
+| `eqm.reservation.immediate_nonzero_delay` | RESOURCE_INVALID | ERROR | editor, game | IMMEDIATE kind with non-zero delay |
+| `eqm.reservation.prepared_zero_delay` | RESOURCE_INVALID | ERROR | editor, game | PREPARED kind with delay <= 0 |
+| `eqm.reservation.negative_rumination` | RESOURCE_INVALID | ERROR | editor, game | `rumination < 0` |
+| `eqm.reservation.invalid_duration` | RESOURCE_INVALID | ERROR | editor, game | `duration < -1` (-1 = unlimited) |
+| `eqm.reservation.reaction_needs_duration` | RESOURCE_INVALID | ERROR | editor, game | REACTION_PREPARATION with duration 0 |
+| `eqm.reservation.operation_needs_target` | RESOURCE_INVALID | ERROR | editor, game | OPERATION with empty `operation_target_tag` |
+| `eqm.reservation.missing_definition` | RESOURCE_INVALID | ERROR | editor, game | `EQReservation` has no definition |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

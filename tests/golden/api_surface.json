@@ -396,6 +396,76 @@
       ]
     }
   },
+  "L2": {
+    "EQActionDefinition": {
+      "consts": [
+        "DURATION_UNLIMITED"
+      ],
+      "enums": [
+        "Kind"
+      ],
+      "methods": [
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> EQActionDefinition"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "validate",
+          "params": "",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "delay",
+        "duration",
+        "kind",
+        "operation_target_tag",
+        "rumination",
+        "tags"
+      ]
+    },
+    "EQReservation": {
+      "consts": [
+        "EQActionDefinition"
+      ],
+      "enums": [
+        "Status"
+      ],
+      "methods": [
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> EQReservation"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "validate",
+          "params": "",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "actor_id",
+        "definition",
+        "event_id",
+        "remaining_duration",
+        "remaining_ruminations",
+        "status"
+      ]
+    }
+  },
   "core": {
     "EQBackend": {
       "consts": [
@@ -484,6 +554,14 @@
         "POLICY_BASE_INSTANCE",
         "POLICY_MISSING",
         "POLICY_NAME_EMPTY",
+        "RESERVATION_IMMEDIATE_NONZERO_DELAY",
+        "RESERVATION_INVALID_DURATION",
+        "RESERVATION_MISSING_DEFINITION",
+        "RESERVATION_NEGATIVE_DELAY",
+        "RESERVATION_NEGATIVE_RUMINATION",
+        "RESERVATION_OPERATION_NEEDS_TARGET",
+        "RESERVATION_PREPARED_ZERO_DELAY",
+        "RESERVATION_REACTION_NEEDS_DURATION",
         "RUNTIME_SCHEDULE_UNREGISTERED_ACTOR",
         "RUNTIME_UNREGISTERED_ACTOR_EVENT",
         "TIE_BREAK_AMBIGUOUS",

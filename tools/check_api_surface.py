@@ -39,7 +39,9 @@ LAYER_MAP = {
     # L1 policy
     "EQConfig": "L1", "EQPolicy": "L1", "EQFixedRoundPolicy": "L1", "EQCTBPolicy": "L1",
     "EQEnergyPolicy": "L1", "EQWaitTurnPolicy": "L1",
-    # L2 reservation / L3 event-line: added in Phase 5+
+    # L2 reservation
+    "EQActionDefinition": "L2", "EQReservation": "L2",
+    # L3 event-line: added later in Phase 5+
 }
 
 LAYERS = ["core", "L0", "L1", "L2", "L3"]

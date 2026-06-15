@@ -35,6 +35,14 @@ const ACTION_NEGATIVE_DELAY := &"eqm.action.negative_delay"
 const ACTION_NEGATIVE_COST := &"eqm.action.negative_cost"
 const RUNTIME_UNREGISTERED_ACTOR_EVENT := &"eqm.runtime.unregistered_actor_event"
 const RUNTIME_SCHEDULE_UNREGISTERED_ACTOR := &"eqm.runtime.schedule_unregistered_actor"
+const RESERVATION_NEGATIVE_DELAY := &"eqm.reservation.negative_delay"
+const RESERVATION_IMMEDIATE_NONZERO_DELAY := &"eqm.reservation.immediate_nonzero_delay"
+const RESERVATION_PREPARED_ZERO_DELAY := &"eqm.reservation.prepared_zero_delay"
+const RESERVATION_NEGATIVE_RUMINATION := &"eqm.reservation.negative_rumination"
+const RESERVATION_INVALID_DURATION := &"eqm.reservation.invalid_duration"
+const RESERVATION_REACTION_NEEDS_DURATION := &"eqm.reservation.reaction_needs_duration"
+const RESERVATION_OPERATION_NEEDS_TARGET := &"eqm.reservation.operation_needs_target"
+const RESERVATION_MISSING_DEFINITION := &"eqm.reservation.missing_definition"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -50,6 +58,14 @@ const _META := {
 	ACTION_NEGATIVE_COST: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	RUNTIME_UNREGISTERED_ACTOR_EVENT: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	RUNTIME_SCHEDULE_UNREGISTERED_ACTOR: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_NEGATIVE_DELAY: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_IMMEDIATE_NONZERO_DELAY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_PREPARED_ZERO_DELAY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_NEGATIVE_RUMINATION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_INVALID_DURATION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_REACTION_NEEDS_DURATION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_OPERATION_NEEDS_TARGET: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_MISSING_DEFINITION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 }
 
 
