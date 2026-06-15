@@ -75,13 +75,13 @@ Process references:
 | EQM-050 | COMPLETE | EQM-041 | `docs/plan/2026-06-09_event_queue_manager/EQM-050_reservation_schema/` | Reservation Resource/API schema. | `resources/eq_action_definition.gd`, `runtime/eq_reservation.gd`, `tests/resource/` | Immediate, prepared, reaction preparation, wait, ready reservation, operation action, tags, duration, rumination fields validate. |
 | EQM-051 | COMPLETE | EQM-050 | `docs/plan/2026-06-09_event_queue_manager/EQM-051_reservation_resolution/` | Reservation scheduling and resolution pipeline. | `runtime/eq_reservation_runtime.gd`, `tests/core/` | Immediate action resolves at delay 0; prepared action resolves after delay; wait schedules ready reservation; operation action causes target reservation. |
 | EQM-052 | COMPLETE | EQM-051 | `docs/plan/2026-06-09_event_queue_manager/EQM-052_ap_ready_model/` | AP and ready reservation model for Action Resolution Turn-Based. | `resources/policies/eq_action_resolution_policy.gd`, `tests/policy/` | Ready reservation grants turn after AP recovery delay; AP spending and recovery are deterministic; turn closes through wait. |
-| EQM-053 | READY | EQM-052 | `docs/plan/2026-06-09_event_queue_manager/EQM-053_policy_reducibility_proofs/` | Policy reducibility proofs (dedicated policies as reservation/event-line degenerate cases). | `tests/policy/`, `tests/golden/` | CTB, energy, and wait-turn (TO/FFT-CT) configurations expressed via the reservation + event-line model reproduce the dedicated policies' golden traces across tie-break / speed / delay matrices; per-tick event-line polling (Q17) and any optimized backend produce identical traces; reducibility proves the model's generality but does not mandate that every model reduce — independent `EQPolicy` implementations remain permitted (roadmap §1.1); divergences are recorded as model gaps feeding the next evaluation. |
+| EQM-053 | COMPLETE | EQM-052 | `docs/plan/2026-06-09_event_queue_manager/EQM-053_policy_reducibility_proofs/` | Policy reducibility proofs (dedicated policies as reservation/event-line degenerate cases). | `tests/policy/`, `tests/golden/` | CTB, energy, and wait-turn (TO/FFT-CT) configurations expressed via the reservation + event-line model reproduce the dedicated policies' golden traces across tie-break / speed / delay matrices; per-tick event-line polling (Q17) and any optimized backend produce identical traces; reducibility proves the model's generality but does not mandate that every model reduce — independent `EQPolicy` implementations remain permitted (roadmap §1.1); divergences are recorded as model gaps feeding the next evaluation. |
 
 ## Phase 6 — Trigger and reaction engine
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-060 | BACKLOG | EQM-052 | `docs/plan/2026-06-09_event_queue_manager/EQM-060_condition_contract/` | Condition and tag matching contract. | `resources/eq_condition.gd`, `runtime/eq_tag_matcher.gd`, `tests/trigger/` | Conditions can match event type, source, target, tags, range/sensing adapter placeholder, and custom predicate. |
+| EQM-060 | READY | EQM-052 | `docs/plan/2026-06-09_event_queue_manager/EQM-060_condition_contract/` | Condition and tag matching contract. | `resources/eq_condition.gd`, `runtime/eq_tag_matcher.gd`, `tests/trigger/` | Conditions can match event type, source, target, tags, range/sensing adapter placeholder, and custom predicate. |
 | EQM-061 | BACKLOG | EQM-060 | `docs/plan/2026-06-09_event_queue_manager/EQM-061_reaction_preparation/` | Reaction preparation runtime. | `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Counterattack preparation triggers on incoming `<損害>` reservation; duration expiry prevents trigger; owner/source matching tested. |
 | EQM-062 | BACKLOG | EQM-061 | `docs/plan/2026-06-09_event_queue_manager/EQM-062_rumination_cycle_guard/` | Rumination and cycle prevention. | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Rumination count decrements and reschedules; max chain guard stops infinite loops with explicit error/event. |
 
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-053` (Phase 5 autonomous run; 050/051/052 COMPLETE → 053 = Phase 5 milestone. EQM-053 = reducibility proofs, Codex-delegation candidate.)
+Current: `EQM-060` (Phase 5 COMPLETE. CHECKPOINT — Phase 5/6 milestone boundary, §8.3; autonomous run paused for user direction before Phase 6)
 
 ## Proof log
 
@@ -614,3 +614,22 @@ proof:
 ```
 
 Dependency sweep: EQM-052 COMPLETE → EQM-053 READY. Current pointer → EQM-053.
+
+### EQM-053 — COMPLETE (2026-06-15) — Phase 5 milestone — P2 delegation (Codex 5.5)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-053_policy_reducibility_proofs/
+  review: docs/review/autopilot/EQM-053_SELF_REVIEW_2026-06-15.md
+  pattern: P2 delegation — Codex 5.5 (gpt-5.5 xhigh) authored under contract; orchestrator owned gate; 1 orchestrator gate-repair (CTB carry semantics)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=25 checks=326 failures=0; [api-surface] ok
+  gate: §4 policy (metamorphic: per-tick event-line sim order == dedicated policy order for CTB/energy/wait across speed/cost/tie matrices, incl. non-divisor speeds)
+  finding: gate caught CTB carry divergence (sim carried; policy is no-carry; only coincided for divisor speeds) -> repaired to no-carry + non-divisor case; energy carries (matches), wait countdown
+  scope: tests-only; api-surface golden unchanged
+  major files:
+    - test_project/tests/policy/test_eq_reducibility.gd (new; Codex-authored + orchestrator CTB repair)
+```
+
+Dependency sweep: EQM-053 COMPLETE → **Phase 5 (Action Reservation model) milestone reached** (EQM-050..053 COMPLETE). EQM-060 READY. Current pointer → EQM-060.
+CHECKPOINT: Phase 5/6 milestone boundary (§8.3). Autonomous run paused for user direction before Phase 6 (EQM-060 condition/tag matching — trigger/reaction engine).
