@@ -372,6 +372,28 @@
       "vars": [
         "policy_name"
       ]
+    },
+    "EQWaitTurnPolicy": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "on_turn_finished",
+          "params": "runtime, actor_id: StringName, result",
+          "returns": "-> void"
+        },
+        {
+          "name": "seed",
+          "params": "runtime, actor_ids: Array",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "agility_key",
+        "base_cost",
+        "wait_key"
+      ]
     }
   },
   "core": {

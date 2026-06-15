@@ -38,7 +38,7 @@ LAYER_MAP = {
     "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0", "EQPrediction": "L0",
     # L1 policy
     "EQConfig": "L1", "EQPolicy": "L1", "EQFixedRoundPolicy": "L1", "EQCTBPolicy": "L1",
-    "EQEnergyPolicy": "L1",
+    "EQEnergyPolicy": "L1", "EQWaitTurnPolicy": "L1",
     # L2 reservation / L3 event-line: added in Phase 5+
 }
 
