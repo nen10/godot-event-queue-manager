@@ -310,6 +310,29 @@
         "tie_break"
       ]
     },
+    "EQEnergyPolicy": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "on_turn_finished",
+          "params": "runtime, actor_id: StringName, result",
+          "returns": "-> void"
+        },
+        {
+          "name": "seed",
+          "params": "runtime, actor_ids: Array",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "base_cost",
+        "energy_key",
+        "speed_key",
+        "threshold"
+      ]
+    },
     "EQFixedRoundPolicy": {
       "consts": [],
       "enums": [],

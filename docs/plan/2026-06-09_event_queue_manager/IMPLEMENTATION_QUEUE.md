@@ -65,8 +65,8 @@ Process references:
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-040 | READY | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-040_energy_policy/` | Roguelike energy policy. | `resources/policies/eq_energy_policy.gd`, `tests/policy/` | Threshold readiness, action cost, speed differences, wait, and energy carry-over tested. |
-| EQM-041 | BACKLOG | EQM-040 | `docs/plan/2026-06-09_event_queue_manager/EQM-041_wait_turn_policy/` | Tactics Ogre-style wait-turn policy. | `resources/policies/eq_wait_turn_policy.gd`, `tests/policy/`, `demos/wait_turn_tactics/` | Units with wait values resolve instantly to next ready unit; action cost modifies next wait; equal wait tie-break explained. |
+| EQM-040 | COMPLETE | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-040_energy_policy/` | Roguelike energy policy. | `resources/policies/eq_energy_policy.gd`, `tests/policy/` | Threshold readiness, action cost, speed differences, wait, and energy carry-over tested. |
+| EQM-041 | READY | EQM-040 | `docs/plan/2026-06-09_event_queue_manager/EQM-041_wait_turn_policy/` | Tactics Ogre-style wait-turn policy. | `resources/policies/eq_wait_turn_policy.gd`, `tests/policy/`, `demos/wait_turn_tactics/` | Units with wait values resolve instantly to next ready unit; action cost modifies next wait; equal wait tie-break explained. |
 
 ## Phase 5 — Action Reservation model
 
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-040` (Phase 3 COMPLETE — v0.1 MVP milestone. CHECKPOINT — milestone boundary, §8.3; autonomous run paused for user direction before Phase 4)
+Current: `EQM-041` (Phase 4 autonomous run, user-approved 2026-06-15; 040 COMPLETE → 041 = Phase 4 milestone)
 
 ## Proof log
 
@@ -514,3 +514,23 @@ proof:
 
 Dependency sweep: EQM-035 COMPLETE → **Phase 3 COMPLETE = v0.1 MVP milestone reached** (EQM-030..035 COMPLETE). EQM-040 READY (dep EQM-034). Current pointer → EQM-040.
 CHECKPOINT: v0.1 MVP milestone boundary (§8.3). Autonomous run paused for user direction before Phase 4 (EQM-040 energy / EQM-041 wait-turn).
+User direction 2026-06-15: proceed autonomously through Phase 4 (EQM-040→041) to the Phase 4 milestone; consult on design forks.
+
+### EQM-040 — COMPLETE (2026-06-15)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-040_energy_policy/
+  review: docs/review/autopilot/EQM-040_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct); repair 1/3 (test-only type; no product change)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=18 checks=241 failures=0; [api-surface] ok
+  gate: §4 policy (readiness/cost/speed/wait/carry-over) + API surface (EQEnergyPolicy L1)
+  surface: api_surface.json re-baselined (+EQEnergyPolicy L1) via explicit --update
+  major files:
+    - addons/event_queue_manager/resources/policies/eq_energy_policy.gd (new)
+    - tools/check_api_surface.py, docs/design/API_SURFACE.md, tests/golden/api_surface.json
+    - test_project/tests/policy/test_eq_energy_policy.gd (new)
+```
+
+Dependency sweep: EQM-040 COMPLETE → EQM-041 READY. Current pointer → EQM-041.
