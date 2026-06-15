@@ -40,7 +40,7 @@ LAYER_MAP = {
     "EQConfig": "L1", "EQPolicy": "L1", "EQFixedRoundPolicy": "L1", "EQCTBPolicy": "L1",
     "EQEnergyPolicy": "L1", "EQWaitTurnPolicy": "L1",
     # L2 reservation
-    "EQActionDefinition": "L2", "EQReservation": "L2",
+    "EQActionDefinition": "L2", "EQReservation": "L2", "EQReservationRuntime": "L2",
     # L3 event-line: added later in Phase 5+
 }
 

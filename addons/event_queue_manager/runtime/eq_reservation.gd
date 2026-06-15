@@ -13,6 +13,8 @@ enum Status { PENDING, ARMED, RESOLVED, INVALIDATED }
 
 var actor_id: StringName = &""
 var definition: EQActionDefinition
+## For OPERATION reservations: the actor the caused reservation lands on.
+var target_id: StringName = &""
 ## Scheduler event id once scheduled (-1 = not yet scheduled).
 var event_id: int = -1
 var status: int = Status.PENDING
@@ -43,6 +45,7 @@ func validate() -> EQValidation:
 func to_dict() -> Dictionary:
 	return {
 		"actor_id": String(actor_id),
+		"target_id": String(target_id),
 		"definition": definition.to_dict() if definition != null else {},
 		"event_id": event_id,
 		"status": status,
@@ -57,6 +60,7 @@ static func from_dict(d: Dictionary) -> EQReservation:
 	if dd is Dictionary and not (dd as Dictionary).is_empty():
 		def = EQActionDefinition.from_dict(dd)
 	var r := EQReservation.new(StringName(d.get("actor_id", "")), def)
+	r.target_id = StringName(d.get("target_id", ""))
 	r.event_id = int(d.get("event_id", -1))
 	r.status = int(d.get("status", Status.PENDING))
 	r.remaining_ruminations = int(d.get("remaining_ruminations", r.remaining_ruminations))

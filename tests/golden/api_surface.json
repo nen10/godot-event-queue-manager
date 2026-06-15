@@ -462,7 +462,42 @@
         "event_id",
         "remaining_duration",
         "remaining_ruminations",
-        "status"
+        "status",
+        "target_id"
+      ]
+    },
+    "EQReservationRuntime": {
+      "consts": [
+        "EQActionDefinition",
+        "EQReservation",
+        "EQRuntime"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "armed_for",
+          "params": "actor_id: StringName",
+          "returns": "-> Array"
+        },
+        {
+          "name": "pending",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "resolve_next",
+          "params": "",
+          "returns": "-> EQReservation"
+        },
+        {
+          "name": "submit",
+          "params": "res: EQReservation",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "runtime"
       ]
     }
   },

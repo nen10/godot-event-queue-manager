@@ -20,7 +20,7 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 | `core` | foundational infra below the user layers | EQEntry, EQOrdering, EQScheduler, EQBackend, EQSortedArrayBackend, EQSnapshot, EQTrace, EQError, EQValidation, EQVersion |
 | `L0` | turn order ("who acts next") | EQRuntime, EQActorRegistry, EQActorState, EQActionResult, EQManager, EQPrediction |
 | `L1` | policy selection | EQConfig, EQPolicy, EQFixedRoundPolicy, EQCTBPolicy, EQEnergyPolicy, EQWaitTurnPolicy |
-| `L2` | reservation / prepared actions | EQActionDefinition, EQReservation |
+| `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime |
 | `L3` | event-line internals | *(Phase 5+)* |
 
 A public class absent from the layer map (`LAYER_MAP` in `tools/check_api_surface.py`) fails the gate: every public class must be assigned exactly one layer. Update this table and `LAYER_MAP` together.
