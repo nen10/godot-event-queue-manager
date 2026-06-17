@@ -90,8 +90,8 @@ Process references:
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
 | EQM-070 | COMPLETE | EQM-062 | `docs/plan/2026-06-09_event_queue_manager/EQM-070_transaction_snapshot/` | Player turn draft transaction. | `runtime/eq_transaction.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Draft actions can be applied, inspected, rolled back, and committed; live scheduler unchanged before commit. |
-| EQM-071 | READY | EQM-070 | `docs/plan/2026-06-09_event_queue_manager/EQM-071_wait_commit_boundary/` | Wait/end-turn commit boundary. | `runtime/eq_transaction.gd`, `resources/policies/eq_action_resolution_policy.gd`, `tests/transaction/` | Player immediate actions are rollbackable before wait; wait commits draft and schedules ready reservation. |
-| EQM-072 | BACKLOG | EQM-071 | `docs/plan/2026-06-09_event_queue_manager/EQM-072_deterministic_replay/` | Deterministic random and replay proof. | `runtime/eq_rng.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Snapshot restore reproduces random-dependent order and results under same seed. |
+| EQM-071 | COMPLETE | EQM-070 | `docs/plan/2026-06-09_event_queue_manager/EQM-071_wait_commit_boundary/` | Wait/end-turn commit boundary. | `runtime/eq_transaction.gd`, `resources/policies/eq_action_resolution_policy.gd`, `tests/transaction/` | Player immediate actions are rollbackable before wait; wait commits draft and schedules ready reservation. |
+| EQM-072 | READY | EQM-071 | `docs/plan/2026-06-09_event_queue_manager/EQM-072_deterministic_replay/` | Deterministic random and replay proof. | `runtime/eq_rng.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Snapshot restore reproduces random-dependent order and results under same seed. |
 
 ## Phase 8 — Effect and presentation pipeline
 
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-071` (Phase 7 autonomous run, user-approved 2026-06-15; 070 COMPLETE → 071 → 072 = Phase 7 milestone. EQM-072 = Codex-delegation candidate.)
+Current: `EQM-072` (Phase 7 autonomous run; 070/071 COMPLETE → 072 = Phase 7 milestone. EQM-072 delegated to Codex 5.5.)
 
 ## Proof log
 
@@ -712,3 +712,22 @@ proof:
 ```
 
 Dependency sweep: EQM-070 COMPLETE → EQM-071 READY. Current pointer → EQM-071.
+
+### EQM-071 — COMPLETE (2026-06-15)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-071_wait_commit_boundary/
+  review: docs/review/autopilot/EQM-071_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct, wait semantics); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=31 checks=402 failures=0; [api-surface] ok
+  gate: §4 transaction (immediate rollbackable before wait; wait commits draft + schedules ready; commit guard) + API surface (EQActionResolutionPolicy +wait_close)
+  surface: api_surface.json re-baselined (EQActionResolutionPolicy +wait_close) via explicit --update
+  major files:
+    - addons/event_queue_manager/runtime/eq_transaction.gd (commit guard); resources/policies/eq_action_resolution_policy.gd (+wait_close)
+    - tools/check_api_surface.py, docs/design/API_SURFACE.md, tests/golden/api_surface.json
+    - test_project/tests/transaction/test_eq_wait_commit_boundary.gd (new)
+```
+
+Dependency sweep: EQM-071 COMPLETE → EQM-072 READY. Current pointer → EQM-072.

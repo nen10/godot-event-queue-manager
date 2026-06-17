@@ -449,6 +449,11 @@
           "name": "seed",
           "params": "runtime, actor_ids: Array",
           "returns": "-> void"
+        },
+        {
+          "name": "wait_close",
+          "params": "runtime, actor_id: StringName, result, transaction = null",
+          "returns": "-> void"
         }
       ],
       "signals": [],

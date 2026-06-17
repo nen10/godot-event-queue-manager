@@ -51,6 +51,16 @@ func on_turn_finished(runtime, actor_id: StringName, result) -> void:
 	runtime.schedule(actor_id, runtime.scheduler.current_tick + delay, 0, &"turn")
 
 
+## The turn closes through wait: commit the player's drafted immediate actions
+## (if a transaction is given) to the live scheduler, then schedule the ready
+## reservation for the next turn (after AP recovery). Drafting is rollbackable up
+## to this point (EQM-070); wait is the commit boundary.
+func wait_close(runtime, actor_id: StringName, result, transaction = null) -> void:
+	if transaction != null:
+		transaction.commit()
+	on_turn_finished(runtime, actor_id, result)
+
+
 ## The actor's next turn as a concrete READY reservation (EQM-050 READY kind),
 ## with the delay set to the AP-recovery time for `spent` AP. Lets a consumer
 ## treat the ready turn as a reservation object without driving the policy.

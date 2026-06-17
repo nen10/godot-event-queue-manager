@@ -50,15 +50,20 @@ func is_committed() -> bool:
 
 
 ## Drafts a push onto the working copy. Returns the working event_id (or -1).
+## A no-op after commit (the draft boundary is closed).
 func draft_push(due_tick: int, priority: int = 0, kind: StringName = &"", actor_id: StringName = &"") -> int:
+	if _committed:
+		return -1
 	var id := _working.push(due_tick, priority, kind, actor_id)
 	if id != -1:
 		_draft_log.append({"op": &"push", "event_id": id, "due_tick": due_tick, "kind": String(kind), "actor_id": String(actor_id)})
 	return id
 
 
-## Drafts a cancel onto the working copy.
+## Drafts a cancel onto the working copy. A no-op after commit.
 func draft_cancel(event_id: int) -> bool:
+	if _committed:
+		return false
 	var ok := _working.cancel(event_id)
 	if ok:
 		_draft_log.append({"op": &"cancel", "event_id": event_id})
