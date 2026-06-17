@@ -32,7 +32,7 @@ LAYER_MAP = {
     "EQEntry": "core", "EQOrdering": "core", "EQScheduler": "core",
     "EQBackend": "core", "EQSortedArrayBackend": "core",
     "EQSnapshot": "core", "EQTrace": "core",
-    "EQError": "core", "EQValidation": "core", "EQVersion": "core",
+    "EQError": "core", "EQValidation": "core", "EQVersion": "core", "EQRng": "core",
     # L0 turn order
     "EQRuntime": "L0", "EQActorRegistry": "L0",
     "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0", "EQPrediction": "L0",

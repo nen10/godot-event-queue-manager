@@ -817,6 +817,49 @@
       "signals": [],
       "vars": []
     },
+    "EQRng": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> void"
+        },
+        {
+          "name": "from_saved",
+          "params": "d: Dictionary",
+          "returns": "-> EQRng"
+        },
+        {
+          "name": "get_seed",
+          "params": "",
+          "returns": "-> int"
+        },
+        {
+          "name": "randf",
+          "params": "",
+          "returns": "-> float"
+        },
+        {
+          "name": "randi",
+          "params": "",
+          "returns": "-> int"
+        },
+        {
+          "name": "randi_range",
+          "params": "from: int, to: int",
+          "returns": "-> int"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
     "EQScheduler": {
       "consts": [
         "EQBackend",

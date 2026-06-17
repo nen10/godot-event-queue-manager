@@ -91,13 +91,13 @@ Process references:
 |---|---|---|---|---|---|---|
 | EQM-070 | COMPLETE | EQM-062 | `docs/plan/2026-06-09_event_queue_manager/EQM-070_transaction_snapshot/` | Player turn draft transaction. | `runtime/eq_transaction.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Draft actions can be applied, inspected, rolled back, and committed; live scheduler unchanged before commit. |
 | EQM-071 | COMPLETE | EQM-070 | `docs/plan/2026-06-09_event_queue_manager/EQM-071_wait_commit_boundary/` | Wait/end-turn commit boundary. | `runtime/eq_transaction.gd`, `resources/policies/eq_action_resolution_policy.gd`, `tests/transaction/` | Player immediate actions are rollbackable before wait; wait commits draft and schedules ready reservation. |
-| EQM-072 | READY | EQM-071 | `docs/plan/2026-06-09_event_queue_manager/EQM-072_deterministic_replay/` | Deterministic random and replay proof. | `runtime/eq_rng.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Snapshot restore reproduces random-dependent order and results under same seed. |
+| EQM-072 | COMPLETE | EQM-071 | `docs/plan/2026-06-09_event_queue_manager/EQM-072_deterministic_replay/` | Deterministic random and replay proof. | `runtime/eq_rng.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Snapshot restore reproduces random-dependent order and results under same seed. |
 
 ## Phase 8 — Effect and presentation pipeline
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-080 | BACKLOG | EQM-072 | `docs/plan/2026-06-09_event_queue_manager/EQM-080_effect_records/` | Simulation effect and presentation event records. | `runtime/eq_effect_record.gd`, `runtime/eq_presentation_event.gd`, `tests/presentation/` | Status effects record immediately; presentation requests can be queued separately with actor/position references. |
+| EQM-080 | READY | EQM-072 | `docs/plan/2026-06-09_event_queue_manager/EQM-080_effect_records/` | Simulation effect and presentation event records. | `runtime/eq_effect_record.gd`, `runtime/eq_presentation_event.gd`, `tests/presentation/` | Status effects record immediately; presentation requests can be queued separately with actor/position references. |
 | EQM-081 | BACKLOG | EQM-080 | `docs/plan/2026-06-09_event_queue_manager/EQM-081_visibility_flush_policy/` | Importance/sensing/offscreen presentation policy. | `resources/eq_presentation_policy.gd`, `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Important event flushes previous visuals; sensed non-important defers; offscreen skips; player turn flush tested. |
 | EQM-082 | BACKLOG | EQM-081 | `docs/plan/2026-06-09_event_queue_manager/EQM-082_moving_target_barrier/` | Moving-target consistency barrier. | `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Event referencing moved entity forces prior pending visuals to flush before resolving/displaying dependent event. |
 
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-072` (Phase 7 autonomous run; 070/071 COMPLETE → 072 = Phase 7 milestone. EQM-072 delegated to Codex 5.5.)
+Current: `EQM-080` (Phase 7 COMPLETE. CHECKPOINT — Phase 7/8 milestone boundary, §8.3; autonomous run paused for user direction before Phase 8)
 
 ## Proof log
 
@@ -731,3 +731,23 @@ proof:
 ```
 
 Dependency sweep: EQM-071 COMPLETE → EQM-072 READY. Current pointer → EQM-072.
+
+### EQM-072 — COMPLETE (2026-06-15) — Phase 7 milestone — P2 delegation (Codex 5.5)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-072_deterministic_replay/
+  review: docs/review/autopilot/EQM-072_SELF_REVIEW_2026-06-15.md
+  pattern: P2 delegation — Codex 5.5 (gpt-5.5 xhigh) implemented orchestrator-pinned contract; orchestrator owned surface wiring + gate; repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=32 checks=407 failures=0; [api-surface] ok
+  gate: §4 transaction/determinism (same-seed determinism; save/restore continues stream; snapshot+rng-state restore reproduces random-dependent scheduler order) + API surface (EQRng core)
+  surface: api_surface.json re-baselined (core +EQRng) via explicit --update (orchestrator)
+  major files:
+    - addons/event_queue_manager/runtime/eq_rng.gd (new; Codex + orchestrator doc)
+    - tools/check_api_surface.py, docs/design/API_SURFACE.md, tests/golden/api_surface.json (orchestrator)
+    - test_project/tests/transaction/test_eq_rng_replay.gd (new; Codex)
+```
+
+Dependency sweep: EQM-072 COMPLETE → **Phase 7 (Transaction and rollback) milestone reached** (EQM-070..072 COMPLETE). EQM-080 READY. Current pointer → EQM-080.
+CHECKPOINT: Phase 7/8 milestone boundary (§8.3). Autonomous run paused for user direction before Phase 8 (EQM-080 effect/presentation records — simulation/presentation split).
