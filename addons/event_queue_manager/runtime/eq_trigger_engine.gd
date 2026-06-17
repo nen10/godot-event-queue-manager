@@ -20,6 +20,11 @@ const EQActionDefinition := preload("../resources/eq_action_definition.gd")
 # Each armed entry: { reservation, condition, owner, armed_at, duration }.
 var _armed: Array[Dictionary] = []
 
+## Absolute backstop on a trigger cascade (SEMANTICS §8 engineering max depth).
+var max_chain: int = 64
+## Cycle-guard faults (e.g. TRIGGER_CHAIN_LIMIT). Recorded, never thrown.
+var faults: Array[Dictionary] = []
+
 
 ## Arms a reaction (a REACTION_PREPARATION reservation) with the condition that
 ## selects which incoming events trigger it. `current_tick` starts its lifetime.
@@ -46,12 +51,49 @@ func on_event_resolved(view: Dictionary, current_tick: int) -> Array:
 		var cond = armed["condition"]
 		if cond != null and cond.matches(view):
 			var res: EQReservation = armed["reservation"]
-			res.status = EQReservation.Status.RESOLVED
 			fired.append(res)
+			# rumination: re-arm while ruminations remain, else consume (one-shot).
+			if res.remaining_ruminations > 0:
+				res.remaining_ruminations -= 1
+				res.status = EQReservation.Status.ARMED
+				survivors.append(armed)
+			else:
+				res.status = EQReservation.Status.RESOLVED
 		else:
 			survivors.append(armed)
 	_armed = survivors
 	return fired
+
+
+## Drives a bounded trigger cascade: fire reactions for `initial_view`, then for
+## any follow-up event views a fired reaction produces (via `follow_up(reservation)
+## -> Array`), and so on. The chain is bounded by max_chain — exceeding it records
+## a TRIGGER_CHAIN_LIMIT fault and stops (shipped fail-safe; never an infinite
+## loop, never a crash). Returns all fired reservations.
+func fire_cascade(initial_view: Dictionary, current_tick: int, follow_up: Callable = Callable()) -> Array:
+	var all_fired: Array = []
+	var queue: Array = [initial_view]
+	var steps := 0
+	while not queue.is_empty():
+		if steps >= max_chain:
+			faults.append({
+				"code": EQError.TRIGGER_CHAIN_LIMIT,
+				"recoverability": EQError.recoverability_of(EQError.TRIGGER_CHAIN_LIMIT),
+				"message": "trigger chain exceeded max_chain (%d)" % max_chain,
+			})
+			break
+		var view: Dictionary = queue.pop_front()
+		var fired := on_event_resolved(view, current_tick)
+		for r in fired:
+			all_fired.append(r)
+		if follow_up.is_valid():
+			for r in fired:
+				var ups = follow_up.call(r)
+				if ups is Array:
+					for v in ups:
+						queue.append(v)
+		steps += 1
+	return all_fired
 
 
 ## Drops armed reactions whose duration has elapsed (duration -1 = unlimited

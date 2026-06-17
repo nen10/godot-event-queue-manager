@@ -593,13 +593,21 @@
           "returns": "-> Array"
         },
         {
+          "name": "fire_cascade",
+          "params": "initial_view: Dictionary, current_tick: int, follow_up: Callable = Callable(",
+          "returns": ""
+        },
+        {
           "name": "on_event_resolved",
           "params": "view: Dictionary, current_tick: int",
           "returns": "-> Array"
         }
       ],
       "signals": [],
-      "vars": []
+      "vars": [
+        "faults",
+        "max_chain"
+      ]
     }
   },
   "core": {
@@ -701,7 +709,8 @@
         "RUNTIME_SCHEDULE_UNREGISTERED_ACTOR",
         "RUNTIME_UNREGISTERED_ACTOR_EVENT",
         "TIE_BREAK_AMBIGUOUS",
-        "TIE_BREAK_UNKNOWN"
+        "TIE_BREAK_UNKNOWN",
+        "TRIGGER_CHAIN_LIMIT"
       ],
       "enums": [
         "Recoverability",

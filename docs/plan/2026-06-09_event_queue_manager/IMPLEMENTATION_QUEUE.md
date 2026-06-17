@@ -83,13 +83,13 @@ Process references:
 |---|---|---|---|---|---|---|
 | EQM-060 | COMPLETE | EQM-052 | `docs/plan/2026-06-09_event_queue_manager/EQM-060_condition_contract/` | Condition and tag matching contract. | `resources/eq_condition.gd`, `runtime/eq_tag_matcher.gd`, `tests/trigger/` | Conditions can match event type, source, target, tags, range/sensing adapter placeholder, and custom predicate. |
 | EQM-061 | COMPLETE | EQM-060 | `docs/plan/2026-06-09_event_queue_manager/EQM-061_reaction_preparation/` | Reaction preparation runtime. | `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Counterattack preparation triggers on incoming `<損害>` reservation; duration expiry prevents trigger; owner/source matching tested. |
-| EQM-062 | READY | EQM-061 | `docs/plan/2026-06-09_event_queue_manager/EQM-062_rumination_cycle_guard/` | Rumination and cycle prevention. | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Rumination count decrements and reschedules; max chain guard stops infinite loops with explicit error/event. |
+| EQM-062 | COMPLETE | EQM-061 | `docs/plan/2026-06-09_event_queue_manager/EQM-062_rumination_cycle_guard/` | Rumination and cycle prevention. | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Rumination count decrements and reschedules; max chain guard stops infinite loops with explicit error/event. |
 
 ## Phase 7 — Transaction and rollback
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-070 | BACKLOG | EQM-062 | `docs/plan/2026-06-09_event_queue_manager/EQM-070_transaction_snapshot/` | Player turn draft transaction. | `runtime/eq_transaction.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Draft actions can be applied, inspected, rolled back, and committed; live scheduler unchanged before commit. |
+| EQM-070 | READY | EQM-062 | `docs/plan/2026-06-09_event_queue_manager/EQM-070_transaction_snapshot/` | Player turn draft transaction. | `runtime/eq_transaction.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Draft actions can be applied, inspected, rolled back, and committed; live scheduler unchanged before commit. |
 | EQM-071 | BACKLOG | EQM-070 | `docs/plan/2026-06-09_event_queue_manager/EQM-071_wait_commit_boundary/` | Wait/end-turn commit boundary. | `runtime/eq_transaction.gd`, `resources/policies/eq_action_resolution_policy.gd`, `tests/transaction/` | Player immediate actions are rollbackable before wait; wait commits draft and schedules ready reservation. |
 | EQM-072 | BACKLOG | EQM-071 | `docs/plan/2026-06-09_event_queue_manager/EQM-072_deterministic_replay/` | Deterministic random and replay proof. | `runtime/eq_rng.gd`, `runtime/eq_snapshot.gd`, `tests/transaction/` | Snapshot restore reproduces random-dependent order and results under same seed. |
 
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-062` (Phase 6 autonomous run; 060/061 COMPLETE → 062 = Phase 6 milestone.)
+Current: `EQM-070` (Phase 6 COMPLETE. CHECKPOINT — Phase 6/7 milestone boundary, §8.3; autonomous run paused for user direction before Phase 7)
 
 ## Proof log
 
@@ -672,3 +672,23 @@ proof:
 ```
 
 Dependency sweep: EQM-061 COMPLETE → EQM-062 READY. Current pointer → EQM-062.
+
+### EQM-062 — COMPLETE (2026-06-15) — Phase 6 milestone
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-062_rumination_cycle_guard/
+  review: docs/review/autopilot/EQM-062_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct, cycle-guard safety); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=29 checks=370 failures=0; [api-surface] ok
+  gate: §4 trigger (rumination decrements+reschedules for reservation & reaction; cycle guard bounds a runaway cascade with TRIGGER_CHAIN_LIMIT fault, no crash; rumination 0 = one-shot compat)
+  surface: api_surface.json re-baselined (EQTriggerEngine +fire_cascade/max_chain/faults) via explicit --update; +1 error code (eqm.trigger.chain_limit, BUDGET_EXCEEDED)
+  major files:
+    - addons/event_queue_manager/runtime/{eq_trigger_engine.gd(+rumination/cascade),eq_reservation_runtime.gd(+rumination),eq_error.gd(+code)}
+    - docs/design/ERROR_CONTRACT.md, API_SURFACE.md; tools/check_api_surface.py; tests/golden/api_surface.json
+    - test_project/tests/trigger/test_eq_rumination_cycle_guard.gd (new)
+```
+
+Dependency sweep: EQM-062 COMPLETE → **Phase 6 (Trigger/reaction engine) milestone reached** (EQM-060..062 COMPLETE). EQM-070 READY. Current pointer → EQM-070.
+CHECKPOINT: Phase 6/7 milestone boundary (§8.3). Autonomous run paused for user direction before Phase 7 (EQM-070 transaction snapshot — player-turn draft / rollback / commit).

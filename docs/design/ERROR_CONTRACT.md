@@ -53,6 +53,7 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.reservation.reaction_needs_duration` | RESOURCE_INVALID | ERROR | editor, game | REACTION_PREPARATION with duration 0 |
 | `eqm.reservation.operation_needs_target` | RESOURCE_INVALID | ERROR | editor, game | OPERATION with empty `operation_target_tag` |
 | `eqm.reservation.missing_definition` | RESOURCE_INVALID | ERROR | editor, game | `EQReservation` has no definition |
+| `eqm.trigger.chain_limit` | BUDGET_EXCEEDED | ERROR | editor, game | a trigger cascade exceeded `EQTriggerEngine.max_chain` (chain truncated, recorded) |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

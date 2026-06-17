@@ -75,6 +75,11 @@ func resolve_next() -> EQReservation:
 	res.status = EQReservation.Status.RESOLVED
 	if res.definition.kind == EQActionDefinition.Kind.OPERATION:
 		_cause_target_reservation(res)
+	# rumination: a resolved reservation with ruminations left decrements and
+	# reschedules itself (count-bounded, so it cannot loop forever).
+	if res.remaining_ruminations > 0:
+		res.remaining_ruminations -= 1
+		submit(res)
 	return res
 
 
