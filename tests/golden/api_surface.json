@@ -460,6 +460,29 @@
         "recovery_per_tick"
       ]
     },
+    "EQCondition": {
+      "consts": [
+        "EQTagMatcher"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "matches",
+          "params": "view: Dictionary",
+          "returns": "-> bool"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "any_tags",
+        "custom_predicate",
+        "match_kind",
+        "match_source",
+        "match_target",
+        "require_tags",
+        "sensing_required"
+      ]
+    },
     "EQReservation": {
       "consts": [
         "EQActionDefinition"
@@ -528,6 +551,24 @@
       "vars": [
         "runtime"
       ]
+    },
+    "EQTagMatcher": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "has_all",
+          "params": "tags: Array, required: Array",
+          "returns": "-> bool"
+        },
+        {
+          "name": "has_any",
+          "params": "tags: Array, candidates: Array",
+          "returns": "-> bool"
+        }
+      ],
+      "signals": [],
+      "vars": []
     }
   },
   "core": {
