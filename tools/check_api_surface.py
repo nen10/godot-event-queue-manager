@@ -42,7 +42,7 @@ LAYER_MAP = {
     # L2 reservation
     "EQActionDefinition": "L2", "EQReservation": "L2", "EQReservationRuntime": "L2",
     "EQActionResolutionPolicy": "L2", "EQCondition": "L2", "EQTagMatcher": "L2",
-    "EQTriggerEngine": "L2",
+    "EQTriggerEngine": "L2", "EQTransaction": "L2",
     # L3 event-line: added later in Phase 5+
 }
 

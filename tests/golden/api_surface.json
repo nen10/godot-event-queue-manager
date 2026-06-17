@@ -570,6 +570,57 @@
       "signals": [],
       "vars": []
     },
+    "EQTransaction": {
+      "consts": [
+        "EQScheduler",
+        "EQSnapshot"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "commit",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "draft",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "draft_cancel",
+          "params": "event_id: int",
+          "returns": "-> bool"
+        },
+        {
+          "name": "draft_push",
+          "params": "due_tick: int, priority: int = 0, kind: StringName = &\"\", actor_id: StringName = &\"\"",
+          "returns": "-> int"
+        },
+        {
+          "name": "is_committed",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "is_live_unchanged",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "rollback",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "working",
+          "params": "",
+          "returns": "-> EQScheduler"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
     "EQTriggerEngine": {
       "consts": [
         "EQActionDefinition",
