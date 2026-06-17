@@ -569,6 +569,37 @@
       ],
       "signals": [],
       "vars": []
+    },
+    "EQTriggerEngine": {
+      "consts": [
+        "EQActionDefinition",
+        "EQReservation"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "arm",
+          "params": "reservation: EQReservation, condition, current_tick: int",
+          "returns": "-> void"
+        },
+        {
+          "name": "armed_count",
+          "params": "",
+          "returns": "-> int"
+        },
+        {
+          "name": "armed_for",
+          "params": "actor_id: StringName",
+          "returns": "-> Array"
+        },
+        {
+          "name": "on_event_resolved",
+          "params": "view: Dictionary, current_tick: int",
+          "returns": "-> Array"
+        }
+      ],
+      "signals": [],
+      "vars": []
     }
   },
   "core": {

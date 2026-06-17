@@ -82,8 +82,8 @@ Process references:
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
 | EQM-060 | COMPLETE | EQM-052 | `docs/plan/2026-06-09_event_queue_manager/EQM-060_condition_contract/` | Condition and tag matching contract. | `resources/eq_condition.gd`, `runtime/eq_tag_matcher.gd`, `tests/trigger/` | Conditions can match event type, source, target, tags, range/sensing adapter placeholder, and custom predicate. |
-| EQM-061 | READY | EQM-060 | `docs/plan/2026-06-09_event_queue_manager/EQM-061_reaction_preparation/` | Reaction preparation runtime. | `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Counterattack preparation triggers on incoming `<損害>` reservation; duration expiry prevents trigger; owner/source matching tested. |
-| EQM-062 | BACKLOG | EQM-061 | `docs/plan/2026-06-09_event_queue_manager/EQM-062_rumination_cycle_guard/` | Rumination and cycle prevention. | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Rumination count decrements and reschedules; max chain guard stops infinite loops with explicit error/event. |
+| EQM-061 | COMPLETE | EQM-060 | `docs/plan/2026-06-09_event_queue_manager/EQM-061_reaction_preparation/` | Reaction preparation runtime. | `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Counterattack preparation triggers on incoming `<損害>` reservation; duration expiry prevents trigger; owner/source matching tested. |
+| EQM-062 | READY | EQM-061 | `docs/plan/2026-06-09_event_queue_manager/EQM-062_rumination_cycle_guard/` | Rumination and cycle prevention. | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trigger_engine.gd`, `tests/trigger/` | Rumination count decrements and reschedules; max chain guard stops infinite loops with explicit error/event. |
 
 ## Phase 7 — Transaction and rollback
 
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-061` (Phase 6 autonomous run, user-approved 2026-06-15; 060 COMPLETE → 061 → 062 = Phase 6 milestone. EQM-060 delegated to Codex 5.5; 061/062 orchestrator-direct.)
+Current: `EQM-062` (Phase 6 autonomous run; 060/061 COMPLETE → 062 = Phase 6 milestone.)
 
 ## Proof log
 
@@ -653,3 +653,22 @@ proof:
 ```
 
 Dependency sweep: EQM-060 COMPLETE → EQM-061 READY. Current pointer → EQM-061.
+
+### EQM-061 — COMPLETE (2026-06-15)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-061_reaction_preparation/
+  review: docs/review/autopilot/EQM-061_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct, trigger firing semantics); repair 0
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=28 checks=358 failures=0; [api-surface] ok
+  gate: §4 trigger (counterattack on incoming damage / duration expiry prevents trigger / owner-source matching / one-shot / sweep-point) + API surface (EQTriggerEngine L2)
+  surface: api_surface.json re-baselined (L2 +EQTriggerEngine) via explicit --update
+  major files:
+    - addons/event_queue_manager/runtime/eq_trigger_engine.gd (new)
+    - tools/check_api_surface.py, docs/design/API_SURFACE.md, tests/golden/api_surface.json
+    - test_project/tests/trigger/test_eq_trigger_engine.gd (new)
+```
+
+Dependency sweep: EQM-061 COMPLETE → EQM-062 READY. Current pointer → EQM-062.
