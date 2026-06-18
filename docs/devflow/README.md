@@ -24,6 +24,7 @@
 | `docs/devflow/TEST.md` | 標準検証コマンド、環境要件、自動テストの方法・一覧。 |
 | `docs/devflow/policy/ROADMAP_POLICY.md` | Roadmap 作成の判断基準。 |
 | `docs/devflow/policy/IMPLEMENTATION_QUEUE_DESIGN_POLICY.md` | Roadmap を implementation queue に変換する判断基準。 |
+| `docs/devflow/policy/DESIGN_REVIEW_POLICY.md` | Roadmap / Queue / Task Packet / 実装後 成果物の設計レビュー基準。 |
 | `docs/devflow/policy/ANALOG_TEST_POLICY.md` | アナログテスト作成指針。 |
 | `docs/devflow/policy/UI_TESTABILITY_POLICY.md` | UI テスト層 (L0-L6) の全体方針と projection-first UI 要件。 |
 | `docs/devflow/policy/UI_LAYOUT_METRIC_TEST_POLICY.md` | Control tree 数値評価による UI 構造 acceptance gate。 |
