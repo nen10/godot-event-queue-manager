@@ -33,6 +33,17 @@ static func branch(runtime) -> EQRuntime:
 ## default-cost action. Live state is unchanged. Returns up to `n` actor_ids
 ## (fewer if the queue empties).
 static func predict_turns(runtime, n: int, default_cost: int = 0) -> Array:
+	var out: Array = []
+	for e in predict_entries(runtime, n, default_cost):
+		out.append(e["actor_id"])
+	return out
+
+
+## Like predict_turns but returns the predicted entries as {actor_id, tick}
+## dictionaries, so a projection (timeline dock/HUD) can show both the order and
+## the due tick without re-deriving the schedule. Same branch-and-discard model;
+## predict_turns is the actor_id-only view of this.
+static func predict_entries(runtime, n: int, default_cost: int = 0) -> Array:
 	var b := branch(runtime)
 	var pol = runtime.config.policy if runtime.config != null else null
 	var out: Array = []
@@ -40,7 +51,7 @@ static func predict_turns(runtime, n: int, default_cost: int = 0) -> Array:
 		var e := b.advance()
 		if e == null:
 			break
-		out.append(e.actor_id)
+		out.append({"actor_id": e.actor_id, "tick": e.due_tick})
 		if pol != null:
 			pol.on_turn_finished(b, e.actor_id, EQActionResult.new(default_cost, 0))
 	return out

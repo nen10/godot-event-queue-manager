@@ -245,6 +245,11 @@
           "returns": "-> EQRuntime"
         },
         {
+          "name": "predict_entries",
+          "params": "runtime, n: int, default_cost: int = 0",
+          "returns": "-> Array"
+        },
+        {
           "name": "predict_turns",
           "params": "runtime, n: int, default_cost: int = 0",
           "returns": "-> Array"
@@ -1384,6 +1389,48 @@
           "name": "set_state",
           "params": "order: Array, explanations: Array = []",
           "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQTimelineDock": {
+      "consts": [
+        "DEFAULT_NEXT_N",
+        "EQPrediction",
+        "SURFACE"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "is_empty_state",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "is_validation_state",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "order",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "row_count",
+          "params": "",
+          "returns": "-> int"
+        },
+        {
+          "name": "set_preview",
+          "params": "config: EQConfig, runtime, next_n: int = DEFAULT_NEXT_N",
+          "returns": "-> void"
+        },
+        {
+          "name": "validation_messages",
+          "params": "",
+          "returns": "-> Array"
         }
       ],
       "signals": [],

@@ -17,6 +17,7 @@ const Builder := preload("res://addons/event_queue_manager/editor/testing/eq_ui_
 const TestLayout := preload("res://tests/ui_headless/test_editor_layout_metrics.gd")
 const TestState := preload("res://tests/ui_headless/test_editor_state_matrix.gd")
 const TestInteraction := preload("res://tests/ui_headless/test_editor_interaction_contract.gd")
+const TestTimelineDock := preload("res://tests/ui_headless/test_timeline_dock.gd")
 
 const DOCK_SIZES := [Vector2(320, 600), Vector2(420, 720)]
 
@@ -39,6 +40,8 @@ static func run(tree: SceneTree, t, out_dir: String) -> void:
 	TestLayout.run(t, results)
 	TestState.run(t, results)
 	TestInteraction.run(t, results)
+	# real editor surfaces fed through the same collector (EQM-090+)
+	await TestTimelineDock.run(tree, t)
 
 
 static func _evaluate_one(tree: SceneTree, sc: Dictionary, dock: Vector2) -> Dictionary:
