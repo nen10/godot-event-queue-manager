@@ -749,12 +749,100 @@
         "faults",
         "max_chain"
       ]
+    },
+    "EQTriggerIndex": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "add",
+          "params": "reservation, condition",
+          "returns": "-> int"
+        },
+        {
+          "name": "candidates",
+          "params": "view: Dictionary",
+          "returns": "-> Array"
+        },
+        {
+          "name": "clear",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "matching_reservations",
+          "params": "view: Dictionary",
+          "returns": "-> Array"
+        },
+        {
+          "name": "size",
+          "params": "",
+          "returns": "-> int"
+        },
+        {
+          "name": "target_bucket_size",
+          "params": "target: StringName",
+          "returns": "-> int"
+        },
+        {
+          "name": "wildcard_size",
+          "params": "",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": []
     }
   },
   "core": {
     "EQBackend": {
       "consts": [
         "EQEntry"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "clear",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "insert",
+          "params": "entry: EQEntry",
+          "returns": "-> void"
+        },
+        {
+          "name": "is_empty",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "ordered",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "peek_min",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "pop_min",
+          "params": "",
+          "returns": "-> EQEntry"
+        },
+        {
+          "name": "size",
+          "params": "",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQBinaryHeapBackend": {
+      "consts": [
+        "EQOrdering"
       ],
       "enums": [],
       "methods": [

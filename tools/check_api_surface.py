@@ -30,7 +30,7 @@ GOLDEN = REPO / "tests" / "golden" / "api_surface.json"
 LAYER_MAP = {
     # core foundation
     "EQEntry": "core", "EQOrdering": "core", "EQScheduler": "core",
-    "EQBackend": "core", "EQSortedArrayBackend": "core",
+    "EQBackend": "core", "EQSortedArrayBackend": "core", "EQBinaryHeapBackend": "core",
     "EQSnapshot": "core", "EQTrace": "core",
     "EQError": "core", "EQValidation": "core", "EQVersion": "core", "EQRng": "core",
     "EQEffectRecord": "core", "EQEffectChunk": "core", "EQOrderExplanation": "core",
@@ -50,7 +50,7 @@ LAYER_MAP = {
     # L2 reservation
     "EQActionDefinition": "L2", "EQReservation": "L2", "EQReservationRuntime": "L2",
     "EQActionResolutionPolicy": "L2", "EQCondition": "L2", "EQTagMatcher": "L2",
-    "EQTriggerEngine": "L2", "EQTransaction": "L2",
+    "EQTriggerEngine": "L2", "EQTransaction": "L2", "EQTriggerIndex": "L2",
     # L3 event-line: added later in Phase 5+
 }
 
