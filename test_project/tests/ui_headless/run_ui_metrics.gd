@@ -32,15 +32,16 @@ static func run(tree: SceneTree, t, out_dir: String) -> void:
 			results.append(res)
 
 	var agg: Dictionary = _aggregate(results)
-	print("[ui_metrics] scenarios=%d evaluations=%d P0=%d P1=%d WARN=%d (M4: P0 enforced on real/good surfaces)"
+	print("[ui_metrics] scenarios=%d evaluations=%d P0=%d P1=%d WARN=%d (M5: P0+P1 enforced on real/good surfaces)"
 		% [Builder.scenarios().size(), results.size(), agg["P0"], agg["P1"], agg["WARN"]])
 
 	if out_dir != "":
 		_write_report(out_dir, results, agg)
 
-	# M4 acceptance gate (EQM-093): a P0 on any non-broken scenario FAILS the build.
+	# M4 gate (EQM-093): P0 on any non-broken scenario FAILS the build.
+	# M5 gate (EQM-095): P1 likewise enforced (row geometry, truncation, picker width).
 	# broken_* are the evaluator's self-test (they MUST produce P0) and are excluded.
-	_enforce_p0(results, t)
+	_enforce(results, t)
 
 	# structural gates (these DO fail the build) — the harness's own correctness
 	TestLayout.run(t, results)
@@ -86,21 +87,28 @@ static func _evaluate_one(tree: SceneTree, sc: Dictionary, dock: Vector2) -> Dic
 	}
 
 
-## M4 enforcement: every P0 finding on a non-broken scenario is a build failure.
-## Lists the enforced metric set (acceptance) so the gate's coverage is explicit.
-static func _enforce_p0(results: Array, t) -> void:
-	const ENFORCED := ["noop_button", "scroll_reachability", "state_contradiction",
+## M4/M5 enforcement: every P0 (M4) and P1 (M5) finding on a non-broken scenario
+## is a build failure. broken_* are excluded (they MUST raise findings — self-test).
+static func _enforce(results: Array, t) -> void:
+	const ENFORCED_P0 := ["noop_button", "scroll_reachability", "state_contradiction",
 		"debug_leakage", "projection_integrity", "sample_separation", "modality", "truncation"]
-	var violations := 0
+	const ENFORCED_P1 := ["timeline_geometry", "truncation", "modality"]  # row geometry, picker width, non-primary truncation
+	var p0 := 0
+	var p1 := 0
 	for r in results:
 		if r["kind"] == "broken":
 			continue
 		for f in r["findings"]:
 			if f["severity"] == "P0":
-				violations += 1
+				p0 += 1
 				t.ok(false, "[M4 P0 gate] %s/%s/%s: %s.%s — %s"
 					% [r["surface"], r["name"], r["dock_class"], f["metric"], f["id"], f["message"]])
-	t.ok(violations == 0, "[M4 P0 gate] no P0 across non-broken scenarios (enforced: %s)" % str(ENFORCED))
+			elif f["severity"] == "P1":
+				p1 += 1
+				t.ok(false, "[M5 P1 gate] %s/%s/%s: %s.%s — %s"
+					% [r["surface"], r["name"], r["dock_class"], f["metric"], f["id"], f["message"]])
+	t.ok(p0 == 0, "[M4 P0 gate] no P0 across non-broken scenarios (enforced: %s)" % str(ENFORCED_P0))
+	t.ok(p1 == 0, "[M5 P1 gate] no P1 across non-broken scenarios (enforced: %s)" % str(ENFORCED_P1))
 
 
 static func _dock_class(dock: Vector2) -> String:

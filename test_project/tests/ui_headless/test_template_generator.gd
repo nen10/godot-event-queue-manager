@@ -40,6 +40,7 @@ static func _test_sample_then_duplicate(tree: SceneTree, t) -> void:
 	var findings: Array = Evaluator.evaluate(snapshot, {"dock_class": "normal"})
 	t.ok(not _has(findings, "sample_separation", "P0"), "sample is badged (no sample_separation P0)")
 	t.ok(not _has(findings, "noop_button", "P0"), "generate/duplicate buttons are wired")
+	t.eq(Evaluator.summarize(findings)["P1"], 0, "real generator is P1-clean (M5 gate)")
 	win.remove_child(gen)
 
 	# duplicate_to_project -> explicit bridge writes project assets, clears sample

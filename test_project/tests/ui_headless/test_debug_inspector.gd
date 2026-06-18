@@ -41,6 +41,7 @@ static func _test_renders_explanation(tree: SceneTree, t) -> void:
 	var findings: Array = Evaluator.evaluate(snapshot, {"dock_class": "normal"})
 	t.ok(not _has(findings, "debug_leakage", "P0"), "no debug leakage in the inspector")
 	t.ok(not _has(findings, "modality", "P0"), "no boolean-text state in the inspector")
+	t.eq(Evaluator.summarize(findings)["P1"], 0, "real inspector is P1-clean (M5 gate)")
 
 	# the value cells are integers (no float ordering leaked), and a deciding icon exists
 	var saw_value := false

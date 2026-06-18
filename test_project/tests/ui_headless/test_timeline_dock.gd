@@ -63,6 +63,7 @@ static func _test_projection_integrity(tree: SceneTree, t) -> void:
 	var context := {"dock_class": "normal", "headless_order": expected, "next_n": 5}
 	var findings: Array = Evaluator.evaluate(snapshot, context)
 	t.ok(not _has(findings, "projection_integrity", "P0"), "laid-out dock rows match prediction (projection integrity)")
+	t.eq(Evaluator.summarize(findings)["P1"], 0, "real dock is P1-clean (M5 gate)")
 	t.eq(dock.row_count(), expected.size(), "one row per predicted turn (windowed to N)")
 
 	# metadata present on the rows (harness can read stable roles)

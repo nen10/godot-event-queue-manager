@@ -7,11 +7,12 @@ severities*, this file holds the *project-specific values* (surfaces, required
 components, forbidden text, thresholds, dead-area exceptions). State-dependent
 display lives in `EDITOR_STATE_MATRIX.md`.
 
-Adoption stage: **M4** (EQM-093) — the metric harness enforces P0 as a build FAIL
-on real/good surfaces (no-op button, scroll reachability, state contradiction,
-debug leakage, float tick, projection integrity, sample separation); the static
-audit runs `--enforce`. (Contract authored M0=EQM-086, harness M1-M3=EQM-087,
-first surfaces=EQM-090/091/092.) M5 calibration = EQM-094/095.
+Adoption stage: **M5** (EQM-095) — the metric harness enforces **P0 and P1** as a
+build FAIL on real/good surfaces (P0: no-op button, scroll reachability, state
+contradiction, debug leakage, float tick, projection integrity, sample separation;
+P1: row geometry, non-primary truncation, picker width, text-only status); the
+static audit runs `--enforce`. (Contract M0=EQM-086, harness M1-M3=EQM-087, first
+surfaces=EQM-090/091/092, P0 gate M4=EQM-093, calibration loop=EQM-094.)
 Changes to visible UI MUST update this file first (UI_LAYOUT_METRIC_TEST_POLICY §7.1).
 
 ---
@@ -249,10 +250,17 @@ visible **dev-mode marker** so a snapshot can assert it is not normal mode.
 
 ---
 
-## 7. Initial thresholds (pre-calibration)
+## 7. Thresholds (M5-ratified)
 
 Mirrors UI_LAYOUT_METRIC_TEST_POLICY §9 as the project's binding values. Calibration
 updates these here (with a reason line) per `UI_LAYOUT_CALIBRATION_POLICY.md`.
+
+**M5 status (EQM-095):** the P1 gate is active against these values. No calibration
+ledger iteration has been baked yet (the loop is `manual-optional`, human-driven),
+so the thresholds are **ratified at their initial values** — every real/good surface
+passes P1 at them, so there is no evidence to move them. They change only when a real
+tweak-and-bake session writes to `LAYOUT_CALIBRATION_LEDGER.md`; this is not a license
+to hand-tune them without that evidence.
 
 ```text
 min_picker_width_normal               = 180
@@ -284,9 +292,12 @@ and any text-only state allowances are listed here with a reason + backlog note.
 | timeline_dock | `timeline_list` dead area while `empty_state` shown | result-waiting region | — |
 | order_inspector | `explanation_panel` dead area while `empty_state` shown | result-waiting region | — |
 | config_panel | `validation_list` dead area while empty | result-waiting region | — |
+| timeline_dock | `action_label` may elide (clip_text + EXPAND) at any width | the kind/action is secondary to order; full text is in tooltip; elide ≠ P1 because the label expands to fill, never starved | — |
+| all | narrow-width (`320`) truncation is **WARN**, not P1 | narrow is the smallest acceptance dock; eliding there is acceptable; P1 truncation applies at normal+ (§6.2/§6.3) | — |
 
 No generic ResourcePicker exceptions. No text-only state exceptions (all status
-uses icon/checkbox/badge per `EDITOR_STATE_MATRIX.md`).
+uses icon/checkbox/badge per `EDITOR_STATE_MATRIX.md`). The M5 P1 gate (EQM-095)
+runs against these declarations: every real/good surface is P1-clean at normal width.
 
 ---
 
