@@ -17,5 +17,20 @@ static func less_than(a: EQEntry, b: EQEntry) -> bool:
 	return a.sequence < b.sequence
 
 
+## The single ordering key (in less_than precedence) that decides a vs b — i.e.
+## why one sorts before the other. Returns &"due_tick" / &"priority" / &"sequence",
+## or &"" when all keys are equal (impossible for two distinct entries, since
+## sequence is unique). This is the authoritative source for order explanations
+## (EQM-091): it cannot drift from less_than because it mirrors the same keys.
+static func decided_by(a: EQEntry, b: EQEntry) -> StringName:
+	if a.due_tick != b.due_tick:
+		return &"due_tick"
+	if a.priority != b.priority:
+		return &"priority"
+	if a.sequence != b.sequence:
+		return &"sequence"
+	return &""
+
+
 static func sort(entries: Array) -> void:
 	entries.sort_custom(less_than)

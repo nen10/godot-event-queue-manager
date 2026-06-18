@@ -33,12 +33,13 @@ LAYER_MAP = {
     "EQBackend": "core", "EQSortedArrayBackend": "core",
     "EQSnapshot": "core", "EQTrace": "core",
     "EQError": "core", "EQValidation": "core", "EQVersion": "core", "EQRng": "core",
-    "EQEffectRecord": "core", "EQEffectChunk": "core",
+    "EQEffectRecord": "core", "EQEffectChunk": "core", "EQOrderExplanation": "core",
     # presentation (simulation/presentation split — must not leak into L0/L1)
     "EQPresentationEvent": "presentation",
     "EQPresentationPolicy": "presentation", "EQPresentationBuffer": "presentation",
     # ui (runtime/editor UI projections — must not leak into L0/L1)
     "EQTimelineHud": "ui", "EQDebugOverlay": "ui", "EQTimelineDock": "ui",
+    "EQDebugInspector": "ui",
     # L0 turn order
     "EQRuntime": "L0", "EQActorRegistry": "L0",
     "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0", "EQPrediction": "L0",

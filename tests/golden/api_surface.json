@@ -963,12 +963,49 @@
       "signals": [],
       "vars": []
     },
+    "EQOrderExplanation": {
+      "consts": [
+        "EQEntry",
+        "EQOrdering",
+        "FACTOR_DIRECTION",
+        "FACTOR_KEYS"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "deciding_factor",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "of",
+          "params": "entry: EQEntry, predecessor: EQEntry = null",
+          "returns": "-> EQOrderExplanation"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "actor_id",
+        "decided_by",
+        "factors"
+      ]
+    },
     "EQOrdering": {
       "consts": [
         "EQEntry"
       ],
       "enums": [],
       "methods": [
+        {
+          "name": "decided_by",
+          "params": "a: EQEntry, b: EQEntry",
+          "returns": "-> StringName"
+        },
         {
           "name": "less_than",
           "params": "a: EQEntry, b: EQEntry",
@@ -1366,6 +1403,49 @@
     }
   },
   "ui": {
+    "EQDebugInspector": {
+      "consts": [
+        "EQOrderExplanation",
+        "KEY_LABEL",
+        "KEY_TOOLTIP",
+        "SURFACE"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "clear",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "decided_by",
+          "params": "",
+          "returns": "-> StringName"
+        },
+        {
+          "name": "factor_rows",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "is_empty_state",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "select",
+          "params": "entry, predecessor = null",
+          "returns": "-> void"
+        },
+        {
+          "name": "show_explanation",
+          "params": "explanation: EQOrderExplanation",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
     "EQDebugOverlay": {
       "consts": [],
       "enums": [],
