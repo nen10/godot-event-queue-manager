@@ -97,8 +97,8 @@ Process references:
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-080 | READY | EQM-072 | `docs/plan/2026-06-09_event_queue_manager/EQM-080_effect_records/` | Simulation effect and presentation event records. | `runtime/eq_effect_record.gd`, `runtime/eq_presentation_event.gd`, `tests/presentation/` | Status effects record immediately; presentation requests can be queued separately with actor/position references. |
-| EQM-081 | BACKLOG | EQM-080 | `docs/plan/2026-06-09_event_queue_manager/EQM-081_visibility_flush_policy/` | Importance/sensing/offscreen presentation policy. | `resources/eq_presentation_policy.gd`, `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Important event flushes previous visuals; sensed non-important defers; offscreen skips; player turn flush tested. |
+| EQM-080 | COMPLETE | EQM-072 | `docs/plan/2026-06-09_event_queue_manager/EQM-080_effect_records/` | Simulation effect and presentation event records. | `runtime/eq_effect_record.gd`, `runtime/eq_presentation_event.gd`, `tests/presentation/` | Status effects record immediately; presentation requests can be queued separately with actor/position references. |
+| EQM-081 | READY | EQM-080 | `docs/plan/2026-06-09_event_queue_manager/EQM-081_visibility_flush_policy/` | Importance/sensing/offscreen presentation policy. | `resources/eq_presentation_policy.gd`, `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Important event flushes previous visuals; sensed non-important defers; offscreen skips; player turn flush tested. |
 | EQM-082 | BACKLOG | EQM-081 | `docs/plan/2026-06-09_event_queue_manager/EQM-082_moving_target_barrier/` | Moving-target consistency barrier. | `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Event referencing moved entity forces prior pending visuals to flush before resolving/displaying dependent event. |
 
 ## Phase 8b — Runtime order surface and dogfood
@@ -141,7 +141,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 ## Current pointer
 
-Current: `EQM-080` (Phase 7 COMPLETE. CHECKPOINT — Phase 7/8 milestone boundary, §8.3; autonomous run paused for user direction before Phase 8)
+Current: `EQM-081` (Phase 8 autonomous run, user-approved plan 2026-06-15; 080 COMPLETE → 081 → 082 = Phase 8 milestone.)
 
 ## Proof log
 
@@ -751,3 +751,25 @@ proof:
 
 Dependency sweep: EQM-072 COMPLETE → **Phase 7 (Transaction and rollback) milestone reached** (EQM-070..072 COMPLETE). EQM-080 READY. Current pointer → EQM-080.
 CHECKPOINT: Phase 7/8 milestone boundary (§8.3). Autonomous run paused for user direction before Phase 8 (EQM-080 effect/presentation records — simulation/presentation split).
+
+### EQM-080 — COMPLETE (2026-06-18)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-080_effect_records/
+  review: docs/review/autopilot/EQM-080_SELF_REVIEW_2026-06-15.md
+  pattern: P0 (orchestrator-direct — simulation/presentation split foundation; design forks pre-agreed in approved Phase 8 plan). Repair: 0.
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=34 checks=438 failures=0; [api-surface] ok
+  gate: simulation/presentation split (EQEffectRecord immediate + deterministic; EQEffectChunk is_save_allowed=is_empty, §10/§22; EQPresentationEvent value-snapshot/no-live-node) + API surface (presentation layer added)
+  surface: api_surface.json re-baselined (core +EQEffectRecord/EQEffectChunk; +presentation layer with EQPresentationEvent) via explicit --update (orchestrator)
+  major files:
+    - addons/event_queue_manager/runtime/eq_effect_record.gd (new; core)
+    - addons/event_queue_manager/runtime/eq_effect_chunk.gd (new; core)
+    - addons/event_queue_manager/runtime/eq_presentation_event.gd (new; presentation)
+    - test_project/tests/presentation/test_eq_effect_record.gd (new)
+    - test_project/tests/presentation/test_eq_presentation_event.gd (new)
+    - tools/check_api_surface.py, docs/design/API_SURFACE.md, tests/golden/api_surface.json (orchestrator)
+```
+
+Dependency sweep: EQM-080 COMPLETE → EQM-081 READY. Current pointer → EQM-081.

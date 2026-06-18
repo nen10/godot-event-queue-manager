@@ -33,6 +33,9 @@ LAYER_MAP = {
     "EQBackend": "core", "EQSortedArrayBackend": "core",
     "EQSnapshot": "core", "EQTrace": "core",
     "EQError": "core", "EQValidation": "core", "EQVersion": "core", "EQRng": "core",
+    "EQEffectRecord": "core", "EQEffectChunk": "core",
+    # presentation (simulation/presentation split — must not leak into L0/L1)
+    "EQPresentationEvent": "presentation",
     # L0 turn order
     "EQRuntime": "L0", "EQActorRegistry": "L0",
     "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0", "EQPrediction": "L0",
@@ -46,7 +49,7 @@ LAYER_MAP = {
     # L3 event-line: added later in Phase 5+
 }
 
-LAYERS = ["core", "L0", "L1", "L2", "L3"]
+LAYERS = ["core", "L0", "L1", "L2", "L3", "presentation"]
 L01_LAYERS = {"L0", "L1"}
 
 _RE_CLASS = re.compile(r"^class_name\s+(\w+)", re.M)

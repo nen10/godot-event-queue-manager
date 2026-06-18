@@ -712,6 +712,86 @@
       "signals": [],
       "vars": []
     },
+    "EQEffectChunk": {
+      "consts": [
+        "EQEffectRecord"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "add",
+          "params": "record: EQEffectRecord",
+          "returns": "-> void"
+        },
+        {
+          "name": "clear",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "drain",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "is_empty",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "is_save_allowed",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "records",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "size",
+          "params": "",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQEffectRecord": {
+      "consts": [
+        "CLASS_IMPORTANT",
+        "CLASS_OFFSCREEN",
+        "CLASS_SENSED"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> EQEffectRecord"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "to_trace_record",
+          "params": "",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "classification",
+        "delta",
+        "kind",
+        "source",
+        "stat",
+        "tags",
+        "target"
+      ]
+    },
     "EQEntry": {
       "consts": [],
       "enums": [],
@@ -1101,6 +1181,45 @@
       ],
       "signals": [],
       "vars": []
+    }
+  },
+  "presentation": {
+    "EQPresentationEvent": {
+      "consts": [
+        "EQEffectRecord"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "bind",
+          "params": "obj: Object",
+          "returns": "-> void"
+        },
+        {
+          "name": "bound",
+          "params": "",
+          "returns": "-> Object"
+        },
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> EQPresentationEvent"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "actor_id",
+        "changes_position_of",
+        "classification",
+        "depends_on",
+        "position",
+        "tags"
+      ]
     }
   }
 }
