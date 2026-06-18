@@ -1,0 +1,8 @@
+{"actor":"knight","cause":"timer","event_id":1,"i":0,"kind":"resolved","priority":102,"seq":0,"tick":1,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"priority"}}
+{"actor":"cleric","cause":"timer","event_id":2,"i":1,"kind":"resolved","priority":101,"seq":1,"tick":1,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"priority"}}
+{"actor":"orc","cause":"timer","event_id":3,"i":2,"kind":"resolved","priority":22,"seq":2,"tick":1,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"priority"}}
+{"actor":"goblin","cause":"timer","event_id":4,"i":3,"kind":"resolved","priority":21,"seq":3,"tick":1,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"knight","cause":"timer","event_id":5,"i":4,"kind":"resolved","priority":102,"seq":4,"tick":2,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"priority"}}
+{"actor":"cleric","cause":"timer","event_id":6,"i":5,"kind":"resolved","priority":101,"seq":5,"tick":2,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"priority"}}
+{"actor":"orc","cause":"timer","event_id":7,"i":6,"kind":"resolved","priority":22,"seq":6,"tick":2,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"priority"}}
+{"actor":"goblin","cause":"timer","event_id":8,"i":7,"kind":"resolved","priority":21,"seq":7,"tick":2,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}

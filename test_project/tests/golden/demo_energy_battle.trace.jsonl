@@ -1,0 +1,9 @@
+{"actor":"rogue","cause":"timer","event_id":2,"i":0,"kind":"resolved","priority":0,"seq":1,"tick":5,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"hero","cause":"timer","event_id":1,"i":1,"kind":"resolved","priority":0,"seq":0,"tick":7,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"rogue","cause":"timer","event_id":4,"i":2,"kind":"resolved","priority":0,"seq":3,"tick":10,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"golem","cause":"timer","event_id":3,"i":3,"kind":"resolved","priority":0,"seq":2,"tick":13,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"hero","cause":"timer","event_id":5,"i":4,"kind":"resolved","priority":0,"seq":4,"tick":14,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"sequence"}}
+{"actor":"rogue","cause":"timer","event_id":6,"i":5,"kind":"resolved","priority":0,"seq":5,"tick":14,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"rogue","cause":"timer","event_id":9,"i":6,"kind":"resolved","priority":0,"seq":8,"tick":19,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"hero","cause":"timer","event_id":8,"i":7,"kind":"resolved","priority":0,"seq":7,"tick":20,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"rogue","cause":"timer","event_id":10,"i":8,"kind":"resolved","priority":0,"seq":9,"tick":23,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
