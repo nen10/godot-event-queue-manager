@@ -39,7 +39,7 @@ LAYER_MAP = {
     "EQPresentationPolicy": "presentation", "EQPresentationBuffer": "presentation",
     # ui (runtime/editor UI projections — must not leak into L0/L1)
     "EQTimelineHud": "ui", "EQDebugOverlay": "ui", "EQTimelineDock": "ui",
-    "EQDebugInspector": "ui",
+    "EQDebugInspector": "ui", "EQTemplateGenerator": "ui",
     # L0 turn order
     "EQRuntime": "L0", "EQActorRegistry": "L0",
     "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0", "EQPrediction": "L0",

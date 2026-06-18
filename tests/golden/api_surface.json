@@ -1474,6 +1474,45 @@
       "signals": [],
       "vars": []
     },
+    "EQTemplateGenerator": {
+      "consts": [
+        "DEMO_ENTRY",
+        "DemoBattle",
+        "EQConfig",
+        "SURFACE",
+        "TEMPLATE_ID"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "duplicate_to_project",
+          "params": "target_dir: String = \"user://eq_demo_action_resolution\"",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "generate",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "is_sample",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "manifest",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "satisfies_production_slot",
+          "params": "",
+          "returns": "-> bool"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
     "EQTimelineDock": {
       "consts": [
         "DEFAULT_NEXT_N",

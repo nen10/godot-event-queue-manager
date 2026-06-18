@@ -33,6 +33,7 @@ static func evaluate(snapshot: Dictionary, context: Dictionary = {}) -> Array:
 	_metric_noop_button(nodes, surface, findings)
 	_metric_modality(nodes, surface, findings)
 	_metric_projection_integrity(nodes, surface, context, findings)
+	_metric_sample_separation(nodes, surface, findings)
 	return findings
 
 
@@ -218,3 +219,19 @@ static func _metric_projection_integrity(nodes: Array, surface: String, context:
 	if ui_order.size() != expected_count:
 		_add(findings, "P0", surface, "projection_integrity", "timeline_list",
 			"visible row count %d != min(N,len)=%d" % [ui_order.size(), expected_count])
+
+
+# §5.10 sample separation — a generated sample artifact must be badged, never
+# shown as production. (silent sample -> production is the §5.10 P0; here we catch
+# the visible half: a sample surface with no sample badge.)
+static func _metric_sample_separation(nodes: Array, surface: String, findings: Array) -> void:
+	var has_sample := false
+	var has_sample_badge := false
+	for n in nodes:
+		if n.get("is_sample", false):
+			has_sample = true
+		if n.get("role", "") == "badge_sample":
+			has_sample_badge = true
+	if has_sample and not has_sample_badge:
+		_add(findings, "P0", surface, "sample_separation", "screen_root",
+			"sample artifact present but not badged (could pass as production)")

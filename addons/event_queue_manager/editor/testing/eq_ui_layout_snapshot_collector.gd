@@ -87,6 +87,7 @@ static func _node_snapshot(c: Control, surface_id: StringName, inside_scroll: bo
 		"inside_scroll_container": inside_scroll,
 		"is_button_like": _is_button_like(c),
 		"is_icon_button": _is_icon_button(c),
+		"is_sample": bool(c.get_meta(&"ui_is_sample", false)),
 		"has_status_glyph": _has_status_glyph(c),
 		"visible_text_kind": _visible_text_kind(c, text, role),
 	}
