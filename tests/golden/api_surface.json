@@ -177,6 +177,61 @@
         "policy"
       ]
     },
+    "EQNodeBridge": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "bind_actor",
+          "params": "actor_id: StringName, node: Object",
+          "returns": "-> void"
+        },
+        {
+          "name": "node_for",
+          "params": "actor_id: StringName",
+          "returns": "-> Object"
+        },
+        {
+          "name": "notify_effect_recorded",
+          "params": "record",
+          "returns": "-> void"
+        },
+        {
+          "name": "notify_presentation_flushed",
+          "params": "event",
+          "returns": "-> void"
+        },
+        {
+          "name": "notify_reservation_resolved",
+          "params": "reservation",
+          "returns": "-> void"
+        },
+        {
+          "name": "notify_trigger_fired",
+          "params": "reservation",
+          "returns": "-> void"
+        },
+        {
+          "name": "on_actor_freed",
+          "params": "actor_id: StringName",
+          "returns": "-> void"
+        },
+        {
+          "name": "prune_freed",
+          "params": "",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [
+        "effect_recorded",
+        "event_invalidated",
+        "presentation_flushed",
+        "reservation_resolved",
+        "trigger_fired",
+        "turn_ready"
+      ],
+      "vars": []
+    },
     "EQPrediction": {
       "consts": [
         "EQActionResult",
@@ -261,6 +316,31 @@
         "registry",
         "scheduler"
       ]
+    },
+    "EQSaveAdapter": {
+      "consts": [
+        "SCHEMA_VERSION"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "contains_live_object",
+          "params": "value",
+          "returns": "-> bool"
+        },
+        {
+          "name": "load",
+          "params": "into_runtime, data: Dictionary, rebind: Dictionary = {}",
+          "returns": "-> bool"
+        },
+        {
+          "name": "save",
+          "params": "runtime",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": []
     }
   },
   "L1": {

@@ -18,7 +18,7 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 | layer | meaning | classes |
 |---|---|---|
 | `core` | foundational infra below the user layers | EQEntry, EQOrdering, EQScheduler, EQBackend, EQSortedArrayBackend, EQSnapshot, EQTrace, EQError, EQValidation, EQVersion, EQRng, EQEffectRecord, EQEffectChunk |
-| `L0` | turn order ("who acts next") | EQRuntime, EQActorRegistry, EQActorState, EQActionResult, EQManager, EQPrediction |
+| `L0` | turn order ("who acts next") | EQRuntime, EQActorRegistry, EQActorState, EQActionResult, EQManager, EQPrediction, EQSaveAdapter, EQNodeBridge |
 | `L1` | policy selection | EQConfig, EQPolicy, EQFixedRoundPolicy, EQCTBPolicy, EQEnergyPolicy, EQWaitTurnPolicy |
 | `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime, EQActionResolutionPolicy, EQCondition, EQTagMatcher, EQTriggerEngine, EQTransaction |
 | `L3` | event-line internals | *(Phase 5+)* |

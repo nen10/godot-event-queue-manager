@@ -42,6 +42,7 @@ LAYER_MAP = {
     # L0 turn order
     "EQRuntime": "L0", "EQActorRegistry": "L0",
     "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0", "EQPrediction": "L0",
+    "EQSaveAdapter": "L0", "EQNodeBridge": "L0",
     # L1 policy
     "EQConfig": "L1", "EQPolicy": "L1", "EQFixedRoundPolicy": "L1", "EQCTBPolicy": "L1",
     "EQEnergyPolicy": "L1", "EQWaitTurnPolicy": "L1",

@@ -105,7 +105,7 @@ Process references:
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-085 | READY | EQM-032, EQM-072, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-085_godot_node_bridge/` | Godot node bridge: save/load rebind adapter, optional autoload installer, actor-deletion handling, full multi-domain signal bridge. | `runtime/eq_node_bridge.gd`, `runtime/eq_save_adapter.gd`, `tests/runtime/` | Save/load stores `actor_id` + Resources, never live Nodes, and rebinds on load; actor deletion routes pending events through the Q05 invalidation path; optional autoload installer is opt-in (scene-local default per profile); signal bridge covers turn/reservation/trigger/effect/presentation/invalid; tests cover scene-local manager, actor deletion, and save/load rebind (roadmap Phase 9 "Godot runtime integration"). |
+| EQM-085 | COMPLETE | EQM-032, EQM-072, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-085_godot_node_bridge/` | Godot node bridge: save/load rebind adapter, optional autoload installer, actor-deletion handling, full multi-domain signal bridge. | `runtime/eq_node_bridge.gd`, `runtime/eq_save_adapter.gd`, `tests/runtime/` | Save/load stores `actor_id` + Resources, never live Nodes, and rebinds on load; actor deletion routes pending events through the Q05 invalidation path; optional autoload installer is opt-in (scene-local default per profile); signal bridge covers turn/reservation/trigger/effect/presentation/invalid; tests cover scene-local manager, actor deletion, and save/load rebind (roadmap Phase 9 "Godot runtime integration"). |
 | EQM-083 | COMPLETE | EQM-033, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-083_runtime_timeline_hud/` | Player-facing runtime timeline HUD + consumer runtime debug overlay. | `runtime/ui/eq_timeline_hud.gd`, `runtime/ui/eq_timeline_hud.tscn`, `runtime/ui/eq_debug_overlay.gd`, `tests/ui_headless/` | HUD renders injected prediction (projection integrity in-game); updates on `queue_changed`; shows explicit stale state while presentation is deferred; controls carry `ui_metric_id` metadata; no UI-side order recomputation; HUD labels are localizable and order/state uses non-text modality (icon/badge) for colorblind/screen-reader safety; a separate opt-in debug overlay/log hook lets a developer inspect the live order and "why next" in their own game. |
 | EQM-084 | COMPLETE | EQM-083 | `docs/plan/2026-06-09_event_queue_manager/EQM-084_dogfood_vertical_slice/` | Dogfood consumer slice: minimal playable Action Resolution Turn-Based game consuming only the public addon API (exercises EQM-085 save/load if present). | `dogfood/`, `docs/review/`, `tests/golden/` | Slice uses public API only (no runtime internals); ships its own golden trace; friction report `docs/review/DOGFOOD_FRICTION_<date>.md` records API ergonomics findings; findings become queue candidates or explicit no-change records. |
 
@@ -113,7 +113,7 @@ Process references:
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-086 | BACKLOG | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-086_editor_ui_contract/` | Editor UI contract and state matrix (adoption M0). | `docs/ui/EDITOR_UI_CONTRACT.md`, `docs/ui/EDITOR_STATE_MATRIX.md` | Surfaces, required components, forbidden visible text, scenario states, and initial thresholds defined per `UI_LAYOUT_METRIC_TEST_POLICY.md`; docs-only acceptance, no Godot run required. |
+| EQM-086 | READY | EQM-034 | `docs/plan/2026-06-09_event_queue_manager/EQM-086_editor_ui_contract/` | Editor UI contract and state matrix (adoption M0). | `docs/ui/EDITOR_UI_CONTRACT.md`, `docs/ui/EDITOR_STATE_MATRIX.md` | Surfaces, required components, forbidden visible text, scenario states, and initial thresholds defined per `UI_LAYOUT_METRIC_TEST_POLICY.md`; docs-only acceptance, no Godot run required. |
 | EQM-087 | BACKLOG | EQM-086 | `docs/plan/2026-06-09_event_queue_manager/EQM-087_ui_metric_harness/` | UI static audit + layout snapshot collector + WARN-only metric report (adoption M1-M3). | `tools/ui_static_audit.py`, `addons/event_queue_manager/editor/testing/`, `tests/ui_headless/` | Static audit runs inside `./tools/test.sh`; collector produces snapshot JSON for a synthetic scenario Control tree; evaluator reports metrics WARN-only; report written under `.godot_user/test-runs/`. |
 | EQM-090 | BACKLOG | EQM-034, EQM-087 | `docs/plan/2026-06-09_event_queue_manager/EQM-090_timeline_dock_mvp/` | Timeline Preview Dock MVP for basic policies. | `editor/timeline_dock.tscn`, `editor/timeline_dock.gd`, `tests/ui_headless/` | User selects project config; dock shows next events or explicit unset/validation state; no silent sample default; controls carry `ui_metric_id` metadata; displayed order equals headless prediction (projection integrity); metric WARN report cited in self-review. |
 | EQM-091 | BACKLOG | EQM-090 | `docs/plan/2026-06-09_event_queue_manager/EQM-091_debug_order_explanation/` | Debug order explanation view. | `editor/debug_inspector.gd`, `runtime/eq_order_explanation.gd`, `tests/ui_headless/` | For a selected event, UI can explain tick/priority/sequence/tie-break reason, rendered from structured explanation data (explanation-as-data), not free-form strings. |
@@ -844,3 +844,17 @@ proof:
 ```
 
 Dependency sweep: EQM-084 COMPLETE → (EQM-085 already READY via 032/072/082). Current pointer → EQM-085.
+
+### EQM-085 — COMPLETE (2026-06-18) — Phase 8b complete
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-085_godot_node_bridge/
+  review: docs/review/autopilot/EQM-085_SELF_REVIEW_2026-06-18.md
+  pattern: P0 (orchestrator-direct, runtime/Godot integration); repair 0
+  tests: ./tools/test.sh -> PASS (exit 0); files=40 checks=530 failures=0; [api-surface] ok
+  gate: §4 runtime/integration (node-free save/load + rebind reproduces order; actor-deletion invalidation; 6-domain signal bridge; scene-local)
+  major files: addons/event_queue_manager/runtime/{eq_save_adapter.gd,eq_node_bridge.gd} (new); test_project/tests/runtime/{test_eq_save_adapter,test_eq_node_bridge}.gd (new)
+```
+
+Dependency sweep: EQM-085 COMPLETE → Phase 8b done (083/084/085). EQM-086 READY. Current pointer → EQM-086.
