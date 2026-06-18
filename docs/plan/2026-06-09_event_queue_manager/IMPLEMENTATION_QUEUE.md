@@ -99,7 +99,7 @@ Process references:
 |---|---|---|---|---|---|---|
 | EQM-080 | COMPLETE | EQM-072 | `docs/plan/2026-06-09_event_queue_manager/EQM-080_effect_records/` | Simulation effect and presentation event records. | `runtime/eq_effect_record.gd`, `runtime/eq_presentation_event.gd`, `tests/presentation/` | Status effects record immediately; presentation requests can be queued separately with actor/position references. |
 | EQM-081 | COMPLETE | EQM-080 | `docs/plan/2026-06-09_event_queue_manager/EQM-081_visibility_flush_policy/` | Importance/sensing/offscreen presentation policy. | `resources/eq_presentation_policy.gd`, `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Important event flushes previous visuals; sensed non-important defers; offscreen skips; player turn flush tested. |
-| EQM-082 | READY | EQM-081 | `docs/plan/2026-06-09_event_queue_manager/EQM-082_moving_target_barrier/` | Moving-target consistency barrier. | `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Event referencing moved entity forces prior pending visuals to flush before resolving/displaying dependent event. |
+| EQM-082 | COMPLETE | EQM-081 | `docs/plan/2026-06-09_event_queue_manager/EQM-082_moving_target_barrier/` | Moving-target consistency barrier. | `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Event referencing moved entity forces prior pending visuals to flush before resolving/displaying dependent event. |
 
 ## Phase 8b — Runtime order surface and dogfood
 
@@ -794,3 +794,22 @@ proof:
 ```
 
 Dependency sweep: EQM-081 COMPLETE → EQM-082 READY. Current pointer → EQM-082.
+
+### EQM-082 — COMPLETE (2026-06-18)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-082_moving_target_barrier/
+  review: docs/review/autopilot/EQM-082_SELF_REVIEW_2026-06-18.md
+  pattern: P0 (orchestrator-direct). Repair: 0.
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=36 checks=489 failures=0; [api-surface] ok
+  gate: barrier selective flush (depends_on ∩ changes_position_of); insertion-order preserved; neutrality holds
+  surface: no change (no new class_name; _barrier_flush is internal)
+  major files:
+    - addons/event_queue_manager/runtime/eq_presentation_buffer.gd (extended: _barrier_flush)
+    - test_project/tests/presentation/test_eq_moving_target_barrier.gd (new)
+```
+
+Dependency sweep: EQM-082 COMPLETE → **Phase 8 (Effect and Presentation Pipeline) milestone reached** (EQM-080..082 COMPLETE).
+CHECKPOINT: Phase 8/9 milestone boundary. Autonomous run paused for user direction before Phase 8b (EQM-085 Godot node bridge).

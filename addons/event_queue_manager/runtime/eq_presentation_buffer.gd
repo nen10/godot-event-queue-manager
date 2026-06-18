@@ -22,8 +22,13 @@ func _init(p_policy: EQPresentationPolicy) -> void:
 	_policy = p_policy
 
 
-## Enqueue an event; applies policy flush rules immediately.
+## Enqueue an event; applies the moving-target barrier (EQM-082) then policy flush rules.
 func enqueue(event: EQPresentationEvent) -> void:
+	# Moving-target barrier: flush only the pending events whose changes_position_of
+	# overlaps this event's depends_on — precise tracking, not flush-all (EQM-082).
+	if not event.depends_on.is_empty():
+		_barrier_flush(event.depends_on)
+
 	var cls: StringName = event.classification
 	if _policy.skip_classes.has(cls):
 		return
@@ -69,3 +74,23 @@ func _drain_pending() -> void:
 	for e: EQPresentationEvent in _pending:
 		_flushed.append(e)
 	_pending.clear()
+
+
+## Flush exactly the pending events whose changes_position_of intersects depends_on.
+## Non-conflicting pending events remain in place; insertion order is preserved.
+func _barrier_flush(depends_on: Array[StringName]) -> void:
+	var to_flush: Array[EQPresentationEvent] = []
+	var remaining: Array[EQPresentationEvent] = []
+	for ev: EQPresentationEvent in _pending:
+		var conflict: bool = false
+		for actor: StringName in ev.changes_position_of:
+			if depends_on.has(actor):
+				conflict = true
+				break
+		if conflict:
+			to_flush.append(ev)
+		else:
+			remaining.append(ev)
+	_pending = remaining
+	for ev: EQPresentationEvent in to_flush:
+		_flushed.append(ev)
