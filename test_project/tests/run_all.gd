@@ -21,6 +21,12 @@ func _initialize() -> void:
 			continue
 		script.run(t)
 
+	# UI metric phase (frame-stepping; excluded from sync discovery above because
+	# headless Control layout only resolves across process frames). EQM-087.
+	var ui_runner: GDScript = load("res://tests/ui_headless/run_ui_metrics.gd")
+	if ui_runner != null:
+		await ui_runner.run(self, t, OS.get_environment("EQ_RUN_OUT"))
+
 	print("[run_all] files=%d checks=%d failures=%d" % [files.size(), t.checks, t.failures.size()])
 	if t.failures.is_empty():
 		print("[run_all] PASS")
@@ -41,7 +47,9 @@ func _discover(dir_path: String) -> Array[String]:
 	while entry != "":
 		var full := dir_path.path_join(entry)
 		if d.current_is_dir():
-			if not entry.begins_with("."):
+			# ui_headless/ holds frame-stepping modules run by the UI phase, not
+			# the synchronous discovery loop (they need a flushed layout + results).
+			if not entry.begins_with(".") and entry != "ui_headless":
 				out.append_array(_discover(full))
 		elif entry.begins_with("test_") and entry.ends_with(".gd"):
 			out.append(full)
