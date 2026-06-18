@@ -106,8 +106,8 @@ Process references:
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
 | EQM-085 | BACKLOG | EQM-032, EQM-072, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-085_godot_node_bridge/` | Godot node bridge: save/load rebind adapter, optional autoload installer, actor-deletion handling, full multi-domain signal bridge. | `runtime/eq_node_bridge.gd`, `runtime/eq_save_adapter.gd`, `tests/runtime/` | Save/load stores `actor_id` + Resources, never live Nodes, and rebinds on load; actor deletion routes pending events through the Q05 invalidation path; optional autoload installer is opt-in (scene-local default per profile); signal bridge covers turn/reservation/trigger/effect/presentation/invalid; tests cover scene-local manager, actor deletion, and save/load rebind (roadmap Phase 9 "Godot runtime integration"). |
-| EQM-083 | BACKLOG | EQM-033, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-083_runtime_timeline_hud/` | Player-facing runtime timeline HUD + consumer runtime debug overlay. | `runtime/ui/eq_timeline_hud.gd`, `runtime/ui/eq_timeline_hud.tscn`, `runtime/ui/eq_debug_overlay.gd`, `tests/ui_headless/` | HUD renders injected prediction (projection integrity in-game); updates on `queue_changed`; shows explicit stale state while presentation is deferred; controls carry `ui_metric_id` metadata; no UI-side order recomputation; HUD labels are localizable and order/state uses non-text modality (icon/badge) for colorblind/screen-reader safety; a separate opt-in debug overlay/log hook lets a developer inspect the live order and "why next" in their own game. |
-| EQM-084 | BACKLOG | EQM-083 | `docs/plan/2026-06-09_event_queue_manager/EQM-084_dogfood_vertical_slice/` | Dogfood consumer slice: minimal playable Action Resolution Turn-Based game consuming only the public addon API (exercises EQM-085 save/load if present). | `dogfood/`, `docs/review/`, `tests/golden/` | Slice uses public API only (no runtime internals); ships its own golden trace; friction report `docs/review/DOGFOOD_FRICTION_<date>.md` records API ergonomics findings; findings become queue candidates or explicit no-change records. |
+| EQM-083 | COMPLETE | EQM-033, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-083_runtime_timeline_hud/` | Player-facing runtime timeline HUD + consumer runtime debug overlay. | `runtime/ui/eq_timeline_hud.gd`, `runtime/ui/eq_timeline_hud.tscn`, `runtime/ui/eq_debug_overlay.gd`, `tests/ui_headless/` | HUD renders injected prediction (projection integrity in-game); updates on `queue_changed`; shows explicit stale state while presentation is deferred; controls carry `ui_metric_id` metadata; no UI-side order recomputation; HUD labels are localizable and order/state uses non-text modality (icon/badge) for colorblind/screen-reader safety; a separate opt-in debug overlay/log hook lets a developer inspect the live order and "why next" in their own game. |
+| EQM-084 | READY | EQM-083 | `docs/plan/2026-06-09_event_queue_manager/EQM-084_dogfood_vertical_slice/` | Dogfood consumer slice: minimal playable Action Resolution Turn-Based game consuming only the public addon API (exercises EQM-085 save/load if present). | `dogfood/`, `docs/review/`, `tests/golden/` | Slice uses public API only (no runtime internals); ships its own golden trace; friction report `docs/review/DOGFOOD_FRICTION_<date>.md` records API ergonomics findings; findings become queue candidates or explicit no-change records. |
 
 ## Phase 9 — Editor tooling
 
@@ -140,6 +140,8 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 | — | — | — | — | — | — |
 
 ## Current pointer
+
+Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to EQM-103; cross milestone checkpoints; delegate clear low-shrink tasks to Codex 5.5; stop only at genuine design forks / env-missing / external-upload (§8.4). Phase 8 (EQM-080/081/082, other-model) reviewed — no shrink.
 
 Current: `EQM-081` (Phase 8 autonomous run, user-approved plan 2026-06-15; 080 COMPLETE → 081 → 082 = Phase 8 milestone.)
 
@@ -813,3 +815,17 @@ proof:
 
 Dependency sweep: EQM-082 COMPLETE → **Phase 8 (Effect and Presentation Pipeline) milestone reached** (EQM-080..082 COMPLETE).
 CHECKPOINT: Phase 8/9 milestone boundary. Autonomous run paused for user direction before Phase 8b (EQM-085 Godot node bridge).
+
+### EQM-083 — COMPLETE (2026-06-18)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-083_runtime_timeline_hud/
+  review: docs/review/autopilot/EQM-083_SELF_REVIEW_2026-06-18.md
+  pattern: P0 (orchestrator-direct, first UI surface); repair 0
+  tests: ./tools/test.sh -> PASS (exit 0); files=37 checks=504 failures=0; [api-surface] ok
+  gate: §4 UI (L4 projection integrity + L2 state matrix + ui_metric_id metadata); new `ui` API-surface layer
+  major files: addons/event_queue_manager/runtime/ui/{eq_timeline_hud.gd,eq_timeline_hud.tscn,eq_debug_overlay.gd} (new); test_project/tests/ui_headless/test_eq_timeline_hud.gd (new)
+```
+
+Dependency sweep: EQM-083 COMPLETE → EQM-084 READY. Current pointer → EQM-084.

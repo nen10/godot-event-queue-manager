@@ -1279,5 +1279,85 @@
         "skip_classes"
       ]
     }
+  },
+  "ui": {
+    "EQDebugOverlay": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "explanation_for",
+          "params": "index: int",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "order",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "rows",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "set_state",
+          "params": "order: Array, explanations: Array = []",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQTimelineHud": {
+      "consts": [
+        "EQPrediction"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "bind",
+          "params": "manager, depth: int = 5",
+          "returns": "-> void"
+        },
+        {
+          "name": "is_empty_state",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "is_stale",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "order",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "refresh",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "rows",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "set_stale",
+          "params": "stale: bool",
+          "returns": "-> void"
+        },
+        {
+          "name": "set_state",
+          "params": "order: Array, stale: bool = false",
+          "returns": "-> void"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    }
   }
 }

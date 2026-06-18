@@ -37,6 +37,8 @@ LAYER_MAP = {
     # presentation (simulation/presentation split — must not leak into L0/L1)
     "EQPresentationEvent": "presentation",
     "EQPresentationPolicy": "presentation", "EQPresentationBuffer": "presentation",
+    # ui (runtime/editor UI projections — must not leak into L0/L1)
+    "EQTimelineHud": "ui", "EQDebugOverlay": "ui",
     # L0 turn order
     "EQRuntime": "L0", "EQActorRegistry": "L0",
     "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0", "EQPrediction": "L0",
@@ -50,7 +52,7 @@ LAYER_MAP = {
     # L3 event-line: added later in Phase 5+
 }
 
-LAYERS = ["core", "L0", "L1", "L2", "L3", "presentation"]
+LAYERS = ["core", "L0", "L1", "L2", "L3", "presentation", "ui"]
 L01_LAYERS = {"L0", "L1"}
 
 _RE_CLASS = re.compile(r"^class_name\s+(\w+)", re.M)

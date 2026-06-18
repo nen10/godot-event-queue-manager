@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8eqmtimelinehud01"]
+
+[ext_resource type="Script" path="res://addons/event_queue_manager/runtime/ui/eq_timeline_hud.gd" id="1_hud"]
+
+[node name="EQTimelineHud" type="VBoxContainer"]
+script = ExtResource("1_hud")
