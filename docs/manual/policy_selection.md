@@ -10,9 +10,9 @@ default).
 | Classic initiative / **team phases** | `EQFixedRoundPolicy` | `demos/phase_battle/` | one round at a time, ordered by an `initiative` key (priority DESC). Initiative *bands* give phases (all allies then all enemies). |
 | **Charge Time / ATB** | `EQCTBPolicy` | `demos/ctb_battle/` | each actor charges by `speed`; acts when its charge crosses a cost. Faster = more turns. |
 | **Energy threshold** | `EQEnergyPolicy` | `demos/energy_battle/` | accrue energy by `speed` each tick; act at `threshold`; carried (post-spend) energy is user-inspectable. |
-| **Wait-based** (FFX-style) | `EQWaitTurnPolicy` | `demos/wait_turn_tactics/` | a per-actor wait counter; lower wait acts first, equal-wait broken by `agility`. |
+| **Wait-based** (wait-turn) | `EQWaitTurnPolicy` | `demos/wait_turn_tactics/` | a per-actor wait counter; lower wait acts first, equal-wait broken by `agility`. |
 | **Action economy / SRPG** (AP, reactions) | `EQActionResolutionPolicy` | `demos/action_resolution/` | AP recovers per tick; a turn is ready at `ap_max`; pairs with reservations/triggers for prepared + counter actions. |
-| **Stack / LIFO** (MTG-style responses) | *(composition, no policy)* | `demos/stack_resolution/` | items share a tick with `priority = stack depth`; the total order (priority DESC) pops the last-pushed first. |
+| **Stack / LIFO** (trading-card-style responses) | *(composition, no policy)* | `demos/stack_resolution/` | items share a tick with `priority = stack depth`; the total order (priority DESC) pops the last-pushed first. |
 
 ## Notes
 

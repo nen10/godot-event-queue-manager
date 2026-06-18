@@ -1,6 +1,6 @@
 extends Node
-## LEARNING-PATH SAMPLE — not production. A LIFO "stack" resolution (the
-## Magic-style stack: the last response cast resolves first) built with the public
+## LEARNING-PATH SAMPLE — not production. A LIFO "stack" resolution (a
+## trading-card-style stack: the last response cast resolves first) built with the public
 ## L0 API only (EQRuntime / EQEntry / EQTrace). The stack is modelled with the
 ## ordering comparator: items share a tick and carry priority = stack depth, so
 ## priority-DESC pops the deepest (last-pushed) item first. No dedicated stack

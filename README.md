@@ -4,7 +4,7 @@ A Godot 4.x addon for deterministic **event / turn / action order** management.
 
 RPG 戦闘・ローグライク・タクティクス・4X・カード/ボードなど、多くのゲームで共通して必要になる「行動順管理」を、決定的かつ観測可能な順序で導入できるようにする addon。
 
-> Status: pre-v0.1 / 設計・実装初期。code は `addons/event_queue_manager/` 以下に Phase 進行で追加される (EQM-002 以降)。本リポジトリは Roadmap → Implementation Queue → Task の自動化フローで開発する。
+> Status: **v1.0 release candidate** (EQM-103)。core (L0 turn-order 〜 L2 reservation)・editor UI・demo suite・manual を実装済み。本リポジトリは Roadmap → Implementation Queue → Task の自動化フローで開発する。
 
 ## 何ができるか (狙い)
 
@@ -15,6 +15,23 @@ RPG 戦闘・ローグライク・タクティクス・4X・カード/ボード�
 - **projection-first な editor UI**: editor は注入された headless state の projection。UI は数値 metric で受け入れ判定する (screenshot に依存しない)。
 
 対応を意図するゲームシステム例: ポケモン型、ターン制不思議のダンジョン、FE、4X、タクティクスオウガ型ウェイトターン、および AP ベースの「行動解決ターン制」。
+
+## 導入 (install)
+
+1. `addons/event_queue_manager/` を自分の Godot 4.x project の `addons/` 以下へコピーする。
+2. Project Settings → Plugins で **Event Queue Manager** を有効化する。
+3. core API は plugin 有効化なしでも `preload("res://addons/event_queue_manager/runtime/eq_manager.gd")` で使える (editor dock のみ plugin を要求)。
+
+最小例・policy 選択・reservation/action-resolution は manual を参照:
+
+| manual | 内容 |
+|---|---|
+| [`docs/manual/concepts.md`](docs/manual/concepts.md) | 3 面モデル + L0→L3 層 (まずこれ) |
+| [`docs/manual/policy_selection.md`](docs/manual/policy_selection.md) | ジャンル別 policy 選択 + 対応 demo |
+| [`docs/manual/reservations.md`](docs/manual/reservations.md) | 予約・準備・反応 (L2) |
+| [`docs/manual/action_resolution.md`](docs/manual/action_resolution.md) | AP 行動解決ループ・wait/ready・rollback |
+
+runnable demos: [`demos/`](demos/) (CTB / energy / wait-turn / action-resolution / phase / stack、各 golden trace 付き)。
 
 ## 概念モデル
 
@@ -66,4 +83,7 @@ tools/                        test.sh, static audits
 
 ## License
 
-未確定 (release 候補 EQM-103 で AssetLib 互換ライセンスを選定)。
+**MIT** — [`LICENSE`](LICENSE)。AssetLib 互換の許容ライセンス。addon は第三者のゲーム
+アセット・コード・商標を一切同梱しない。docs 中のジャンル名 (CTB, wait-turn, stack 等) は
+仕組みのカテゴリを指す nominative な参照であり、demo の登場名 (hero / orc / slime / knight
+等) は本 project のオリジナルである (clean-room)。
