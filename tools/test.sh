@@ -52,8 +52,8 @@ log "output: ${OUT_DIR}"
 PY_FAIL=0
 if command -v python3 >/dev/null 2>&1; then
   if [[ -f tools/ui_static_audit.py ]]; then
-    log "running tools/ui_static_audit.py"
-    python3 tools/ui_static_audit.py | tee "${OUT_DIR}/ui_static_audit.log" || PY_FAIL=1
+    log "running tools/ui_static_audit.py (--enforce: UI metric adoption M4, EQM-093)"
+    python3 tools/ui_static_audit.py --enforce | tee "${OUT_DIR}/ui_static_audit.log" || PY_FAIL=1
   else
     log "skip ui_static_audit.py (not present yet)"
   fi

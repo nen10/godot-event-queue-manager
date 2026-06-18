@@ -34,6 +34,9 @@ static func evaluate(snapshot: Dictionary, context: Dictionary = {}) -> Array:
 	_metric_modality(nodes, surface, findings)
 	_metric_projection_integrity(nodes, surface, context, findings)
 	_metric_sample_separation(nodes, surface, findings)
+	var dock_size: Array = snapshot.get("dock_size", [420, 720])
+	_metric_scroll_reachability(nodes, surface, dock_size, findings)
+	_metric_state_contradiction(nodes, surface, findings)
 	return findings
 
 
@@ -235,3 +238,50 @@ static func _metric_sample_separation(nodes: Array, surface: String, findings: A
 	if has_sample and not has_sample_badge:
 		_add(findings, "P0", surface, "sample_separation", "screen_root",
 			"sample artifact present but not badged (could pass as production)")
+
+
+# §5.3 scroll reachability — content taller than the viewport must live in a
+# scroll container, and a required primary action must not be stranded below it.
+const CONTENT_ROLES := ["timeline_list", "validation_list", "explanation_panel"]
+
+static func _metric_scroll_reachability(nodes: Array, surface: String, dock_size: Array, findings: Array) -> void:
+	var viewport_h: float = dock_size[1] if dock_size.size() > 1 else 720.0
+	for n in nodes:
+		if n.get("role", "") in CONTENT_ROLES:
+			# natural (unclamped) content height is the combined minimum size
+			var content_h: float = (n.get("combined_minimum_size", [0, 0]))[1]
+			var scrolled: bool = n.get("is_scroll_container", false) or n.get("inside_scroll_container", false)
+			if content_h > viewport_h and not scrolled:
+				_add(findings, "P0", surface, "scroll_reachability", n.get("id", ""),
+					"content height %.0f > viewport %.0f with no scroll container" % [content_h, viewport_h])
+	# a required primary action stranded below the viewport and outside any scroll
+	for n in nodes:
+		if n.get("role", "") == "primary_action":
+			var bottom: float = (n.get("global_rect", [0, 0, 0, 0]))[1] + (n.get("global_rect", [0, 0, 0, 0]))[3]
+			if bottom > viewport_h and not n.get("inside_scroll_container", false):
+				_add(findings, "P0", surface, "scroll_reachability", n.get("id", ""),
+					"primary action below the viewport and outside a scroll container")
+
+
+# §5.8 state contradiction — mutually-exclusive surface states must not co-occur.
+static func _metric_state_contradiction(nodes: Array, surface: String, findings: Array) -> void:
+	var empty_visible := false
+	var rows := 0
+	var validation_rows := 0
+	for n in nodes:
+		var role: String = n.get("role", "")
+		if role == "empty_state" and n.get("visible", true):
+			empty_visible = true
+		elif role in ["timeline_row", "turn_row"]:
+			rows += 1
+		elif role == "validation_row":
+			validation_rows += 1
+	if empty_visible and rows > 0:
+		_add(findings, "P0", surface, "state_contradiction", "screen_root",
+			"empty_state shown while %d row(s) are present" % rows)
+	if empty_visible and validation_rows > 0:
+		_add(findings, "P0", surface, "state_contradiction", "screen_root",
+			"empty_state shown together with validation rows")
+	if validation_rows > 0 and rows > 0:
+		_add(findings, "P0", surface, "state_contradiction", "screen_root",
+			"invalid config (validation rows) shown together with an order")

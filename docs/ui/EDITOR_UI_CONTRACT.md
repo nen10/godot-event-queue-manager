@@ -7,7 +7,11 @@ severities*, this file holds the *project-specific values* (surfaces, required
 components, forbidden text, thresholds, dead-area exceptions). State-dependent
 display lives in `EDITOR_STATE_MATRIX.md`.
 
-Adoption stage: **M0** (contract authored; harness M1+ = EQM-087, dock M? = EQM-090+).
+Adoption stage: **M4** (EQM-093) — the metric harness enforces P0 as a build FAIL
+on real/good surfaces (no-op button, scroll reachability, state contradiction,
+debug leakage, float tick, projection integrity, sample separation); the static
+audit runs `--enforce`. (Contract authored M0=EQM-086, harness M1-M3=EQM-087,
+first surfaces=EQM-090/091/092.) M5 calibration = EQM-094/095.
 Changes to visible UI MUST update this file first (UI_LAYOUT_METRIC_TEST_POLICY §7.1).
 
 ---
