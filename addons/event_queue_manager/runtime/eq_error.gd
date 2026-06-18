@@ -44,6 +44,7 @@ const RESERVATION_REACTION_NEEDS_DURATION := &"eqm.reservation.reaction_needs_du
 const RESERVATION_OPERATION_NEEDS_TARGET := &"eqm.reservation.operation_needs_target"
 const RESERVATION_MISSING_DEFINITION := &"eqm.reservation.missing_definition"
 const TRIGGER_CHAIN_LIMIT := &"eqm.trigger.chain_limit"
+const PRESENTATION_POLICY_CLASS_CONFLICT := &"eqm.presentation.policy_class_conflict"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -68,6 +69,7 @@ const _META := {
 	RESERVATION_OPERATION_NEEDS_TARGET: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	RESERVATION_MISSING_DEFINITION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	TRIGGER_CHAIN_LIMIT: {"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	PRESENTATION_POLICY_CLASS_CONFLICT: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 }
 
 

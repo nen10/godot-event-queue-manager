@@ -22,7 +22,7 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 | `L1` | policy selection | EQConfig, EQPolicy, EQFixedRoundPolicy, EQCTBPolicy, EQEnergyPolicy, EQWaitTurnPolicy |
 | `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime, EQActionResolutionPolicy, EQCondition, EQTagMatcher, EQTriggerEngine, EQTransaction |
 | `L3` | event-line internals | *(Phase 5+)* |
-| `presentation` | simulation/presentation split (must not leak into L0/L1) | EQPresentationEvent |
+| `presentation` | simulation/presentation split (must not leak into L0/L1) | EQPresentationEvent, EQPresentationPolicy, EQPresentationBuffer |
 
 A public class absent from the layer map (`LAYER_MAP` in `tools/check_api_surface.py`) fails the gate: every public class must be assigned exactly one layer. Update this table and `LAYER_MAP` together.
 

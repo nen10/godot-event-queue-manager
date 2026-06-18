@@ -834,6 +834,7 @@
         "POLICY_BASE_INSTANCE",
         "POLICY_MISSING",
         "POLICY_NAME_EMPTY",
+        "PRESENTATION_POLICY_CLASS_CONFLICT",
         "RESERVATION_IMMEDIATE_NONZERO_DELAY",
         "RESERVATION_INVALID_DURATION",
         "RESERVATION_MISSING_DEFINITION",
@@ -1184,6 +1185,46 @@
     }
   },
   "presentation": {
+    "EQPresentationBuffer": {
+      "consts": [
+        "EQPresentationEvent"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "clear_flushed",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "enqueue",
+          "params": "event: EQPresentationEvent",
+          "returns": "-> void"
+        },
+        {
+          "name": "flush",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "flush_player_turn",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
+          "name": "flushed",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "pending",
+          "params": "",
+          "returns": "-> Array"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
     "EQPresentationEvent": {
       "consts": [
         "EQEffectRecord"
@@ -1219,6 +1260,23 @@
         "depends_on",
         "position",
         "tags"
+      ]
+    },
+    "EQPresentationPolicy": {
+      "consts": [],
+      "enums": [],
+      "methods": [
+        {
+          "name": "validate",
+          "params": "",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "flush_on_player_turn",
+        "immediate_classes",
+        "skip_classes"
       ]
     }
   }

@@ -98,8 +98,8 @@ Process references:
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
 | EQM-080 | COMPLETE | EQM-072 | `docs/plan/2026-06-09_event_queue_manager/EQM-080_effect_records/` | Simulation effect and presentation event records. | `runtime/eq_effect_record.gd`, `runtime/eq_presentation_event.gd`, `tests/presentation/` | Status effects record immediately; presentation requests can be queued separately with actor/position references. |
-| EQM-081 | READY | EQM-080 | `docs/plan/2026-06-09_event_queue_manager/EQM-081_visibility_flush_policy/` | Importance/sensing/offscreen presentation policy. | `resources/eq_presentation_policy.gd`, `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Important event flushes previous visuals; sensed non-important defers; offscreen skips; player turn flush tested. |
-| EQM-082 | BACKLOG | EQM-081 | `docs/plan/2026-06-09_event_queue_manager/EQM-082_moving_target_barrier/` | Moving-target consistency barrier. | `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Event referencing moved entity forces prior pending visuals to flush before resolving/displaying dependent event. |
+| EQM-081 | COMPLETE | EQM-080 | `docs/plan/2026-06-09_event_queue_manager/EQM-081_visibility_flush_policy/` | Importance/sensing/offscreen presentation policy. | `resources/eq_presentation_policy.gd`, `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Important event flushes previous visuals; sensed non-important defers; offscreen skips; player turn flush tested. |
+| EQM-082 | READY | EQM-081 | `docs/plan/2026-06-09_event_queue_manager/EQM-082_moving_target_barrier/` | Moving-target consistency barrier. | `runtime/eq_presentation_buffer.gd`, `tests/presentation/` | Event referencing moved entity forces prior pending visuals to flush before resolving/displaying dependent event. |
 
 ## Phase 8b — Runtime order surface and dogfood
 
@@ -773,3 +773,24 @@ proof:
 ```
 
 Dependency sweep: EQM-080 COMPLETE → EQM-081 READY. Current pointer → EQM-081.
+
+### EQM-081 — COMPLETE (2026-06-18)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-081_visibility_flush_policy/
+  review: docs/review/autopilot/EQM-081_SELF_REVIEW_2026-06-18.md
+  pattern: P0 (orchestrator-direct). Repair: 0.
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (exit 0); files=35 checks=469 failures=0; [api-surface] ok
+  gate: flush-policy rules (immediate/skip/defer-coalesce); presentation-neutrality property test (chunk contents identical under two policies; flushed output differs)
+  surface: api_surface.json re-baselined (presentation +EQPresentationPolicy, +EQPresentationBuffer) via explicit --update (orchestrator)
+  major files:
+    - addons/event_queue_manager/resources/eq_presentation_policy.gd (new; presentation)
+    - addons/event_queue_manager/runtime/eq_presentation_buffer.gd (new; presentation)
+    - addons/event_queue_manager/runtime/eq_error.gd (+PRESENTATION_POLICY_CLASS_CONFLICT)
+    - test_project/tests/presentation/test_eq_presentation_buffer.gd (new)
+    - tools/check_api_surface.py, docs/design/API_SURFACE.md, tests/golden/api_surface.json (orchestrator)
+```
+
+Dependency sweep: EQM-081 COMPLETE → EQM-082 READY. Current pointer → EQM-082.

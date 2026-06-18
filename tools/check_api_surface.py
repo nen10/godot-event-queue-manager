@@ -36,6 +36,7 @@ LAYER_MAP = {
     "EQEffectRecord": "core", "EQEffectChunk": "core",
     # presentation (simulation/presentation split — must not leak into L0/L1)
     "EQPresentationEvent": "presentation",
+    "EQPresentationPolicy": "presentation", "EQPresentationBuffer": "presentation",
     # L0 turn order
     "EQRuntime": "L0", "EQActorRegistry": "L0",
     "EQActorState": "L0", "EQActionResult": "L0", "EQManager": "L0", "EQPrediction": "L0",
