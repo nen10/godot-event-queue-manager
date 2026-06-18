@@ -105,9 +105,9 @@ Process references:
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-085 | BACKLOG | EQM-032, EQM-072, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-085_godot_node_bridge/` | Godot node bridge: save/load rebind adapter, optional autoload installer, actor-deletion handling, full multi-domain signal bridge. | `runtime/eq_node_bridge.gd`, `runtime/eq_save_adapter.gd`, `tests/runtime/` | Save/load stores `actor_id` + Resources, never live Nodes, and rebinds on load; actor deletion routes pending events through the Q05 invalidation path; optional autoload installer is opt-in (scene-local default per profile); signal bridge covers turn/reservation/trigger/effect/presentation/invalid; tests cover scene-local manager, actor deletion, and save/load rebind (roadmap Phase 9 "Godot runtime integration"). |
+| EQM-085 | READY | EQM-032, EQM-072, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-085_godot_node_bridge/` | Godot node bridge: save/load rebind adapter, optional autoload installer, actor-deletion handling, full multi-domain signal bridge. | `runtime/eq_node_bridge.gd`, `runtime/eq_save_adapter.gd`, `tests/runtime/` | Save/load stores `actor_id` + Resources, never live Nodes, and rebinds on load; actor deletion routes pending events through the Q05 invalidation path; optional autoload installer is opt-in (scene-local default per profile); signal bridge covers turn/reservation/trigger/effect/presentation/invalid; tests cover scene-local manager, actor deletion, and save/load rebind (roadmap Phase 9 "Godot runtime integration"). |
 | EQM-083 | COMPLETE | EQM-033, EQM-082 | `docs/plan/2026-06-09_event_queue_manager/EQM-083_runtime_timeline_hud/` | Player-facing runtime timeline HUD + consumer runtime debug overlay. | `runtime/ui/eq_timeline_hud.gd`, `runtime/ui/eq_timeline_hud.tscn`, `runtime/ui/eq_debug_overlay.gd`, `tests/ui_headless/` | HUD renders injected prediction (projection integrity in-game); updates on `queue_changed`; shows explicit stale state while presentation is deferred; controls carry `ui_metric_id` metadata; no UI-side order recomputation; HUD labels are localizable and order/state uses non-text modality (icon/badge) for colorblind/screen-reader safety; a separate opt-in debug overlay/log hook lets a developer inspect the live order and "why next" in their own game. |
-| EQM-084 | READY | EQM-083 | `docs/plan/2026-06-09_event_queue_manager/EQM-084_dogfood_vertical_slice/` | Dogfood consumer slice: minimal playable Action Resolution Turn-Based game consuming only the public addon API (exercises EQM-085 save/load if present). | `dogfood/`, `docs/review/`, `tests/golden/` | Slice uses public API only (no runtime internals); ships its own golden trace; friction report `docs/review/DOGFOOD_FRICTION_<date>.md` records API ergonomics findings; findings become queue candidates or explicit no-change records. |
+| EQM-084 | COMPLETE | EQM-083 | `docs/plan/2026-06-09_event_queue_manager/EQM-084_dogfood_vertical_slice/` | Dogfood consumer slice: minimal playable Action Resolution Turn-Based game consuming only the public addon API (exercises EQM-085 save/load if present). | `dogfood/`, `docs/review/`, `tests/golden/` | Slice uses public API only (no runtime internals); ships its own golden trace; friction report `docs/review/DOGFOOD_FRICTION_<date>.md` records API ergonomics findings; findings become queue candidates or explicit no-change records. |
 
 ## Phase 9 — Editor tooling
 
@@ -829,3 +829,18 @@ proof:
 ```
 
 Dependency sweep: EQM-083 COMPLETE → EQM-084 READY. Current pointer → EQM-084.
+
+### EQM-084 — COMPLETE (2026-06-18)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-084_dogfood_vertical_slice/
+  review: docs/review/autopilot/EQM-084_SELF_REVIEW_2026-06-18.md
+  friction: docs/review/DOGFOOD_FRICTION_2026-06-18.md (4 findings; 0 blocking; F1 turn-close-paths -> EQM-100; F2 effect/presentation signals -> EQM-085/EQM-100)
+  pattern: P0 (orchestrator-direct, full-API dogfood); repair 1 (in-slice wait_close->finish_action; no addon change)
+  tests: ./tools/test.sh -> PASS (exit 0); files=38 checks=510 failures=0; [api-surface] ok
+  golden: tests/golden/dogfood_action_resolution.trace.jsonl (turn x8, effect x8, reaction_fired x2; seeded RNG)
+  major files: dogfood/action_resolution/{battle.gd,README.md} (new); test_project/dogfood symlink; test_project/tests/debug_scene/test_dogfood_action_resolution.gd (new)
+```
+
+Dependency sweep: EQM-084 COMPLETE → (EQM-085 already READY via 032/072/082). Current pointer → EQM-085.
