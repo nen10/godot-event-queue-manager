@@ -22,7 +22,7 @@ RPG 戦闘・ローグライク・タクティクス・4X・カード/ボード�
 2. Project Settings → Plugins で **Event Queue Manager** を有効化する。
 3. core API は plugin 有効化なしでも `preload("res://addons/event_queue_manager/runtime/eq_manager.gd")` で使える (editor dock のみ plugin を要求)。
 
-最小例・policy 選択・reservation/action-resolution は manual を参照。日本語版は [`docs/manual/ja/`](docs/manual/ja/)。
+最小例・policy 選択・reservation/action-resolution は manual を参照。日本語版は [`docs/ja/manual/`](docs/ja/manual/)。
 
 | manual | 内容 |
 |---|---|
