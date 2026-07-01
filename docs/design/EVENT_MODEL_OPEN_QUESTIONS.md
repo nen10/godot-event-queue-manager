@@ -15,6 +15,8 @@ status:
 
 semantics は確定し `docs/design/EVENT_MODEL_SEMANTICS.md` (契約) と `docs/design/ORDERING_MODEL_COVERAGE.md` (≥8 system 写像) に記述された。この 2 文書が **v1 authoritative** であり、本 registry の各項目はそこへの **pointer**(本 file 冒頭の目的どおり「決定への pointer に置き換える」)。下表は adopted/rejected の記録先。索引 status 表 (下記) が status-of-record で、全 Q は settled。Phase 2 API freeze は本 task 完了で gate 解除 (EQM-020 依存充足)。
 
+> 追補 (2026-07-02): v1.0 RC 後の契約監査 (`docs/review/EVENT_MODEL_DESIGN_GAP_AUDIT_2026-07-02.md`) を受け、**実装ラウンド Q27–Q43** を本 file 末尾に追加した。Q01–Q26 の settled 状態は不変。
+
 | Q | 決定の記録先 (SEM = EVENT_MODEL_SEMANTICS.md, COV = ORDERING_MODEL_COVERAGE.md) |
 |---|---|
 | Q01 save 境界 | SEM §10 |
@@ -475,3 +477,238 @@ user意見:
 - stacking は refresh default / 独立 stack 明示宣言の両選択可。lifecycle は actor lifecycle 従属、中途消滅 entity の pending は Q05 invalidation 経路。
 
 影響: EVENT_MODEL_CONCEPTS.md §3.1 (homogeneity 定義), EQM-014 (watched-set / sparse polling 契約), EQM-053/102 (polling cost)。
+
+---
+
+# 実装ラウンド擦り合わせ (Q27–Q43, 2026-07-02)
+
+経緯: v1.0 RC 完了後の契約監査 (`docs/review/EVENT_MODEL_DESIGN_GAP_AUDIT_2026-07-02.md`) で、(a) SEM §16 凍結契約が予約のみで未実装であること、(b) それらを実装するには SEM の記述粒度では足りない設計詳細が残ることを確認した。本 round はその設計詳細を確定し、v1.x 実装 queue (EQM-110 系、監査報告 §5) の入力にする。各項目は Q16–Q26 と同じ形式で、`user意見:` 欄へ inline 注釈を入れてください。決定後は SEM v1.1 (EQM-110) へ確定記述し、各項目を pointer に置き換える。
+
+| id | status | 領域 |
+|---|---|---|
+| Q27 | RECOMMENDED | 条件成立 event の ordering key 導出 |
+| Q28 | RECOMMENDED | solve/invalidation 同時成立・race 勝者 |
+| Q29 | RECOMMENDED | solve AND の評価様式 (level / latched) |
+| Q30 | RECOMMENDED | predicate 条件の serialize (named registry) |
+| Q31 | PIVOT | 解決 pipeline の callback 契約 |
+| Q32 | RECOMMENDED | fired reaction の解決方式 (nest / schedule) |
+| Q33 | RECOMMENDED | event-line update rule の表現 (data 限定) |
+| Q34 | RECOMMENDED | threshold 意味論 (level 統一 / repeating) |
+| Q35 | RECOMMENDED | pattern (2) sweep rule の宣言・serialize |
+| Q36 | RECOMMENDED | window の object model |
+| Q37 | RECOMMENDED | deadline 到達時の既定動作 |
+| Q38 | RECOMMENDED | composite 形成規則と hook signature |
+| Q39 | RECOMMENDED | actor 離脱の正規 invalidation 経路 (Q05 是正) |
+| Q40 | RECOMMENDED | duration expiry の event 化形 (Q06 是正) |
+| Q41 | RECOMMENDED | snapshot schema v2 (additive) |
+| Q42 | RECOMMENDED | L2 authoring surface (行動解決ターン制) |
+| Q43 | OPEN | event-line polling 性能予算数値 |
+
+## Q27 — 条件成立 event の ordering key 導出 [RECOMMENDED]
+
+問い: solve_conditions が sweep 点で成立した event は、master timeline 上でどの ordering key `(due_tick, priority, sequence)` を得るか。SEM §5 (条件) と §3 (comparator) の間に key 割当規則がない — 三面モデルの「入力 → 出力」の弁に変換規則が未定義。
+
+なぜ重要 (game requirement): WT/CT 到達で行動権を得る event の解決タイミングと同 tick 内順序はゲーム性そのもの。規則がないと event-line backend の実装ごとに順序が変わり、決定性 golden が書けない。
+
+推奨: 成立を検出した sweep 点の global tick を `due_tick` に、`priority` は event 宣言時に固定した値 (default 0)、`sequence` は新規採番で push する (reschedule と同型)。条件 event と delay 型 scheduled event は同一 comparator に乗り、§3 は不変。非 tick event-line 参照条件でも due_tick は「成立検出時の global tick」で統一する。
+
+擦り合わせたい点: 同 tick 内で「条件成立 event」と「既存 scheduled event」の相対順序は comparator (priority → sequence) に委ねてよいか。それとも「scheduled 優先」等の層別規則が要るか。
+
+user意見:
+
+## Q28 — solve / invalidation の同時成立・race 勝者 [RECOMMENDED]
+
+問い: 同一評価点で solve_conditions と invalidation_conditions が両方成立した場合の優先規則。および race pattern で複数 racing event の solve が同時成立した場合の勝者決定。
+
+なぜ重要: 「3回 or 5ターン」の buff が最後の 1 回の使用と同時に turn 切れした場合等、境界一致は実 game で頻出する。規則がないと race pattern の決定性が保証できない。
+
+推奨: **invalidation-wins** (失効優先)。効果を出さない側に倒すのが安全で、race の敗者一掃とも整合する。race 同時成立の勝者は comparator hook (Q20) → fallback = 発行順 (§7) で決める。どちらも trace の `closed_by` で説明可能にする。
+
+擦り合わせたい点: invalidation-wins を全 event 一律の core 規則とするか、event 宣言で solve-wins を選べる optional にするか (推奨: 一律。分岐は UX_PATH_REDUCTION に反する)。
+
+user意見:
+
+## Q29 — solve AND の評価様式 (level / latched) [RECOMMENDED]
+
+問い: `solve_conditions` (AND) は「同一評価点で全 term が成立している」(level-triggered) か、「各 term は一度成立したら記憶される」(latched) か。
+
+なぜ重要: 「AP ≥ 5 かつ 対象が可視」で、AP が一度 5 に達した後 4 に落ちてから対象が可視になったとき解決するか否かが変わる。決定性 trace の説明可能性にも直結する。
+
+推奨: **level-triggered を唯一の意味論**とする。latched が必要な game 規則は「成立時に decremental/incremental counter event-line へ書き込む」ことで表現でき (Q18 の AND 失効回収と同型)、primitive を増やさない (UX_PATH_REDUCTION)。
+
+擦り合わせたい点: latched 相当の実需要が counter 経由の表現で書きにくくないか、行動解決ターン制の具体例で確認したい。
+
+user意見:
+
+## Q30 — predicate 条件の serialize (named registry) [RECOMMENDED]
+
+問い: trigger predicate 型の条件はどう snapshot/replay を生き延びるか。現 `EQCondition.custom_predicate` は transient な Callable で、pending 条件が save を跨げない。
+
+なぜ重要: 条件つき event は数 tick〜数十 tick 生存する。save/load 後に条件が消える・評価不能になるのは L2 の中核 UX を壊す。live object 禁止 (Q20) とも整合させる必要がある。
+
+推奨: **named predicate registry**。acceptance が起動時に `register_predicate(name, callable)` で登録し、条件は name (StringName) のみ保持・serialize する。load 時に未登録 name は安定 error (ERROR_CONTRACT 追加)。`custom_predicate` の直接保持は「save を跨がない transient 用途」と明記し、予約条件経路では named のみ許可する。
+
+擦り合わせたい点: registry の所在 (EQRuntime instance か global か — 推奨: runtime instance。scene-local 原則と整合)。predicate の入力 view の固定 (serializable dict のみ、Q20 と同じ制約) でよいか。
+
+user意見:
+
+## Q31 — 解決 pipeline の callback 契約 [PIVOT]
+
+問い: event 解決 1 回の正確な呼出し順序と、consumer (acceptance) が実装する面をどう固定するか。SEM §6 は sweep を散文で述べるが、「誰が effect を適用するか」「chunk へいつ積むか」「sweep で何を再評価するか」の call contract がない。
+
+なぜ重要: これが event-line / conditions / trigger / chunk / trace の全てを繋ぐ**唯一の統合点**。ここが曖昧なまま各機構を実装すると、現行のように機構どうしが配線されない (chunk が孤立、trigger が別経路) 再発を招く。他の Q の大半はこの契約の細部。
+
+推奨: 解決 pipeline を 1 契約に固定する:
+1. scheduler.pop → event 確定 (lazy invalidation 評価、`invalid_event_skipped`/`closed_by`)
+2. acceptance の **effect callback** (`apply_effect(event_view) -> Array[EQEffectRecord]`) — effect 適用の唯一の実装点
+3. EffectRecords を **effect 処理チャンクへ記録** (Q22 の「解決時に積む」を機械化)
+4. **sweep**: trigger 収集/発火評価 + 数値 (event-line) invalidation 再評価 + event 発行/event-line 発行・re-rate の反映
+5. trace 記録 → chunk drain → 次 event へ (chunk 空 = save 境界)
+
+consumer 実装点は effect callback / (optional) comparator hook / (optional) named predicate のみ。`EQRuntime.advance` と `EQReservationRuntime.resolve_next` はこの pipeline に統合する。
+
+擦り合わせたい点: effect callback を必須にするか (L0/L1 の現行 `finish_action` 流儀は「effect なし解決」として残す)。chunk drain のタイミング (各 event 後 / 各 sweep 後)。
+
+user意見:
+
+## Q32 — fired reaction の解決方式 (nest / schedule) [RECOMMENDED]
+
+問い: sweep で発火した reaction を、その場で入れ子解決するか (現 `fire_cascade` の in-place 方式)、「現在 tick の event」として master timeline へ schedule するか。
+
+なぜ重要: 三面モデルの不変条件は「解決するのは timeline 上の event のみ」。現行の in-place 解決は fired reservation が comparator を通らず、trace 上も解決順の説明可能性が落ちる。Q21 の bounded round の単位もこれで決まる。
+
+推奨: **schedule 方式**。fired reaction は `due_tick = current`, `priority = 宣言値`, 新規 sequence で push し、次の pop から通常 pipeline (Q31) で解決する。cascade = 「sweep → 発火 → schedule → 解決 → sweep …」の反復で、bounded round (round 上限 + 同一 (event, reaction) 再発火 guard) を trace に round 番号つきで記録。`fire_cascade` の in-place 解決は廃止。
+
+擦り合わせたい点: 割り込み系 (「攻撃の前に反撃」) は priority で表現可能だが、「同 tick 内で必ず元 event の直後」を保証する reaction 専用の順序規則が要るか (推奨: priority + sequence で足りる。専用規則は増やさない)。
+
+user意見:
+
+## Q33 — event-line update rule の表現 (data 限定) [RECOMMENDED]
+
+問い: event-line の「acceptance 定義の更新規則」を serializable data に限定するか、callable を許すか。
+
+なぜ重要: 決定性・snapshot・replay の三点が「規則 = data」であることに依存する。callable を許すと event-line table が save を跨げない (Q30 と同根)。
+
+推奨: **data のみ**: event-line = `{id, value: int, rate: int per primary tick}`。前進は (a) tick 結合の rate (watched かつ rate≠0 のみ polling, §4.3) と (b) event effect からの明示 `advance(line_id, amount)` の 2 経路のみ。rate 変更 = re-rate (event effect 経由)。callable 型の更新規則は導入しない。複雑な更新は「規則を持つ side の event」が明示 advance する形へ寄せる。
+
+擦り合わせたい点: rate を「tick あたり固定 int」より広げる需要 (例: 帯域 [a,b] の deterministic RNG 加算) を v1.x で持つか (推奨: 持たない。RNG 加算は sweep event + 明示 advance で表現可能)。
+
+user意見:
+
+## Q34 — threshold 意味論 (level 統一 / repeating) [RECOMMENDED]
+
+問い: 条件 `(event-line, threshold, comparison)` は「crossing (到達の瞬間)」を検出するのか「level (現在値の比較)」を評価するのか。周期到達 (100 ごとに行動) と 1 poll 内の複数 crossing をどう扱うか。
+
+なぜ重要: WT/CT の再帰的な行動順、rate が大きい場合の跨ぎ越しで順序が変わる。
+
+推奨: **level 意味論に統一** (Q29 と同型): 評価点で `value ⋛ threshold` を見るだけ。到達の瞬間性は「解決した event の effect が line を reset/減算する」ことで作る (CT 系: 行動時に CT -= threshold)。これにより repeating threshold primitive も 1 poll 複数 crossing 問題も core から消える。跨ぎ越し誤差は Q17 のユーザー許容 (tick 粒度の少ない誤差) の範囲内。
+
+擦り合わせたい点: 同一 tick で複数 entity が同時に threshold を跨いだ場合の順序は Q27/Q38 (comparator hook → 発行順) に委ねる、でよいか。
+
+user意見:
+
+## Q35 — pattern (2) sweep rule の宣言・serialize [RECOMMENDED]
+
+問い: CONCEPTS §3.1 の pattern (2)「共通 callable + per-entity param」の sweep rule を、どう宣言・serialize するか。callable は snapshot を跨げない。
+
+なぜ重要: 多数同質進行 (全 entity の CT) の既定経路が pattern (2) であり、ここが不定だと「natural path」が作れず、per-entity first-class event-line (pattern 1) の濫用へ流れる (Q26 の意図と逆行)。
+
+推奨: sweep rule も **named rule registry** (Q30 と同一機構) で宣言する: `register_sweep_rule(name, callable)`、per-entity param は actor state 内の serializable data。EQM は primary tick 上の system event としてこれを実行し、`event_line_progressed` 相当の trace (rule name + 対象数) を残す。snapshot は rule name + param のみ保存。
+
+擦り合わせたい点: sweep rule の実行順 (複数 rule 登録時) — 推奨: 登録順固定 + 決定性 test。rule 内の entity 走査順 — 推奨: actor_id 昇順固定。
+
+user意見:
+
+## Q36 — window の object model [RECOMMENDED]
+
+問い: window を runtime object としてどう定義するか。EQTransaction (1 段 draft/commit) との関係、meta-cost budget の所在、trace field。SEM は window の性質 (§8/§9/§10) を述べるが object としての定義がない。
+
+なぜ重要: Q01 (save cap)・Q02 (budget)・Q03 (deadline)・Q21 (reentrancy)・Q22 (save 境界) が全て window 概念に依存する。実装はここが決まらないと始められない。
+
+推奨: first-class `EQWindow`: `{window_id (deterministic 採番), owner_actor, nest_level, kind (acceptance tag; base-operator 判定は kind で), deadline (tick, ∞=frozen), budget_paid, draft}`。**EQTransaction は window の draft 実装として従属** (1 window = 1 draft; 現 API は互換 wrapper 化)。open/close は runtime API で行い `window_opened` / `window_closed` trace (fields: id / owner / nest_level / deadline / close cause) を emit。budget は owner actor の serializable state から支払い、chain 中非回復 (Q02) を window stack が enforce する。
+
+擦り合わせたい点: L0 の `turn_ready` → suspend (§14) を「暗黙の nest_level=0 window」として統一するか、window は L2 opt-in に限るか (推奨: 統一。save cap の base-operator level が自然に定義できる)。
+
+user意見:
+
+## Q37 — deadline 到達時の既定動作 [RECOMMENDED]
+
+問い: deadline つき window (Q03) で deadline tick に到達したとき、open draft をどうするか。
+
+なぜ重要: ATB active の「時間切れで手番を失う」体験の core 側既定。曖昧だと acceptance ごとに挙動が割れ、save 境界 (Q22) とも干渉する。
+
+推奨: 既定 = **draft rollback + window close** + `window_closed(cause: deadline)` trace。commit したい game は close 前 hook (acceptance callback) で明示 commit を選べる。deadline は global tick 上の絶対 tick で、deadline window 中は tick が流れ続ける (§9)。rollback 後の chunk は空なので save 境界とも整合。
+
+擦り合わせたい点: 「時間切れ時に強制 default 行動」の需要は hook での明示 commit に含めてよいか (推奨: よい。silent default は禁止原則に反する)。
+
+user意見:
+
+## Q38 — composite 形成規則と hook signature [RECOMMENDED]
+
+問い: composite event (§7) は「いつ・誰が」形成するか。comparator hook の具体 signature。SEM は composite の保証 (atomicity 等) と hook の制約 (serializable, float 可, golden 必須) は定めたが、形成の trigger と関数形が未定。
+
+なぜ重要: TO の「複数 entity 同時 WT 解消はベース WT 低い順」等、同時到達の解決はゲーム規則の核心。ここが決まらないと Q27/Q34 の同時到達ケースが閉じない。
+
+推奨: **自動束ねはしない**。同一 sweep 点で同時に解決可能になった event 集合を候補として hook に渡し、hook は順序 (permutation) を返す。hook 未提供時の既定 = 発行順で逐次解決。composite (atomic bundle) 化は acceptance の明示 API とし、v1.x では「hook = 順序決定のみ」に絞り atomic bundle は後段 (v1.x 後半) に置く。signature 案: `order_simultaneous(candidates: Array[Dictionary(serializable view)]) -> Array[int]`。出力は golden trace に載せる。
+
+擦り合わせたい点: v1.x 前半を「順序 hook のみ」に絞る段階分けでよいか。candidates view に含める field 範囲 (entity stat / event tag / event-line 値 / nest level — Q20 決定の範囲)。
+
+user意見:
+
+## Q39 — actor 離脱の正規 invalidation 経路 (Q05 是正) [RECOMMENDED]
+
+問い: 死亡・離脱 actor の pending event 処理を、現行の「anomaly (contract_violation, dev では halt)」から Q05 意図の「通常経路」へどう是正するか。
+
+なぜ重要: 戦闘中の死亡はゲームの通常進行。dev mode (既定) が routine な状況で halt する現状は、Q05「lazy 判定 + `invalid_event_skipped` を標準とする」と `RUNTIME_RESILIENCE_POLICY` の意図 (anomaly のみ二相) の両方に反する。
+
+推奨: 正規 API `invalidate_actor(actor_id, cause)` を追加: pending event を cancel し、armed reaction を解除し、per-entity 進行を cleanup (Q10/Q22) し、`closed_by: actor_removed` trace を残す (両 mode 同一動作・mode 中立)。`EQNodeBridge.on_actor_freed` はこれを呼ぶ。この経路を通らず unregister 済み actor の event が pop される場合のみ、従来どおり contract violation (dev halt) を維持する。
+
+擦り合わせたい点: 離脱 actor を**対象** (target) とする他者の event の扱い — 推奨: core は関知せず、acceptance が invalidation 条件 (named predicate or counter) で表現する。これで足りるか。
+
+user意見:
+
+## Q40 — duration expiry の event 化形 (Q06 是正) [RECOMMENDED]
+
+問い: Q06 決定「duration expiry は event として timeline に乗り trace に可視・on-expiry trigger 定義可能」を、どの機構で実装するか。現行 trigger engine は silent 削除。
+
+なぜ重要: 反応準備の失効はプレイヤーに見える状態変化であり、trace に無いと replay/デバッグで説明不能。on-expiry effect (失効時反動等) の定義点でもある。
+
+推奨: arm 時に **expiry event** を `due_tick = armed_at + duration` で master timeline に schedule する (duration=∞ は schedule しない)。解決時: 対象がまだ armed なら失効処理 + `closed_by: duration` trace + optional on-expiry effect (Q31 pipeline に乗る)。先に反応回数で close していれば expiry event は lazy invalidation (`invalid_event_skipped` ではなく `closed_by: already_closed` の軽量 trace) で消える。reaction-count 消尽も同じ `closed_by` 語彙 (`closed_by: reaction_count`) で記録し、Q18 の条件語彙と揃える。
+
+擦り合わせたい点: expiry event が queue を埋める規模 (armed 数百) の懸念 — 推奨: 許容 (EQM-102 予算内)。だめなら「失効は sweep の数値 invalidation で評価、trace のみ event 相当に記録」へ後退する。どちらを既定にするか。
+
+user意見:
+
+## Q41 — snapshot schema v2 (additive) [RECOMMENDED]
+
+問い: event-line / window / pending conditions / armed trigger を snapshot にどう足すか。v1 save との互換。
+
+なぜ重要: Q22 決定 (snapshot に event-line table) の実装形。`SNAPSHOT_COMPAT_V1.md` の preserve/migrate 立場に従う必要がある。
+
+推奨: `schema_version = 2` で table を additive 追加: `event_lines[{id, value, rate, watched は導出なので保存しない}]`, `windows[{window_id, owner, nest_level, kind, deadline, budget_paid, draft}]`, `pending_conditions` (event 側に inline), `armed_triggers[{reservation, condition(named), armed_at, duration, expiry_event_id}]`。v1 bundle は load 可 (欠落 table = 空) の migrator を実装し、v2 save を v1 実装が読む方向は不支持 (stable error)。`is_save_allowed()` を `EQSaveAdapter.save` / `EQManager` に配線し、chunk 非空 save は安定 error (auto-save 用に force flag は設けない — 過渡 save は「chunk 空だが window open」の状態で表現される)。
+
+擦り合わせたい点: draft (open window) の serialize は Q01 の「rollback して boundary 保存」を既定にするか、draft ごと保存も許すか (推奨: 既定 rollback、draft 保存は snapshot-for-rollback 側のみ)。
+
+user意見:
+
+## Q42 — L2 authoring surface (行動解決ターン制) [RECOMMENDED]
+
+問い: game 開発者が「条件つき予約」を宣言する Resource 面をどう設計するか。契約を実装しても、書き味が L3 露出だと本製品の目的 (構築しやすさ) を外す。
+
+なぜ重要: 本 round の実装は全て L2/L3 基盤であり、開発者が触るのは authoring 面だけ。ここの受け入れ基準を先に固定しないと、実装都合の API が漏れる (L0/L1 非漏出は EQM-023 が守るが、L2 の書き味は gate がない)。
+
+推奨: `EQActionDefinition` を additive 拡張: `solve_conditions: Array[EQConditionSpec]` / `invalidation_conditions: Array[EQConditionSpec]`。`EQConditionSpec` = `{type: LINE_THRESHOLD | COUNTER | NAMED_PREDICATE, line_id, threshold, comparison, counter_start, predicate_name}` の serializable Resource。既存 `duration` / `rumination` は糖衣 (validate 時に条件へ正規化) として互換維持。**受け入れ基準: 「反撃準備 — 3 回 or 5 ターンのどちらかで close、deadline ∞ 可」が .tres 1 個・GDScript 0 行で宣言でき、trace の `closed_by` にどちらで閉じたかが出ること。** editor picker は Phase 9 の資産 (metric harness) を再利用する。
+
+擦り合わせたい点: 糖衣 (duration/rumination) を残すか、v1.x で条件宣言へ一本化するか (推奨: 残す。既存利用者の互換と「単純な場合は単純に」の両立)。
+
+user意見:
+
+## Q43 — event-line polling 性能予算数値 [OPEN]
+
+問い: event-line backend (Q33) の polling / sweep の性能予算を数値で確定する。Q17 の概算は RTS/STG の edge case 検討で終わっており、v1.x の目標規模が未宣言 (EQM-102 の予算は scheduler 操作のみ)。
+
+なぜ重要: 予算がないと EQM-112 の acceptance が書けず、「watched のみ polling」の sparse 化 (Q26) が十分かも判定できない。
+
+推奨 (要ユーザー確認の下書き): v1.x 目標 = 同時 actor ≤ 200 / watched event-line ≤ 300 / armed trigger ≤ 200 / `advance()` 1 call の追加コスト ≤ 0.5ms (Godot 4.6 headless debug, EQM-102 と同条件)。RTS/STG 規模は対象外を維持 (Q24 deferred)。予測 (EQM-033) は同予算内で depth N ≤ 20。
+
+user意見:

@@ -143,7 +143,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 
 Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to EQM-103; cross milestone checkpoints; delegate clear low-shrink tasks to Codex 5.5; stop only at genuine design forks / env-missing / external-upload (§8.4). Phase 8 (EQM-080/081/082, other-model) reviewed — no shrink.
 
-Current: `EQM-081` (Phase 8 autonomous run, user-approved plan 2026-06-15; 080 COMPLETE → 081 → 082 = Phase 8 milestone.)
+Current: none — **queue COMPLETE through EQM-103** (v1.0 RC, 2026-06-18; proof log 末尾参照)。次 round: `docs/review/EVENT_MODEL_DESIGN_GAP_AUDIT_2026-07-02.md` の監査により、SEM §16 凍結契約の未実装群と設計詳細不足 (registry Q27–Q43) が確定。Q27–Q43 のユーザー決定後に v1.x queue (EQM-110 系、監査報告 §5 の骨子) を起票する。
 
 ## Proof log
 
