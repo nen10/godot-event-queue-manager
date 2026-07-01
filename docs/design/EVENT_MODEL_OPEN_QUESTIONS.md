@@ -514,7 +514,7 @@ user意見:
 
 擦り合わせたい点: 同 tick 内で「条件成立 event」と「既存 scheduled event」の相対順序は comparator (priority → sequence) に委ねてよいか。それとも「scheduled 優先」等の層別規則が要るか。
 
-user意見:
+user意見: 承認。comparatorに委ねて良い。
 
 ## Q28 — solve / invalidation の同時成立・race 勝者 [RECOMMENDED]
 
@@ -526,7 +526,7 @@ user意見:
 
 擦り合わせたい点: invalidation-wins を全 event 一律の core 規則とするか、event 宣言で solve-wins を選べる optional にするか (推奨: 一律。分岐は UX_PATH_REDUCTION に反する)。
 
-user意見:
+user意見: 承認。一律で良い。
 
 ## Q29 — solve AND の評価様式 (level / latched) [RECOMMENDED]
 
@@ -538,7 +538,7 @@ user意見:
 
 擦り合わせたい点: latched 相当の実需要が counter 経由の表現で書きにくくないか、行動解決ターン制の具体例で確認したい。
 
-user意見:
+user意見: 承認。latched 相当の実需要例：1. ある地点に侵入してから一定ターン経過.< 問題なさそう  2. ある地点範囲内で一定ターン経過 < これは侵入時/離脱時に予約を追加/失効を伴えば良い
 
 ## Q30 — predicate 条件の serialize (named registry) [RECOMMENDED]
 
@@ -550,7 +550,7 @@ user意見:
 
 擦り合わせたい点: registry の所在 (EQRuntime instance か global か — 推奨: runtime instance。scene-local 原則と整合)。predicate の入力 view の固定 (serializable dict のみ、Q20 と同じ制約) でよいか。
 
-user意見:
+user意見: 承認。それらの案で進める。
 
 ## Q31 — 解決 pipeline の callback 契約 [PIVOT]
 
@@ -569,7 +569,7 @@ consumer 実装点は effect callback / (optional) comparator hook / (optional) 
 
 擦り合わせたい点: effect callback を必須にするか (L0/L1 の現行 `finish_action` 流儀は「effect なし解決」として残す)。chunk drain のタイミング (各 event 後 / 各 sweep 後)。
 
-user意見:
+user意見: 詳しく相談したい。effect callbackがない場合、開発者が管理しにくくならないだろうか？そうでなければ任意項目で構わない。
 
 ## Q32 — fired reaction の解決方式 (nest / schedule) [RECOMMENDED]
 
@@ -581,7 +581,7 @@ user意見:
 
 擦り合わせたい点: 割り込み系 (「攻撃の前に反撃」) は priority で表現可能だが、「同 tick 内で必ず元 event の直後」を保証する reaction 専用の順序規則が要るか (推奨: priority + sequence で足りる。専用規則は増やさない)。
 
-user意見:
+user意見: 承認。専用規則は不要。
 
 ## Q33 — event-line update rule の表現 (data 限定) [RECOMMENDED]
 
@@ -593,7 +593,7 @@ user意見:
 
 擦り合わせたい点: rate を「tick あたり固定 int」より広げる需要 (例: 帯域 [a,b] の deterministic RNG 加算) を v1.x で持つか (推奨: 持たない。RNG 加算は sweep event + 明示 advance で表現可能)。
 
-user意見:
+user意見: 承認。evelt-line自体のdataに吸収する。帯域も不要。
 
 ## Q34 — threshold 意味論 (level 統一 / repeating) [RECOMMENDED]
 
@@ -605,7 +605,7 @@ user意見:
 
 擦り合わせたい点: 同一 tick で複数 entity が同時に threshold を跨いだ場合の順序は Q27/Q38 (comparator hook → 発行順) に委ねる、でよいか。
 
-user意見:
+user意見: 承認。順番はその案に従う。
 
 ## Q35 — pattern (2) sweep rule の宣言・serialize [RECOMMENDED]
 
@@ -617,7 +617,7 @@ user意見:
 
 擦り合わせたい点: sweep rule の実行順 (複数 rule 登録時) — 推奨: 登録順固定 + 決定性 test。rule 内の entity 走査順 — 推奨: actor_id 昇順固定。
 
-user意見:
+user意見: 承認。backendとしてこのような順番を持つ。sweepに限った話ではないが視認性のため、ゲーム開発者の意図に応じたeffectのgrouping設計の余地があっても良い。
 
 ## Q36 — window の object model [RECOMMENDED]
 
@@ -629,7 +629,7 @@ user意見:
 
 擦り合わせたい点: L0 の `turn_ready` → suspend (§14) を「暗黙の nest_level=0 window」として統一するか、window は L2 opt-in に限るか (推奨: 統一。save cap の base-operator level が自然に定義できる)。
 
-user意見:
+user意見: 承認。「暗黙の nest_level=0 window」として統一します。base-operator levelの柔軟さが、ゲームモードの多層性に効いてきます。
 
 ## Q37 — deadline 到達時の既定動作 [RECOMMENDED]
 
@@ -641,7 +641,7 @@ user意見:
 
 擦り合わせたい点: 「時間切れ時に強制 default 行動」の需要は hook での明示 commit に含めてよいか (推奨: よい。silent default は禁止原則に反する)。
 
-user意見:
+user意見: 承認する。ゲーム開発者側が具体的対応を設計することが前提の項目である。
 
 ## Q38 — composite 形成規則と hook signature [RECOMMENDED]
 
@@ -653,7 +653,7 @@ user意見:
 
 擦り合わせたい点: v1.x 前半を「順序 hook のみ」に絞る段階分けでよいか。candidates view に含める field 範囲 (entity stat / event tag / event-line 値 / nest level — Q20 決定の範囲)。
 
-user意見:
+user意見: 承認。その方針で良い。
 
 ## Q39 — actor 離脱の正規 invalidation 経路 (Q05 是正) [RECOMMENDED]
 
@@ -665,7 +665,7 @@ user意見:
 
 擦り合わせたい点: 離脱 actor を**対象** (target) とする他者の event の扱い — 推奨: core は関知せず、acceptance が invalidation 条件 (named predicate or counter) で表現する。これで足りるか。
 
-user意見:
+user意見: それを可能にする枠組みとしては承認。ただし、開発者側で設計可能なゲームルールの詳細に先回りする必要はない。需要を受け取った時点で随時検討する。蘇生スキル・召喚スキルなど離脱済みを対象にとる行動は検討可能であり、あまりこちらでは細部を埋め込みすぎない。
 
 ## Q40 — duration expiry の event 化形 (Q06 是正) [RECOMMENDED]
 
@@ -677,7 +677,7 @@ user意見:
 
 擦り合わせたい点: expiry event が queue を埋める規模 (armed 数百) の懸念 — 推奨: 許容 (EQM-102 予算内)。だめなら「失効は sweep の数値 invalidation で評価、trace のみ event 相当に記録」へ後退する。どちらを既定にするか。
 
-user意見:
+user意見: 承認。推奨案で進める。
 
 ## Q41 — snapshot schema v2 (additive) [RECOMMENDED]
 
@@ -689,7 +689,7 @@ user意見:
 
 擦り合わせたい点: draft (open window) の serialize は Q01 の「rollback して boundary 保存」を既定にするか、draft ごと保存も許すか (推奨: 既定 rollback、draft 保存は snapshot-for-rollback 側のみ)。
 
-user意見:
+user意見: 承認。Q01が既定。
 
 ## Q42 — L2 authoring surface (行動解決ターン制) [RECOMMENDED]
 
@@ -701,7 +701,7 @@ user意見:
 
 擦り合わせたい点: 糖衣 (duration/rumination) を残すか、v1.x で条件宣言へ一本化するか (推奨: 残す。既存利用者の互換と「単純な場合は単純に」の両立)。
 
-user意見:
+user意見: 承認。今後需要に応じて拡張は検討する。
 
 ## Q43 — event-line polling 性能予算数値 [OPEN]
 
@@ -711,4 +711,4 @@ user意見:
 
 推奨 (要ユーザー確認の下書き): v1.x 目標 = 同時 actor ≤ 200 / watched event-line ≤ 300 / armed trigger ≤ 200 / `advance()` 1 call の追加コスト ≤ 0.5ms (Godot 4.6 headless debug, EQM-102 と同条件)。RTS/STG 規模は対象外を維持 (Q24 deferred)。予測 (EQM-033) は同予算内で depth N ≤ 20。
 
-user意見:
+user意見: 承認。
