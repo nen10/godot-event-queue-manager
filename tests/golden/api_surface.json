@@ -736,7 +736,9 @@
         "EQEventLines",
         "EQReservation",
         "EQRuntime",
-        "EQTriggerEngine"
+        "EQTransaction",
+        "EQTriggerEngine",
+        "EQWindow"
       ],
       "enums": [],
       "methods": [
@@ -746,9 +748,29 @@
           "returns": "-> Array"
         },
         {
+          "name": "close_window",
+          "params": "commit: bool = false, cause: StringName = &\"closed\"",
+          "returns": "-> bool"
+        },
+        {
+          "name": "current_window",
+          "params": "",
+          "returns": "-> EQWindow"
+        },
+        {
           "name": "invalidate_actor",
           "params": "actor_id: StringName, cause: StringName = &\"actor_removed\"",
           "returns": "-> int"
+        },
+        {
+          "name": "is_save_boundary",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "open_window",
+          "params": "owner: StringName, kind: StringName, deadline: int = EQWindow.DEADLINE_UNLIMITED, cost: int = 0, budget_key: StringName = &\"\"",
+          "returns": "-> EQWindow"
         },
         {
           "name": "pending",
@@ -774,6 +796,11 @@
           "name": "submit",
           "params": "res: EQReservation, reaction_condition = null",
           "returns": "-> int"
+        },
+        {
+          "name": "window_depth",
+          "params": "",
+          "returns": "-> int"
         }
       ],
       "signals": [],
@@ -783,6 +810,7 @@
         "last_drained",
         "lines",
         "max_cascade_rounds",
+        "max_window_depth",
         "runtime"
       ]
     },
@@ -838,6 +866,11 @@
         },
         {
           "name": "is_live_unchanged",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "is_live_unchanged_ignoring_clock",
           "params": "",
           "returns": "-> bool"
         },
@@ -940,6 +973,36 @@
       ],
       "signals": [],
       "vars": []
+    },
+    "EQWindow": {
+      "consts": [
+        "DEADLINE_UNLIMITED"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "is_frozen",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "budget_paid",
+        "closed",
+        "deadline",
+        "draft",
+        "kind",
+        "nest_level",
+        "owner_actor",
+        "pre_close",
+        "window_id"
+      ]
     }
   },
   "L3": {
@@ -1278,7 +1341,11 @@
         "RUNTIME_UNREGISTERED_ACTOR_EVENT",
         "TIE_BREAK_AMBIGUOUS",
         "TIE_BREAK_UNKNOWN",
-        "TRIGGER_CHAIN_LIMIT"
+        "TRIGGER_CHAIN_LIMIT",
+        "WINDOW_BUDGET_INSUFFICIENT",
+        "WINDOW_CLOSE_INVALID",
+        "WINDOW_COMMIT_CONFLICT",
+        "WINDOW_DEPTH_LIMIT"
       ],
       "enums": [
         "Recoverability",

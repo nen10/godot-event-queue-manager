@@ -61,6 +61,10 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.condition.predicate_unregistered` | CONTRACT_VIOLATION | ERROR | editor, game | evaluating / loading a condition whose predicate name is not registered (SEM §5.5 stable error) |
 | `eqm.condition.line_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | a condition reads an event-line absent from the evaluation context |
 | `eqm.effect.unregistered` | CONTRACT_VIOLATION | ERROR | editor, game | a reservation declares `effect_name` but no handler is registered (SEM §6.1 declared linkage — never a silent skip; EQM-113) |
+| `eqm.window.depth_limit` | BUDGET_EXCEEDED | ERROR | editor, game | opening a window past `max_window_depth` (SEM §8 engineering backstop; EQM-114) |
+| `eqm.window.budget_insufficient` | BUDGET_EXCEEDED | ERROR | editor, game | opening a window whose meta-cost exceeds the owner's remaining budget (Q02) |
+| `eqm.window.close_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | closing a non-top window or the implicit root |
+| `eqm.window.commit_conflict` | CONTRACT_VIOLATION | ERROR | editor, game | close_window(commit) while the live scheduler changed since open — commit would clobber; the draft rolls back instead (EQM-114 POLICY) |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

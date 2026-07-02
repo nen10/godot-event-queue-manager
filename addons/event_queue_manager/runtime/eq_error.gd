@@ -51,6 +51,10 @@ const CONDITION_COUNTER_START_INVALID := &"eqm.condition.counter_start_invalid"
 const CONDITION_PREDICATE_UNREGISTERED := &"eqm.condition.predicate_unregistered"
 const CONDITION_LINE_UNKNOWN := &"eqm.condition.line_unknown"
 const EFFECT_UNREGISTERED := &"eqm.effect.unregistered"
+const WINDOW_DEPTH_LIMIT := &"eqm.window.depth_limit"
+const WINDOW_BUDGET_INSUFFICIENT := &"eqm.window.budget_insufficient"
+const WINDOW_CLOSE_INVALID := &"eqm.window.close_invalid"
+const WINDOW_COMMIT_CONFLICT := &"eqm.window.commit_conflict"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -82,6 +86,10 @@ const _META := {
 	CONDITION_PREDICATE_UNREGISTERED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	CONDITION_LINE_UNKNOWN: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	EFFECT_UNREGISTERED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	WINDOW_DEPTH_LIMIT: {"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	WINDOW_BUDGET_INSUFFICIENT: {"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	WINDOW_CLOSE_INVALID: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	WINDOW_COMMIT_CONFLICT: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 }
 
 

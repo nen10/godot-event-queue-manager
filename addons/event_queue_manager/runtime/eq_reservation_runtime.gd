@@ -31,6 +31,8 @@ const EQConditionEval := preload("eq_condition_eval.gd")
 const EQEventLines := preload("eq_event_lines.gd")
 const EQEffectChunk := preload("eq_effect_chunk.gd")
 const EQTriggerEngine := preload("eq_trigger_engine.gd")
+const EQWindow := preload("eq_window.gd")
+const EQTransaction := preload("eq_transaction.gd")
 
 var runtime: EQRuntime
 var lines: EQEventLines
@@ -41,6 +43,8 @@ var engine: EQTriggerEngine
 var last_drained: Array = []
 ## Engineering backstop for same-tick reaction cascades (§6.2 bounded rounds).
 var max_cascade_rounds: int = 8
+## Absolute window-nest backstop (SEM §8 engineering max depth, EQM-114).
+var max_window_depth: int = 16
 
 var _by_event: Dictionary = {}          # event_id -> EQReservation (scheduled)
 var _bound_inv: Dictionary = {}         # event_id -> Array bound invalidation terms
@@ -48,6 +52,8 @@ var _expiry_by_event: Dictionary = {}   # expiry event_id -> EQReservation
 var _pending_conditional: Array[Dictionary] = []  # {res, solve, inv, view} in submit order
 var _cascade_tick: int = -1
 var _cascade_round: int = 0
+var _windows: Array = []   # LIFO; [0] is the implicit root (nest 0, never traced/closed)
+var _window_seq: int = 0
 
 
 func _init(p_runtime = null) -> void:
@@ -55,6 +61,124 @@ func _init(p_runtime = null) -> void:
 	lines = EQEventLines.new(runtime.trace())
 	chunk = EQEffectChunk.new()
 	engine = EQTriggerEngine.new()
+	var root := EQWindow.new()
+	root.kind = &"base-operator"
+	_windows = [root]
+
+
+# --- windows (SEM §8.1/§9, EQM-114) ----------------------------------------
+
+## Explicit window depth (the implicit root is 0).
+func window_depth() -> int:
+	return _windows.size() - 1
+
+
+func current_window() -> EQWindow:
+	return _windows.back()
+
+
+## Opens an explicit window above the current one. `deadline` is an absolute
+## global tick (DEADLINE_UNLIMITED = frozen). `cost` (Q02 meta-cost, computed
+## by acceptance as a monotonic function of nest level) is paid from the
+## owner's `data[budget_key]` and is NOT refunded on close (non-replenishing
+## within a chain). Returns the window, or null (depth/budget rejection).
+func open_window(owner: StringName, kind: StringName, deadline: int = EQWindow.DEADLINE_UNLIMITED, cost: int = 0, budget_key: StringName = &"") -> EQWindow:
+	if window_depth() + 1 > max_window_depth:
+		runtime._fault(EQError.WINDOW_DEPTH_LIMIT, "window depth would exceed max_window_depth (%d)" % max_window_depth, {"owner": String(owner)}, true)
+		return null
+	if cost > 0:
+		if not runtime.registry.is_registered(owner):
+			runtime._fault(EQError.RUNTIME_SCHEDULE_UNREGISTERED_ACTOR, "open_window for unregistered actor", {"actor_id": String(owner)}, true)
+			return null
+		var state = runtime.registry.get_state(owner)
+		var budget := int(state.data.get(budget_key, 0))
+		if budget < cost:
+			runtime._fault(EQError.WINDOW_BUDGET_INSUFFICIENT, "window meta-cost %d exceeds remaining budget %d" % [cost, budget], {"owner": String(owner)}, true)
+			return null
+		state.data[budget_key] = budget - cost
+	_window_seq += 1
+	var w := EQWindow.new()
+	w.window_id = _window_seq
+	w.owner_actor = owner
+	w.nest_level = window_depth() + 1
+	w.kind = kind
+	w.deadline = deadline
+	w.budget_paid = cost
+	w.draft = EQTransaction.new(runtime.scheduler)
+	_windows.append(w)
+	runtime.trace().record({
+		"kind": "window_opened",
+		"window_id": w.window_id,
+		"owner": String(owner),
+		"window_kind": String(kind),
+		"nest_level": w.nest_level,
+		"deadline": deadline,
+	})
+	return w
+
+
+## Closes the TOP explicit window. commit=true promotes its draft to the live
+## scheduler — only legal while live is unchanged since open (a drifted commit
+## would clobber live state, WINDOW_COMMIT_CONFLICT -> rollback instead).
+## Closing the implicit root is invalid.
+func close_window(commit: bool = false, cause: StringName = &"closed") -> bool:
+	if _windows.size() <= 1:
+		runtime._fault(EQError.WINDOW_CLOSE_INVALID, "no explicit window to close (the implicit root never closes)", {}, true)
+		return false
+	return _close_top(commit, cause)
+
+
+func _close_top(commit: bool, cause: StringName) -> bool:
+	var w: EQWindow = _windows.pop_back()
+	w.closed = true
+	if w.draft != null:
+		if commit:
+			# The clock may flow during a deadline window; only entry/counter
+			# drift is a conflict. The live clock survives the commit.
+			if w.draft.is_live_unchanged_ignoring_clock():
+				var live_tick := runtime.scheduler.current_tick
+				w.draft.commit()
+				runtime.scheduler.current_tick = maxi(live_tick, runtime.scheduler.current_tick)
+			else:
+				runtime._fault(EQError.WINDOW_COMMIT_CONFLICT, "live scheduler changed since window open; commit would clobber — rolled back", {"window_id": w.window_id}, true)
+				w.draft.rollback()
+		else:
+			w.draft.rollback()
+	runtime.trace().record({
+		"kind": "window_closed",
+		"window_id": w.window_id,
+		"nest_level": w.nest_level,
+		"cause": String(cause),
+	})
+	return true
+
+
+## Deadline check at the deterministic points (post-pop and tick boundary,
+## Q37): a reached deadline first offers the pre_close hook (explicit commit
+## happens there or not at all), then applies the default draft rollback +
+## close — including any windows nested above the deadlined one.
+func _check_deadlines() -> void:
+	var tick := runtime.scheduler.current_tick
+	var idx := _windows.size() - 1
+	while idx >= 1:
+		var w: EQWindow = _windows[idx]
+		if not w.is_frozen() and tick >= w.deadline and not w.closed:
+			if w.pre_close.is_valid():
+				w.pre_close.call(w)
+			while _windows.size() > idx:  # the deadlined window and everything nested above
+				if (_windows.back() as EQWindow).closed:
+					_windows.pop_back()
+					continue
+				_close_top(false, &"deadline")
+			idx = _windows.size() - 1
+			continue
+		idx -= 1
+
+
+## Q01/Q22 save boundary helper (wired into the save path by EQM-117): the
+## effect chunk is empty AND no explicit window is open above the base level.
+func is_save_boundary() -> bool:
+	return chunk.is_save_allowed() and window_depth() == 0
 
 
 ## Schedules (or arms) a reservation per its kind. A reservation with solve
@@ -150,6 +274,7 @@ func resolve_next() -> EQReservation:
 		if e == null:
 			return null
 		lines.sync_primary(runtime.scheduler.current_tick)
+		_check_deadlines()
 		if _expiry_by_event.has(e.event_id):
 			_resolve_expiry(e)
 			continue
@@ -196,6 +321,7 @@ func step_tick() -> void:
 	runtime.scheduler.current_tick += 1
 	var tick := runtime.scheduler.current_tick
 	lines.sync_primary(tick)
+	_check_deadlines()
 	lines.poll_tick(_watched())
 	lines.run_sweep_rules(runtime.registry)
 	_recheck_scheduled_invalidation()

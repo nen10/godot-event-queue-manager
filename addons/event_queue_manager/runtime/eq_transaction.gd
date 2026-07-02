@@ -45,6 +45,18 @@ func is_live_unchanged() -> bool:
 	return EQSnapshot.equals(_live.snapshot(), _base)
 
 
+## Like is_live_unchanged, but ignores the clock (current_tick): the deadline-
+## window case (EQM-114) where time flows while the draft is open but no event
+## was pushed/popped. The window commit path uses this and preserves the live
+## clock across the commit.
+func is_live_unchanged_ignoring_clock() -> bool:
+	var a := _live.snapshot()
+	var b := _base.duplicate(true)
+	a["current_tick"] = 0
+	b["current_tick"] = 0
+	return EQSnapshot.equals(a, b)
+
+
 func is_committed() -> bool:
 	return _committed
 

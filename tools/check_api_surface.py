@@ -51,7 +51,7 @@ LAYER_MAP = {
     "EQActionDefinition": "L2", "EQReservation": "L2", "EQReservationRuntime": "L2",
     "EQActionResolutionPolicy": "L2", "EQCondition": "L2", "EQTagMatcher": "L2",
     "EQTriggerEngine": "L2", "EQTransaction": "L2", "EQTriggerIndex": "L2",
-    "EQConditionSpec": "L2", "EQConditionEval": "L2",
+    "EQConditionSpec": "L2", "EQConditionEval": "L2", "EQWindow": "L2",
     # L3 event-line internals (EQM-112+) — must never appear in L0/L1 signatures
     "EQEventLines": "L3",
 }
