@@ -385,11 +385,32 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 		_:
 			var bound := _bind_conditions(res)
 			if not (bound["solve"] as Array).is_empty():
-				res.status = EQReservation.Status.PENDING
-				_pending_conditional.append({
-					"res": res, "solve": bound["solve"], "inv": bound["inv"], "view": _view_of(res),
-				})
-				return -1
+				# Issuance is itself an evaluation point (level semantics, SEM
+				# §5.4): a set already holding at submit acts NOW — it never
+				# waits for a later sweep to notice an already-true level.
+				var ctx := _ctx(_view_of(res))
+				var solve := EQConditionEval.solve_holds(bound["solve"], ctx)
+				var inv := EQConditionEval.invalidation_check(bound["inv"], ctx)
+				match EQConditionEval.decide(solve, inv):
+					EQConditionEval.Outcome.INVALIDATE:
+						res.status = EQReservation.Status.INVALIDATED
+						_trace_invalidated(-1, res.actor_id, StringName(inv["closed_by"]))
+						return -1
+					EQConditionEval.Outcome.RESOLVE:
+						var ready_id := _schedule(res, 0)
+						if ready_id > 0 and not (bound["inv"] as Array).is_empty():
+							_bound_inv[ready_id] = bound["inv"]
+						return ready_id
+					EQConditionEval.Outcome.FAULT:
+						var f: Dictionary = (inv["fault"] if inv["fault"] != null else solve["fault"])
+						runtime._fault(f["code"], f["message"], f.get("context", {}), true)
+						return -1
+					_:
+						res.status = EQReservation.Status.PENDING
+						_pending_conditional.append({
+							"res": res, "solve": bound["solve"], "inv": bound["inv"], "view": _view_of(res),
+						})
+						return -1
 			var id := _schedule(res, res.definition.delay if kind != EQActionDefinition.Kind.IMMEDIATE else 0)
 			if id > 0 and not (bound["inv"] as Array).is_empty():
 				_bound_inv[id] = bound["inv"]
