@@ -142,8 +142,8 @@ Source: `docs/review/EVENT_MODEL_DESIGN_GAP_AUDIT_2026-07-02.md` (v1.0 凍結契
 | EQM-112 | COMPLETE | EQM-111 | `docs/plan/2026-06-09_event_queue_manager/EQM-112_event_line_backend/` | Event-line backend (coverage: event-line-backend, sweep-rule-registry, progression-budgets)。 | `runtime/eq_event_lines.gd`, `runtime/eq_runtime.gd`, `runtime/eq_trace.gd`, `tests/core/`, `tests/performance/` | SEM §4.3/§4.6/§4.7/§12.1: line = {id, value, rate} data のみ; deterministic 採番; 明示 advance / re-rate; watched 導出 (pending 条件参照) + sparse polling (watched かつ rate≠0); `event_line_progressed` trace 実 emit; sweep rule registry (登録順固定, actor_id 昇順走査, rule name trace); Q43 予算 test (actor 200 / line 300 / +0.5ms 以内)。coverage rows flip。 |
 | EQM-113 | COMPLETE | EQM-112 | `docs/plan/2026-06-09_event_queue_manager/EQM-113_resolution_pipeline/` | 解決 pipeline 統合 (coverage: resolution-pipeline, reaction-schedule, expiry-event, invalidate-actor)。 | `runtime/eq_runtime.gd`, `runtime/eq_reservation_runtime.gd`, `runtime/eq_trigger_engine.gd`, `runtime/eq_effect_chunk.gd`, `runtime/eq_node_bridge.gd`, `tests/core/`, `tests/trigger/` | SEM §6.1–§6.3/§13: 5-step pipeline に advance/resolve_next 統合; effect_name 宣言 linkage (未登録 = 安定 error, 空 = effect なし解決); chunk へ解決時記録 + drain; fired reaction は schedule 化 (in-place `fire_cascade` 廃止, bounded rounds + round 番号 trace); expiry event (`closed_by: duration/reaction_count/already_closed`); `invalidate_actor` (mode 中立, `closed_by: actor_removed`, bridge 配線); golden 更新は明示 flag。coverage rows flip。 |
 | EQM-114 | COMPLETE | EQM-113 | `docs/plan/2026-06-09_event_queue_manager/EQM-114_window_model/` | Window object model (coverage: window-object-model)。 | `runtime/eq_window.gd`, `runtime/eq_runtime.gd`, `runtime/eq_transaction.gd`, `tests/transaction/`, `tests/runtime/` | SEM §8.1/§9: EQWindow {id, owner, nest_level, kind, deadline, budget_paid, draft}; EQTransaction 従属 (互換 wrapper); 暗黙 L0 window (turn_ready→suspend); meta-cost budget (owner state 支払い, chain 中非回復, 絶対 max depth backstop); deadline 既定 = rollback + close + `window_closed(cause: deadline)`, close 前 hook で明示 commit; `window_opened/closed` trace 実 emit。coverage row flip。 |
-| EQM-115 | READY | EQM-114 | `docs/plan/2026-06-09_event_queue_manager/EQM-115_ordering_hook/` | Ordering hook (coverage: ordering-hook)。 | `runtime/eq_runtime.gd`, `resources/eq_config.gd`, `tests/core/`, `tests/golden/` | SEM §7.1: `order_simultaneous(candidates) -> permutation`; candidates view = serializable (entity stat / event tag / event-line 値 / nest level); 既定 = 発行順; hook 出力の golden 被覆; live object 拒否 validation。composite atomic bundle は defer 明記 (実装しない)。coverage row flip。 |
-| EQM-116 | BACKLOG | EQM-115 | `docs/plan/2026-06-09_event_queue_manager/EQM-116_race_pattern/` | Race pattern (coverage: race-pattern)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `runtime/ui/eq_debug_overlay.gd`, `tests/trigger/`, `tests/golden/` | SEM §5.2/§5.4: race-group id (deterministic 採番); OR 解決の racing events 発行 API; 勝者 = hook → 発行順, 敗者は OR invalidation で一掃 (`closed_by`); trace に race_group field; debug overlay で race group を候補群として集約表示 (3 表示分離の最小実装 — EQM 内部 debug と開発者 debug)。coverage row flip。 |
+| EQM-115 | COMPLETE | EQM-114 | `docs/plan/2026-06-09_event_queue_manager/EQM-115_ordering_hook/` | Ordering hook (coverage: ordering-hook)。 | `runtime/eq_runtime.gd`, `resources/eq_config.gd`, `tests/core/`, `tests/golden/` | SEM §7.1: `order_simultaneous(candidates) -> permutation`; candidates view = serializable (entity stat / event tag / event-line 値 / nest level); 既定 = 発行順; hook 出力の golden 被覆; live object 拒否 validation。composite atomic bundle は defer 明記 (実装しない)。coverage row flip。 |
+| EQM-116 | READY | EQM-115 | `docs/plan/2026-06-09_event_queue_manager/EQM-116_race_pattern/` | Race pattern (coverage: race-pattern)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `runtime/ui/eq_debug_overlay.gd`, `tests/trigger/`, `tests/golden/` | SEM §5.2/§5.4: race-group id (deterministic 採番); OR 解決の racing events 発行 API; 勝者 = hook → 発行順, 敗者は OR invalidation で一掃 (`closed_by`); trace に race_group field; debug overlay で race group を候補群として集約表示 (3 表示分離の最小実装 — EQM 内部 debug と開発者 debug)。coverage row flip。 |
 | EQM-117 | BACKLOG | EQM-116 | `docs/plan/2026-06-09_event_queue_manager/EQM-117_snapshot_v2/` | Snapshot v2 + save 境界 enforcement (coverage: snapshot-v2 + save-enforcement)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `runtime/eq_manager.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/core/`, `tests/transaction/` | SEM §10: schema_version 2 (event_lines/windows/armed_triggers additive, 条件 inline); v1→v2 migrator (欠落 = 空); v2-in-v1 = 安定 error; `is_save_allowed` を save 経路へ配線 (chunk 非空 = 安定 error, force flag なし); draft save 既定 = rollback to boundary; replay 証明拡張 (条件/line/window を跨ぐ roundtrip → 同一 pop 順 + 同一 trace)。coverage row flip。 |
 | EQM-118 | BACKLOG | EQM-117 | `docs/plan/2026-06-09_event_queue_manager/EQM-118_reducibility_reproof/` | Reducibility 再証明 (coverage: reducibility-product-proof)。EQM-053 の縮小 (test 内手書き sim) を解消。 | `tests/policy/`, `tests/golden/` | SEM §16.1: CTB / energy / wait-turn 構成を **product の** conditions + event-line model (EQM-111/112 実装) で組み、dedicated policy の golden trace と比較 (order 配列でなく trace); tie-break/speed/delay matrix + 非約数 speed; 差分は model gap として記録。coverage row flip。 |
 | EQM-119 | BACKLOG | EQM-118 | `docs/plan/2026-06-09_event_queue_manager/EQM-119_authoring_surface/` | L2 authoring surface + dogfood/manual 更新 (coverage: authoring-acceptance)。 | `resources/eq_action_definition.gd`, `dogfood/`, `demos/action_resolution/`, `docs/manual/reservations.md`, `docs/manual/action_resolution.md`, `tests/resource/`, `tests/golden/` | SEM §5.6 凍結基準: 「反撃準備 — 3 回 or 5 ターン or どちらか / deadline ∞」を .tres 1 個・GDScript 0 行で宣言し、`closed_by` がどちらで閉じたか golden で可視; dogfood slice を named-effect natural path へ更新; manual 更新 (三面モデル + 条件宣言); Q35 effect grouping follow-up の要否をここで再評価。coverage row 最終 flip。 |
@@ -162,7 +162,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: `EQM-115` (Phase 11; EQM-110..114 COMPLETE 2026-07-02)。
+Current: `EQM-116` (Phase 11; EQM-110..115 COMPLETE 2026-07-02)。
 
 ## Proof log
 
@@ -1009,3 +1009,23 @@ proof:
 ```
 
 Dependency sweep: EQM-114 COMPLETE → EQM-115 READY (ordering hook)。Current pointer → EQM-115。
+
+### EQM-115 — COMPLETE (2026-07-02)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-115_ordering_hook/
+  review: docs/review/autopilot/EQM-115_SELF_REVIEW_2026-07-02.md
+  pattern: P0 (orchestrator-direct); repair 1/3 (test: dev halt する fault を SHIPPED で観測するよう setup 順序修正)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS; files=56 checks=894 failures=0; [api-surface] ok; [contract-coverage] violations=0
+  gate: §4 core (既定 = 発行順 / TO 型 hook 並べ替え / 不正 permutation fault + fallback / view serializable (contains_live_object false) / fired reactions への適用 / 2-run byte 同一 trace)
+  surface: api_surface.json re-baselined (+EQReservationRuntime.set_order_hook; EQTransaction は EQM-114 分に含む) via explicit --update
+  coverage: ordering-hook -> implemented
+  deviations: EQConfig への hook 保持は不採用 (Callable は Resource serialize 不能; named registry 群と同じ起動時登録で統一, SUB_TASKS E)。composite atomic bundle は SEM §7.1 staging どおり defer。golden 被覆は 2-run byte 同一性で保証し、fixture 化は EQM-118 の product 経路 golden に含める。
+  major files:
+    - addons/event_queue_manager/runtime/eq_reservation_runtime.gd (+set_order_hook/_order_candidates + 2 適用点), eq_error.gd (+1 code)
+    - docs/design/ERROR_CONTRACT.md (+1), test_project/tests/core/test_eq_order_hook.gd (new)
+```
+
+Dependency sweep: EQM-115 COMPLETE → EQM-116 READY (race pattern)。Current pointer → EQM-116。

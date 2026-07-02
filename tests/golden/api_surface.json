@@ -788,6 +788,11 @@
           "returns": "-> EQReservation"
         },
         {
+          "name": "set_order_hook",
+          "params": "hook: Callable",
+          "returns": "-> void"
+        },
+        {
           "name": "step_tick",
           "params": "",
           "returns": "-> void"
@@ -1325,6 +1330,7 @@
         "CONDITION_PREDICATE_NAME_EMPTY",
         "CONDITION_PREDICATE_UNREGISTERED",
         "EFFECT_UNREGISTERED",
+        "ORDER_HOOK_INVALID",
         "POLICY_BASE_INSTANCE",
         "POLICY_MISSING",
         "POLICY_NAME_EMPTY",

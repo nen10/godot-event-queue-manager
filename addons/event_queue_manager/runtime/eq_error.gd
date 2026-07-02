@@ -55,6 +55,7 @@ const WINDOW_DEPTH_LIMIT := &"eqm.window.depth_limit"
 const WINDOW_BUDGET_INSUFFICIENT := &"eqm.window.budget_insufficient"
 const WINDOW_CLOSE_INVALID := &"eqm.window.close_invalid"
 const WINDOW_COMMIT_CONFLICT := &"eqm.window.commit_conflict"
+const ORDER_HOOK_INVALID := &"eqm.order.hook_invalid"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -90,6 +91,7 @@ const _META := {
 	WINDOW_BUDGET_INSUFFICIENT: {"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	WINDOW_CLOSE_INVALID: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	WINDOW_COMMIT_CONFLICT: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	ORDER_HOOK_INVALID: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 }
 
 

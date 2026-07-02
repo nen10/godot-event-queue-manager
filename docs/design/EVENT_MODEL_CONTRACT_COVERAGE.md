@@ -29,7 +29,7 @@
 | expiry-event + closed_by vocabulary | §6.3, §11 | EQM-113 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/trigger/test_eq_reaction_pipeline.gd |
 | invalidate-actor (正規離脱経路) | §13 | EQM-113 | implemented | addons/event_queue_manager/runtime/eq_runtime.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd<br>addons/event_queue_manager/runtime/eq_node_bridge.gd | test_project/tests/core/test_eq_resolution_pipeline.gd |
 | window-object-model (EQWindow / 暗黙 L0 window / budget / deadline 既定) | §8.1, §9 | EQM-114 | implemented | addons/event_queue_manager/runtime/eq_window.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd<br>addons/event_queue_manager/runtime/eq_transaction.gd | test_project/tests/transaction/test_eq_window.gd |
-| ordering-hook (order_simultaneous / golden 被覆) | §7.1 | EQM-115 | reserved | — | — |
+| ordering-hook (order_simultaneous / golden 被覆) | §7.1 | EQM-115 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_order_hook.gd |
 | race-pattern (race-group id / 敗者一掃 / 表示分離) | §5.2 | EQM-116 | reserved | — | — |
 | snapshot-v2 + save-enforcement (is_save_allowed 配線 / migrator) | §10 | EQM-117 | reserved | — | — |
 | reducibility-product-proof (EQM-053 の product model 再証明) | §16.1 | EQM-118 | reserved | — | — |

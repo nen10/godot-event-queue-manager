@@ -46,6 +46,63 @@ var max_cascade_rounds: int = 8
 ## Absolute window-nest backstop (SEM §8 engineering max depth, EQM-114).
 var max_window_depth: int = 16
 
+var _order_hook: Callable = Callable()
+
+
+## Registers the acceptance ordering hook (SEM §7.1, Q20/Q38, EQM-115):
+## `func(candidates: Array[Dictionary]) -> Array[int]` — a permutation of
+## candidate indices. Candidates are EQM-built serializable views (index /
+## actor / stats / tags / priority / nest_level / lines); float may appear in
+## stats (the §7 scoped exception) but the output is ints only. Unset = the
+## final fallback, issuance order. The hook must be deterministic (its output
+## participates in the canonical trace).
+func set_order_hook(hook: Callable) -> void:
+	_order_hook = hook
+
+
+## Orders simultaneously-resolvable entries through the hook (identity when
+## unset or singleton). An invalid permutation is a stable fault and falls back
+## to issuance order — never silently adopted.
+func _order_candidates(entries: Array, get_res: Callable) -> Array:
+	if entries.size() <= 1 or not _order_hook.is_valid():
+		return entries
+	var line_values := lines.ctx_lines()
+	var views: Array = []
+	for i in range(entries.size()):
+		var res: EQReservation = get_res.call(entries[i])
+		var stats := {}
+		if runtime.registry.is_registered(res.actor_id):
+			stats = (runtime.registry.get_state(res.actor_id).data as Dictionary).duplicate(true)
+		views.append({
+			"index": i,
+			"actor": String(res.actor_id),
+			"stats": stats,
+			"tags": Array(res.definition.tags).map(func(x): return String(x)) if res.definition != null else [],
+			"priority": res.definition.priority if res.definition != null else 0,
+			"nest_level": window_depth(),
+			"lines": line_values,
+		})
+	var out = _order_hook.call(views)
+	var ok := out is Array and (out as Array).size() == entries.size()
+	if ok:
+		var seen := {}
+		for v in out:
+			var idx := int(v)
+			if idx < 0 or idx >= entries.size() or seen.has(idx):
+				ok = false
+				break
+			seen[idx] = true
+	if not ok:
+		runtime._fault(EQError.ORDER_HOOK_INVALID, "order hook returned an invalid permutation", {"count": entries.size()}, true)
+		return entries
+	var ordered: Array = []
+	var order_ints: Array = []
+	for v in out:
+		ordered.append(entries[int(v)])
+		order_ints.append(int(v))
+	runtime.trace().record({"kind": "order_hook_applied", "count": entries.size(), "order": order_ints})
+	return ordered
+
 var _by_event: Dictionary = {}          # event_id -> EQReservation (scheduled)
 var _bound_inv: Dictionary = {}         # event_id -> Array bound invalidation terms
 var _expiry_by_event: Dictionary = {}   # expiry event_id -> EQReservation
@@ -403,7 +460,7 @@ func _sweep(view: Dictionary) -> void:
 		if _cascade_round > max_cascade_rounds:
 			runtime._fault(EQError.TRIGGER_CHAIN_LIMIT, "same-tick reaction cascade exceeded %d rounds" % max_cascade_rounds, {"tick": tick}, true)
 		else:
-			for res in fired:
+			for res in _order_candidates(fired, func(x): return x):
 				var consumed: bool = (res as EQReservation).status == EQReservation.Status.RESOLVED
 				if consumed:
 					# the armed slot closed by count exhaustion (its final
@@ -443,6 +500,7 @@ func _recheck_scheduled_invalidation() -> void:
 ## invalidation drops it (invalidation-wins).
 func _evaluate_pending_conditional() -> void:
 	var still: Array[Dictionary] = []
+	var to_push: Array = []
 	for p in _pending_conditional:
 		var res: EQReservation = p["res"]
 		var ctx := _ctx(p["view"])
@@ -453,15 +511,19 @@ func _evaluate_pending_conditional() -> void:
 				res.status = EQReservation.Status.INVALIDATED
 				_trace_invalidated(-1, res.actor_id, StringName(inv["closed_by"]))
 			EQConditionEval.Outcome.RESOLVE:
-				var id := _schedule(res, 0)
-				if id > 0 and not (p["inv"] as Array).is_empty():
-					_bound_inv[id] = p["inv"]
+				to_push.append(p)
 			EQConditionEval.Outcome.FAULT:
 				var f: Dictionary = (inv["fault"] if inv["fault"] != null else solve["fault"])
 				runtime._fault(f["code"], f["message"], f.get("context", {}), true)
 			_:
 				still.append(p)
 	_pending_conditional = still
+	# simultaneous arrivals: the §7.1 hook decides the order; fallback = issuance
+	for p in _order_candidates(to_push, func(x): return x["res"]):
+		var res: EQReservation = p["res"]
+		var id := _schedule(res, 0)
+		if id > 0 and not (p["inv"] as Array).is_empty():
+			_bound_inv[id] = p["inv"]
 
 
 func _watched() -> Dictionary:
