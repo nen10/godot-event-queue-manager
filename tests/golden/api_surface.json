@@ -803,6 +803,11 @@
           "returns": "-> int"
         },
         {
+          "name": "submit_race",
+          "params": "members: Array",
+          "returns": "-> StringName"
+        },
+        {
           "name": "window_depth",
           "params": "",
           "returns": "-> int"
@@ -1873,6 +1878,11 @@
           "name": "explanation_for",
           "params": "index: int",
           "returns": "-> Dictionary"
+        },
+        {
+          "name": "group_rows",
+          "params": "",
+          "returns": "-> Array"
         },
         {
           "name": "order",

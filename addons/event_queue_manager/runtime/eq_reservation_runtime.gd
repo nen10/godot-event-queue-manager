@@ -111,6 +111,9 @@ var _cascade_tick: int = -1
 var _cascade_round: int = 0
 var _windows: Array = []   # LIFO; [0] is the implicit root (nest 0, never traced/closed)
 var _window_seq: int = 0
+var _race_groups: Dictionary = {}   # race_group id -> Array[EQReservation]
+var _race_of: Dictionary = {}       # reservation instance_id -> race_group id
+var _race_seq: int = 0
 
 
 func _init(p_runtime = null) -> void:
@@ -282,6 +285,55 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 	return -1
 
 
+## OR-resolution race (SEM §5.2, Q18/Q28): several reservations for the SAME
+## effect, each with different solve_conditions, usually racing on shared
+## lines. Each member goes through the normal pipeline; the first to resolve
+## wins and the rest are swept with `closed_by: race_lost` (their OR
+## invalidation). Simultaneous arrivals are ordered by the §7.1 hook →
+## issuance order — no race-specific rule. Returns the deterministic
+## race-group id (`eqm.race.<seq>`). All candidates stay visible in the trace
+## (`race_opened` / `race_resolved` / race-tagged invalidations) — the
+## EQM-debug display; the overlay aggregates them (game-dev debug); in-game
+## presentation only ever receives the winner's effect.
+func submit_race(members: Array) -> StringName:
+	_race_seq += 1
+	var gid := StringName("eqm.race.%d" % _race_seq)
+	var group: Array = []
+	for m in members:
+		var res: EQReservation = m
+		group.append(res)
+		_race_of[res.get_instance_id()] = gid
+		submit(res)
+	_race_groups[gid] = group
+	runtime.trace().record({"kind": "race_opened", "race_group": String(gid), "members": group.size()})
+	return gid
+
+
+## The winner resolved: sweep the losers (only those not already closed by
+## another path) and record the settlement.
+func _settle_race(gid: StringName, winner: EQReservation, winner_event_id: int) -> void:
+	for member in _race_groups.get(gid, []):
+		var res: EQReservation = member
+		if res == winner or res.status == EQReservation.Status.RESOLVED or res.status == EQReservation.Status.INVALIDATED:
+			continue
+		# pending conditional loser
+		var still: Array[Dictionary] = []
+		for p in _pending_conditional:
+			if p["res"] == res:
+				continue
+			still.append(p)
+		_pending_conditional = still
+		# scheduled loser
+		if res.event_id > 0 and _by_event.has(res.event_id):
+			runtime.scheduler.cancel(res.event_id)
+			_by_event.erase(res.event_id)
+			_bound_inv.erase(res.event_id)
+		res.status = EQReservation.Status.INVALIDATED
+		_trace_invalidated(res.event_id, res.actor_id, &"race_lost", gid)
+	_race_groups.erase(gid)
+	runtime.trace().record({"kind": "race_resolved", "race_group": String(gid), "winner": String(winner.actor_id), "event_id": winner_event_id})
+
+
 ## Binds the normalized condition sets (SEM §5.6 sugar folded in) into
 ## evaluator terms. Declared COUNTER specs get their runtime counter line here
 ## (deterministic issuance). The rumination sugar keeps its runtime store
@@ -353,6 +405,9 @@ func resolve_next() -> EQReservation:
 				runtime._fault(f["code"], f["message"], f.get("context", {}), true)
 				continue
 		res.status = EQReservation.Status.RESOLVED
+		var race_gid: StringName = _race_of.get(res.get_instance_id(), &"")
+		if race_gid != &"" and _race_groups.has(race_gid):
+			_settle_race(race_gid, res, e.event_id)
 		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
 			_cause_target_reservation(res)
 		# step 2/3 — declared effect into the chunk
@@ -549,7 +604,7 @@ func _view_of(res: EQReservation) -> Dictionary:
 	}
 
 
-func _trace_invalidated(event_id: int, actor_id: StringName, closed_by: StringName) -> void:
+func _trace_invalidated(event_id: int, actor_id: StringName, closed_by: StringName, race_group: StringName = &"") -> void:
 	var fields := {
 		"kind": "event_invalidated",
 		"actor": String(actor_id),
@@ -557,6 +612,8 @@ func _trace_invalidated(event_id: int, actor_id: StringName, closed_by: StringNa
 	}
 	if event_id > 0:
 		fields["event_id"] = event_id
+	if race_group != &"":
+		fields["race_group"] = String(race_group)
 	runtime.trace().record(fields)
 
 
