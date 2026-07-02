@@ -17,6 +17,15 @@ Godot addon: Event Queue Manager — 行動順 (event / turn / action order) 管
 - UI static audit: `python3 tools/ui_static_audit.py`
 - test 出力先: `.godot_user/test-runs/<run-id>/` (固定 path / 共有 log へ書かない)
 
+## codexへの作業委任（常時有効）
+
+任意の作業について以下のcodex系ツールに分担させてよい。
+
+- **codex-fugu**: 理解力が高い方。複雑な理解・判断が必要なタスクや実行経路の確立が必要な作業に使う。コマンドライン実行のみ可能 `codex-fugu`
+- **codex CLI (GPT 5.5)**: 設計済み・大規模な実行タスクに使う（`codex exec -s workspace-write - < prompt.md` 等、バックグラウンド実行）。
+
+委任した結果は必ず検証すること（誤分類・サンプルレート異常などの実績あり）。
+
 ## Hard rules
 
 - Queue 実行では planning 後に承認待ちで止まらない。実装 -> test -> self-review -> queue 更新 -> commit まで同 run で行う (`docs/devflow/LINEAR_AUTOPILOT_QUEUE.md`)。
