@@ -60,6 +60,7 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.condition.counter_start_invalid` | RESOURCE_INVALID | ERROR | editor, game | COUNTER spec with `counter_start < 1` |
 | `eqm.condition.predicate_unregistered` | CONTRACT_VIOLATION | ERROR | editor, game | evaluating / loading a condition whose predicate name is not registered (SEM §5.5 stable error) |
 | `eqm.condition.line_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | a condition reads an event-line absent from the evaluation context |
+| `eqm.effect.unregistered` | CONTRACT_VIOLATION | ERROR | editor, game | a reservation declares `effect_name` but no handler is registered (SEM §6.1 declared linkage — never a silent skip; EQM-113) |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

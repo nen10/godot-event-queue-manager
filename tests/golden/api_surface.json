@@ -276,14 +276,29 @@
           "returns": "-> EQEntry"
         },
         {
+          "name": "effects",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
           "name": "finish_action",
           "params": "actor_id: StringName, result: EQActionResult",
           "returns": "-> int"
         },
         {
+          "name": "has_effect",
+          "params": "name: StringName",
+          "returns": "-> bool"
+        },
+        {
           "name": "has_predicate",
           "params": "name: StringName",
           "returns": "-> bool"
+        },
+        {
+          "name": "invalidate_actor",
+          "params": "actor_id: StringName, cause: StringName = &\"actor_removed\"",
+          "returns": "-> int"
         },
         {
           "name": "predicates",
@@ -294,6 +309,11 @@
           "name": "register_actor",
           "params": "actor_id: StringName",
           "returns": "-> EQActorState"
+        },
+        {
+          "name": "register_effect",
+          "params": "name: StringName, handler: Callable",
+          "returns": "-> bool"
         },
         {
           "name": "register_predicate",
@@ -531,9 +551,12 @@
       "vars": [
         "delay",
         "duration",
+        "effect_name",
+        "expiry_effect_name",
         "invalidation_conditions",
         "kind",
         "operation_target_tag",
+        "priority",
         "rumination",
         "solve_conditions",
         "tags"
@@ -707,8 +730,13 @@
     "EQReservationRuntime": {
       "consts": [
         "EQActionDefinition",
+        "EQConditionEval",
+        "EQConditionSpec",
+        "EQEffectChunk",
+        "EQEventLines",
         "EQReservation",
-        "EQRuntime"
+        "EQRuntime",
+        "EQTriggerEngine"
       ],
       "enums": [],
       "methods": [
@@ -718,7 +746,17 @@
           "returns": "-> Array"
         },
         {
+          "name": "invalidate_actor",
+          "params": "actor_id: StringName, cause: StringName = &\"actor_removed\"",
+          "returns": "-> int"
+        },
+        {
           "name": "pending",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "pending_conditional",
           "params": "",
           "returns": "-> Array"
         },
@@ -728,13 +766,23 @@
           "returns": "-> EQReservation"
         },
         {
+          "name": "step_tick",
+          "params": "",
+          "returns": "-> void"
+        },
+        {
           "name": "submit",
-          "params": "res: EQReservation",
+          "params": "res: EQReservation, reaction_condition = null",
           "returns": "-> int"
         }
       ],
       "signals": [],
       "vars": [
+        "chunk",
+        "engine",
+        "last_drained",
+        "lines",
+        "max_cascade_rounds",
         "runtime"
       ]
     },
@@ -830,9 +878,14 @@
           "returns": "-> Array"
         },
         {
-          "name": "fire_cascade",
-          "params": "initial_view: Dictionary, current_tick: int, follow_up: Callable = Callable(",
-          "returns": ""
+          "name": "disarm",
+          "params": "reservation: EQReservation",
+          "returns": "-> bool"
+        },
+        {
+          "name": "disarm_for",
+          "params": "actor_id: StringName",
+          "returns": "-> Array"
         },
         {
           "name": "on_event_resolved",
@@ -842,8 +895,7 @@
       ],
       "signals": [],
       "vars": [
-        "faults",
-        "max_chain"
+        "expired"
       ]
     },
     "EQTriggerIndex": {
@@ -1209,6 +1261,7 @@
         "CONDITION_LINE_UNKNOWN",
         "CONDITION_PREDICATE_NAME_EMPTY",
         "CONDITION_PREDICATE_UNREGISTERED",
+        "EFFECT_UNREGISTERED",
         "POLICY_BASE_INSTANCE",
         "POLICY_MISSING",
         "POLICY_NAME_EMPTY",

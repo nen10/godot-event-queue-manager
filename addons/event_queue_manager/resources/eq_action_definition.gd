@@ -33,6 +33,16 @@ const DURATION_UNLIMITED := -1
 @export var rumination: int = 0
 ## For OPERATION: the tag of the reservation caused on the target.
 @export var operation_target_tag: StringName = &""
+## Ordering priority of the scheduled resolution event (higher first at the
+## same tick, §3). Q32: a fired reaction is scheduled with this value.
+@export var priority: int = 0
+## Named effect applied at resolution (SEM §6.1, declared linkage): empty =
+## explicitly effect-less; set-but-unregistered is a stable error, never a
+## silent skip. Register via EQRuntime.register_effect.
+@export var effect_name: StringName = &""
+## Optional named effect applied when a duration expiry closes this reservation
+## (SEM §6.3). Same registry and error rule as effect_name.
+@export var expiry_effect_name: StringName = &""
 ## Solve terms — AND, level-triggered (SEM §5.4, EQM-111). Empty = no gate.
 @export var solve_conditions: Array[EQConditionSpec] = []
 ## Invalidation terms — OR, invalidation-wins (SEM §5.4). `duration` and
@@ -119,6 +129,9 @@ func to_dict() -> Dictionary:
 		"duration": duration,
 		"rumination": rumination,
 		"operation_target_tag": String(operation_target_tag),
+		"priority": priority,
+		"effect_name": String(effect_name),
+		"expiry_effect_name": String(expiry_effect_name),
 		"solve_conditions": solve_conditions.filter(func(s): return s != null).map(func(s): return s.to_dict()),
 		"invalidation_conditions": invalidation_conditions.filter(func(s): return s != null).map(func(s): return s.to_dict()),
 	}
@@ -135,6 +148,9 @@ static func from_dict(d: Dictionary) -> EQActionDefinition:
 	def.duration = int(d.get("duration", 0))
 	def.rumination = int(d.get("rumination", 0))
 	def.operation_target_tag = StringName(d.get("operation_target_tag", ""))
+	def.priority = int(d.get("priority", 0))
+	def.effect_name = StringName(d.get("effect_name", ""))
+	def.expiry_effect_name = StringName(d.get("expiry_effect_name", ""))
 	var solve: Array[EQConditionSpec] = []
 	for sd in d.get("solve_conditions", []):
 		solve.append(EQConditionSpec.from_dict(sd))

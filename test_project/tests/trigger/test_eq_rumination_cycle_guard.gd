@@ -74,19 +74,50 @@ static func _test_reaction_rumination(t) -> void:
 
 
 static func _test_cycle_guard(t) -> void:
-	var eng := EQTriggerEngine.new()
-	eng.max_chain = 4
-	# a reaction that keeps re-arming (huge rumination) + a follow-up that always
-	# re-emits a matching event => a runaway cascade that must be bounded.
-	eng.arm(_reaction(&"hero", 1000000), _cond(&"hero"), 0)
-	var follow_up := func(_fired): return [_dmg(&"hero")]
-	var all_fired := eng.fire_cascade(_dmg(&"hero"), 1, follow_up)
-	t.ok(all_fired.size() <= eng.max_chain, "cascade bounded by max_chain (fired=%d <= %d)" % [all_fired.size(), eng.max_chain])
-	t.eq(eng.faults.size(), 1, "cycle guard recorded a fault")
-	t.eq(eng.faults[0]["code"], EQError.TRIGGER_CHAIN_LIMIT, "fault code is trigger.chain_limit")
-	t.eq(eng.faults[0]["recoverability"], EQError.Recoverability.BUDGET_EXCEEDED, "chain limit is BUDGET_EXCEEDED")
-	# a non-runaway cascade (no follow-up) terminates without a fault
-	var eng2 := EQTriggerEngine.new()
-	eng2.arm(_reaction(&"hero", 0), _cond(&"hero"), 0)
-	eng2.fire_cascade(_dmg(&"hero"), 1)
-	t.eq(eng2.faults.size(), 0, "a terminating cascade records no fault")
+	# EQM-113 (Q32): the in-place fire_cascade was removed — fired reactions are
+	# SCHEDULED, and the runaway bound is the pipeline's same-tick round guard.
+	# A self-sustaining reaction (its own resolution re-matches its condition)
+	# must be truncated with a TRIGGER_CHAIN_LIMIT fault, never an infinite loop.
+	var rr := EQReservationRuntime.new()
+	rr.runtime.emit_engine_diagnostics = false
+	rr.runtime.set_mode(rr.runtime.Mode.SHIPPED)  # observe truncation (dev halts)
+	rr.max_cascade_rounds = 4
+	rr.runtime.register_actor(&"hero")
+	rr.runtime.register_actor(&"orc")
+
+	var echo := _reaction(&"hero", 1000000)
+	echo.definition.tags = [&"damage"]     # its own resolution re-matches ...
+	echo.target_id = &"hero"               # ... the condition below (runaway)
+	rr.submit(echo, _cond(&"hero"))
+
+	var trigger_def := EQActionDefinition.new()
+	trigger_def.kind = EQActionDefinition.Kind.IMMEDIATE
+	trigger_def.tags = [&"damage"]
+	var first := EQReservation.new(&"orc", trigger_def)
+	first.target_id = &"hero"
+	rr.submit(first)
+
+	var resolutions := 0
+	for _i in 32:
+		if rr.resolve_next() == null:
+			break
+		resolutions += 1
+	t.ok(resolutions <= rr.max_cascade_rounds + 2, "cascade bounded by max_cascade_rounds (resolved=%d)" % resolutions)
+	t.ok(not rr.runtime.faults.is_empty(), "cycle guard recorded a fault")
+	t.eq(rr.runtime.faults.back()["code"], EQError.TRIGGER_CHAIN_LIMIT, "fault code is trigger.chain_limit")
+	t.eq(rr.runtime.faults.back()["recoverability"], EQError.Recoverability.BUDGET_EXCEEDED, "chain limit is BUDGET_EXCEEDED")
+	t.ok(rr.runtime.scheduler.is_empty(), "truncation stops scheduling new rounds (shipped fail-safe, no crash)")
+
+	# a terminating cascade (one-shot reaction, non-matching resolution) records no fault
+	var rr2 := EQReservationRuntime.new()
+	rr2.runtime.emit_engine_diagnostics = false
+	rr2.runtime.register_actor(&"hero")
+	rr2.runtime.register_actor(&"orc")
+	rr2.submit(_reaction(&"hero", 0), _cond(&"hero"))
+	var atk := EQReservation.new(&"orc", trigger_def)
+	atk.target_id = &"hero"
+	rr2.submit(atk)
+	for _i in 8:
+		if rr2.resolve_next() == null:
+			break
+	t.eq(rr2.runtime.faults.size(), 0, "a terminating cascade records no fault")

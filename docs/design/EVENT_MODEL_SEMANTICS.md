@@ -262,6 +262,7 @@ The canonical trace (EQM-013) already has an **open record-kind schema** (sorted
 - `window_opened` / `window_closed` — window lifecycle (fields per §8.1; close carries a cause, e.g. `deadline`).
 - invalidation records carry `closed_by: <condition id>` (and `invalid_event_skipped` for lazy skips).
 - **`closed_by` vocabulary** *(v1.1)*: condition ids plus the reserved causes `duration`, `reaction_count`, `already_closed` (§6.3), `actor_removed` (§13). Cascade resolutions carry their **round number** (§6.2). Sweep-rule executions record rule name + affected count (§4.7).
+- **`event_invalidated`** *(v1.1, EQM-113)* — the invalidation record kind (carries `closed_by`, and `event_id` when the drop maps to a scheduled event). **`reaction_fired`** *(v1.1, EQM-113)* — a fired reaction was scheduled (fields: `round`, `actor`, `event_id`).
 - Effect records carry a deterministic `classification` (important / sensed / offscreen) — **simulation-side data (Q12)**, implemented in EQM-080/081; presentation may not alter it.
 
 Determinism rules (unchanged from EQM-013): ordering keys are int only; fixed key order; no wall-clock / node-path / object address; byte-identical for identical seed/input.

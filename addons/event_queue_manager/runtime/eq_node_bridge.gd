@@ -47,12 +47,14 @@ func node_for(actor_id: StringName) -> Object:
 	return w.get_ref() if w != null else null
 
 
-## Routes a deleted actor through the invalidation path: unregister it so its
-## pending events are skipped (Q05; shipped fail-safe in EQRuntime.advance).
+## Routes a deleted actor through the NORMAL invalidation path (SEM §13, Q39,
+## EQM-113): `invalidate_actor` cancels its pending events with
+## `closed_by: actor_removed` traces and unregisters it — mode-neutral (death
+## mid-battle is normal gameplay, not an anomaly).
 func on_actor_freed(actor_id: StringName) -> void:
 	var rt = _runtime()
 	if rt != null and rt.registry.is_registered(actor_id):
-		rt.registry.unregister(actor_id)
+		rt.invalidate_actor(actor_id)
 	_nodes.erase(actor_id)
 	event_invalidated.emit(actor_id)
 

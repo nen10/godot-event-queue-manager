@@ -24,10 +24,10 @@
 | event-line-backend (data model / watched sparse polling / event_line_progressed) | §4.3, §4.6 | EQM-112 | implemented | addons/event_queue_manager/runtime/eq_event_lines.gd | test_project/tests/core/test_eq_event_lines.gd |
 | sweep-rule-registry (pattern (2) 実行) | §4.7 | EQM-112 | implemented | addons/event_queue_manager/runtime/eq_event_lines.gd | test_project/tests/core/test_eq_event_lines.gd |
 | progression-budgets (Q43 数値) | §12.1 | EQM-112 | implemented | addons/event_queue_manager/runtime/eq_event_lines.gd | test_project/tests/performance/test_eq_event_line_budget.gd |
-| resolution-pipeline (5-step / 宣言 linkage effect callback / chunk 配線) | §6.1 | EQM-113 | reserved | — | — |
-| reaction-schedule (cascade bounded rounds) | §6.2 | EQM-113 | reserved | — | — |
-| expiry-event + closed_by vocabulary | §6.3, §11 | EQM-113 | reserved | — | — |
-| invalidate-actor (正規離脱経路) | §13 | EQM-113 | reserved | — | — |
+| resolution-pipeline (5-step / 宣言 linkage effect callback / chunk 配線) | §6.1 | EQM-113 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd<br>addons/event_queue_manager/runtime/eq_runtime.gd | test_project/tests/core/test_eq_resolution_pipeline.gd |
+| reaction-schedule (cascade bounded rounds) | §6.2 | EQM-113 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd<br>addons/event_queue_manager/runtime/eq_trigger_engine.gd | test_project/tests/trigger/test_eq_reaction_pipeline.gd<br>test_project/tests/trigger/test_eq_rumination_cycle_guard.gd |
+| expiry-event + closed_by vocabulary | §6.3, §11 | EQM-113 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/trigger/test_eq_reaction_pipeline.gd |
+| invalidate-actor (正規離脱経路) | §13 | EQM-113 | implemented | addons/event_queue_manager/runtime/eq_runtime.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd<br>addons/event_queue_manager/runtime/eq_node_bridge.gd | test_project/tests/core/test_eq_resolution_pipeline.gd |
 | window-object-model (EQWindow / 暗黙 L0 window / budget / deadline 既定) | §8.1, §9 | EQM-114 | reserved | — | — |
 | ordering-hook (order_simultaneous / golden 被覆) | §7.1 | EQM-115 | reserved | — | — |
 | race-pattern (race-group id / 敗者一掃 / 表示分離) | §5.2 | EQM-116 | reserved | — | — |

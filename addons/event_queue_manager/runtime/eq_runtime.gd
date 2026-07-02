@@ -80,6 +80,54 @@ func predicates() -> Dictionary:
 	return _predicates.duplicate()
 
 
+# --- named effect registry (SEM §6.1, EQM-113) -----------------------------
+# Declared linkage: a reservation whose definition sets `effect_name` resolves
+# through the registered handler (view -> Array[EQEffectRecord]); set-but-
+# unregistered is a stable error (never a silent skip). Empty = effect-less.
+
+var _effects: Dictionary = {}
+
+
+## Registers (or replaces — idempotent setup) a named effect handler.
+func register_effect(name: StringName, handler: Callable) -> bool:
+	if name == &"":
+		_fault(EQError.CONDITION_PREDICATE_NAME_EMPTY, "effect name must not be empty", {}, true)
+		return false
+	_effects[name] = handler
+	return true
+
+
+func has_effect(name: StringName) -> bool:
+	return _effects.has(name)
+
+
+## A copy (same read-only rule as predicates()).
+func effects() -> Dictionary:
+	return _effects.duplicate()
+
+
+## Normal-path actor departure (SEM §13, Q39; Q05 是正). Cancels the actor's
+## pending events with an `event_invalidated` trace (`closed_by: <cause>`),
+## then unregisters. MODE-NEUTRAL: death/leave mid-battle is normal gameplay,
+## not an anomaly — identical behaviour and trace in dev and shipped. Returns
+## the number of cancelled events. (L2 extends this: EQReservationRuntime
+## also disarms reactions and drops pending conditional reservations.)
+func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed") -> int:
+	var cancelled := 0
+	for e in scheduler.peek(scheduler.size()):
+		if e.actor_id == actor_id and scheduler.cancel(e.event_id):
+			_trace.record({
+				"kind": "event_invalidated",
+				"event_id": e.event_id,
+				"actor": String(actor_id),
+				"closed_by": String(cause),
+			})
+			cancelled += 1
+	if registry.is_registered(actor_id):
+		registry.unregister(actor_id)
+	return cancelled
+
+
 ## Validates the config (if any) and reports it. A missing config is not an
 ## anomaly (scene-local default is config-less); an invalid config is surfaced
 ## per mode. Returns the config's EQValidation (empty when no config).

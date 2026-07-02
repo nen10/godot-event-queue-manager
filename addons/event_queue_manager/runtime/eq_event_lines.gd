@@ -122,13 +122,12 @@ func poll_tick(watched: Dictionary) -> void:
 
 
 ## Mirrors the primary line to the scheduler's current tick (the scheduler owns
-## tick truth; the pipeline is the single caller). No-op when unchanged.
+## tick truth; the pipeline is the single caller). Records NOTHING: the tick's
+## advancement is already canonical in resolved records — a mirror sync is
+## derivative observation, and tracing it would perturb existing goldens
+## (EQM-113 decision, POLICY.md).
 func sync_primary(tick: int) -> void:
-	var from := int(_lines[PRIMARY_LINE_ID]["value"])
-	if from == tick:
-		return
 	_lines[PRIMARY_LINE_ID]["value"] = tick
-	_record({"kind": "event_line_progressed", "cause": "poll", "line": String(PRIMARY_LINE_ID), "from": from, "to": tick})
 
 
 ## Watched set derived from pending conditions (SEM §4.3): the union of line

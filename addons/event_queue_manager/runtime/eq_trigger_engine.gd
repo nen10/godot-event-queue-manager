@@ -11,8 +11,10 @@ extends RefCounted
 ## (e.g. match_target = owner, or a custom predicate rejecting source == owner),
 ## so a counter reacts to an enemy's incoming damage, not the owner's own.
 ##
-## Firing is one-shot here; rumination (re-arming N times) and the infinite-chain
-## cycle guard are EQM-062.
+## Firing is one-shot here; rumination (re-arming N times) is EQM-062. Fired
+## reactions are SCHEDULED onto the master timeline by the resolution pipeline
+## (EQReservationRuntime, SEM §6.2) — the in-place cascade (`fire_cascade`) was
+## removed by EQM-113 (Q32): the pipeline's bounded same-tick rounds replaced it.
 
 const EQReservation := preload("eq_reservation.gd")
 const EQActionDefinition := preload("../resources/eq_action_definition.gd")
@@ -20,10 +22,10 @@ const EQActionDefinition := preload("../resources/eq_action_definition.gd")
 # Each armed entry: { reservation, condition, owner, armed_at, duration }.
 var _armed: Array[Dictionary] = []
 
-## Absolute backstop on a trigger cascade (SEMANTICS §8 engineering max depth).
-var max_chain: int = 64
-## Cycle-guard faults (e.g. TRIGGER_CHAIN_LIMIT). Recorded, never thrown.
-var faults: Array[Dictionary] = []
+## Observable record of duration-expired reactions ({reservation, expired_at}) —
+## expiry is never silent (Q06/SEM §6.3). Pipeline-owned reactions arm with
+## DURATION_UNLIMITED here; their expiry is an expiry EVENT owned by EQM-113.
+var expired: Array[Dictionary] = []
 
 
 ## Arms a reaction (a REACTION_PREPARATION reservation) with the condition that
@@ -65,39 +67,33 @@ func on_event_resolved(view: Dictionary, current_tick: int) -> Array:
 	return fired
 
 
-## Drives a bounded trigger cascade: fire reactions for `initial_view`, then for
-## any follow-up event views a fired reaction produces (via `follow_up(reservation)
-## -> Array`), and so on. The chain is bounded by max_chain — exceeding it records
-## a TRIGGER_CHAIN_LIMIT fault and stops (shipped fail-safe; never an infinite
-## loop, never a crash). Returns all fired reservations.
-func fire_cascade(initial_view: Dictionary, current_tick: int, follow_up: Callable = Callable()) -> Array:
-	var all_fired: Array = []
-	var queue: Array = [initial_view]
-	var steps := 0
-	while not queue.is_empty():
-		if steps >= max_chain:
-			faults.append({
-				"code": EQError.TRIGGER_CHAIN_LIMIT,
-				"recoverability": EQError.recoverability_of(EQError.TRIGGER_CHAIN_LIMIT),
-				"message": "trigger chain exceeded max_chain (%d)" % max_chain,
-			})
-			break
-		var view: Dictionary = queue.pop_front()
-		var fired := on_event_resolved(view, current_tick)
-		for r in fired:
-			all_fired.append(r)
-		if follow_up.is_valid():
-			for r in fired:
-				var ups = follow_up.call(r)
-				if ups is Array:
-					for v in ups:
-						queue.append(v)
-		steps += 1
-	return all_fired
+## Disarms one reservation (e.g. an expiry event closed it, or its owner left).
+## Returns whether it was armed.
+func disarm(reservation: EQReservation) -> bool:
+	for i in range(_armed.size()):
+		if _armed[i]["reservation"] == reservation:
+			_armed.remove_at(i)
+			return true
+	return false
+
+
+## Disarms every reaction owned by an actor (the Q39 departure path). Returns
+## the disarmed reservations.
+func disarm_for(actor_id: StringName) -> Array:
+	var removed: Array = []
+	var survivors: Array[Dictionary] = []
+	for armed in _armed:
+		if armed["owner"] == actor_id:
+			removed.append(armed["reservation"])
+		else:
+			survivors.append(armed)
+	_armed = survivors
+	return removed
 
 
 ## Drops armed reactions whose duration has elapsed (duration -1 = unlimited
-## never expires). Expiry is evaluated before firing.
+## never expires). Expiry is evaluated before firing and is OBSERVABLE via
+## `expired` — never silent (standalone use; the pipeline uses expiry events).
 func _expire(current_tick: int) -> void:
 	var survivors: Array[Dictionary] = []
 	for armed in _armed:
@@ -106,6 +102,7 @@ func _expire(current_tick: int) -> void:
 			survivors.append(armed)
 		else:
 			(armed["reservation"] as EQReservation).status = EQReservation.Status.INVALIDATED
+			expired.append({"reservation": armed["reservation"], "expired_at": current_tick})
 	_armed = survivors
 
 

@@ -50,6 +50,7 @@ const CONDITION_PREDICATE_NAME_EMPTY := &"eqm.condition.predicate_name_empty"
 const CONDITION_COUNTER_START_INVALID := &"eqm.condition.counter_start_invalid"
 const CONDITION_PREDICATE_UNREGISTERED := &"eqm.condition.predicate_unregistered"
 const CONDITION_LINE_UNKNOWN := &"eqm.condition.line_unknown"
+const EFFECT_UNREGISTERED := &"eqm.effect.unregistered"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -80,6 +81,7 @@ const _META := {
 	CONDITION_COUNTER_START_INVALID: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	CONDITION_PREDICATE_UNREGISTERED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	CONDITION_LINE_UNKNOWN: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	EFFECT_UNREGISTERED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 }
 
 

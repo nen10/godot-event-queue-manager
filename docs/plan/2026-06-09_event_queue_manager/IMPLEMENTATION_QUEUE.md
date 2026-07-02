@@ -140,8 +140,8 @@ Source: `docs/review/EVENT_MODEL_DESIGN_GAP_AUDIT_2026-07-02.md` (v1.0 凍結契
 | EQM-110 | COMPLETE | — | `docs/plan/2026-06-09_event_queue_manager/EQM-110_semantics_round2/` | Semantics round 2: Q27–Q43 確定記述 (SEM v1.1) + registry finalization + synthesis + contract coverage gate。 | `docs/design/EVENT_MODEL_SEMANTICS.md`, `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`, `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`, `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`, `tools/check_contract_coverage.py`, `tools/test.sh` | SEM v1.1 が Q27–Q43 を (v1.1) 節として additive 記録 (Q31 は宣言 linkage reconciliation)。§16.1 re-freeze 記録。registry 全 Q DECIDED(user) + pointer 表。coverage matrix + checker が test.sh gate (implemented 行の path 実在 / COMPLETE task の reserved 残留 FAIL / self-test negative)。`./tools/test.sh` PASS。 |
 | EQM-111 | COMPLETE | EQM-110 | `docs/plan/2026-06-09_event_queue_manager/EQM-111_conditions_contract/` | Conditions 契約実装 (coverage: conditions-contract, named-predicate-registry)。 | `resources/eq_condition_spec.gd`, `resources/eq_action_definition.gd`, `runtime/eq_runtime.gd`, `runtime/eq_error.gd`, `docs/design/ERROR_CONTRACT.md`, `tests/resource/`, `tests/trigger/` | SEM §5.4/§5.5/§5.6: `EQConditionSpec` (LINE_THRESHOLD/COUNTER/NAMED_PREDICATE) が `.tres` roundtrip; `solve_conditions`/`invalidation_conditions` additive 追加; duration/rumination 糖衣の条件正規化; level-triggered AND / OR / invalidation-wins の評価 helper; named predicate registry (runtime instance, serializable view のみ, 未登録 load = 安定 error); ERROR_CONTRACT へ codes 追加; API surface 更新 (L2)。coverage row flip。 |
 | EQM-112 | COMPLETE | EQM-111 | `docs/plan/2026-06-09_event_queue_manager/EQM-112_event_line_backend/` | Event-line backend (coverage: event-line-backend, sweep-rule-registry, progression-budgets)。 | `runtime/eq_event_lines.gd`, `runtime/eq_runtime.gd`, `runtime/eq_trace.gd`, `tests/core/`, `tests/performance/` | SEM §4.3/§4.6/§4.7/§12.1: line = {id, value, rate} data のみ; deterministic 採番; 明示 advance / re-rate; watched 導出 (pending 条件参照) + sparse polling (watched かつ rate≠0); `event_line_progressed` trace 実 emit; sweep rule registry (登録順固定, actor_id 昇順走査, rule name trace); Q43 予算 test (actor 200 / line 300 / +0.5ms 以内)。coverage rows flip。 |
-| EQM-113 | READY | EQM-112 | `docs/plan/2026-06-09_event_queue_manager/EQM-113_resolution_pipeline/` | 解決 pipeline 統合 (coverage: resolution-pipeline, reaction-schedule, expiry-event, invalidate-actor)。 | `runtime/eq_runtime.gd`, `runtime/eq_reservation_runtime.gd`, `runtime/eq_trigger_engine.gd`, `runtime/eq_effect_chunk.gd`, `runtime/eq_node_bridge.gd`, `tests/core/`, `tests/trigger/` | SEM §6.1–§6.3/§13: 5-step pipeline に advance/resolve_next 統合; effect_name 宣言 linkage (未登録 = 安定 error, 空 = effect なし解決); chunk へ解決時記録 + drain; fired reaction は schedule 化 (in-place `fire_cascade` 廃止, bounded rounds + round 番号 trace); expiry event (`closed_by: duration/reaction_count/already_closed`); `invalidate_actor` (mode 中立, `closed_by: actor_removed`, bridge 配線); golden 更新は明示 flag。coverage rows flip。 |
-| EQM-114 | BACKLOG | EQM-113 | `docs/plan/2026-06-09_event_queue_manager/EQM-114_window_model/` | Window object model (coverage: window-object-model)。 | `runtime/eq_window.gd`, `runtime/eq_runtime.gd`, `runtime/eq_transaction.gd`, `tests/transaction/`, `tests/runtime/` | SEM §8.1/§9: EQWindow {id, owner, nest_level, kind, deadline, budget_paid, draft}; EQTransaction 従属 (互換 wrapper); 暗黙 L0 window (turn_ready→suspend); meta-cost budget (owner state 支払い, chain 中非回復, 絶対 max depth backstop); deadline 既定 = rollback + close + `window_closed(cause: deadline)`, close 前 hook で明示 commit; `window_opened/closed` trace 実 emit。coverage row flip。 |
+| EQM-113 | COMPLETE | EQM-112 | `docs/plan/2026-06-09_event_queue_manager/EQM-113_resolution_pipeline/` | 解決 pipeline 統合 (coverage: resolution-pipeline, reaction-schedule, expiry-event, invalidate-actor)。 | `runtime/eq_runtime.gd`, `runtime/eq_reservation_runtime.gd`, `runtime/eq_trigger_engine.gd`, `runtime/eq_effect_chunk.gd`, `runtime/eq_node_bridge.gd`, `tests/core/`, `tests/trigger/` | SEM §6.1–§6.3/§13: 5-step pipeline に advance/resolve_next 統合; effect_name 宣言 linkage (未登録 = 安定 error, 空 = effect なし解決); chunk へ解決時記録 + drain; fired reaction は schedule 化 (in-place `fire_cascade` 廃止, bounded rounds + round 番号 trace); expiry event (`closed_by: duration/reaction_count/already_closed`); `invalidate_actor` (mode 中立, `closed_by: actor_removed`, bridge 配線); golden 更新は明示 flag。coverage rows flip。 |
+| EQM-114 | READY | EQM-113 | `docs/plan/2026-06-09_event_queue_manager/EQM-114_window_model/` | Window object model (coverage: window-object-model)。 | `runtime/eq_window.gd`, `runtime/eq_runtime.gd`, `runtime/eq_transaction.gd`, `tests/transaction/`, `tests/runtime/` | SEM §8.1/§9: EQWindow {id, owner, nest_level, kind, deadline, budget_paid, draft}; EQTransaction 従属 (互換 wrapper); 暗黙 L0 window (turn_ready→suspend); meta-cost budget (owner state 支払い, chain 中非回復, 絶対 max depth backstop); deadline 既定 = rollback + close + `window_closed(cause: deadline)`, close 前 hook で明示 commit; `window_opened/closed` trace 実 emit。coverage row flip。 |
 | EQM-115 | BACKLOG | EQM-114 | `docs/plan/2026-06-09_event_queue_manager/EQM-115_ordering_hook/` | Ordering hook (coverage: ordering-hook)。 | `runtime/eq_runtime.gd`, `resources/eq_config.gd`, `tests/core/`, `tests/golden/` | SEM §7.1: `order_simultaneous(candidates) -> permutation`; candidates view = serializable (entity stat / event tag / event-line 値 / nest level); 既定 = 発行順; hook 出力の golden 被覆; live object 拒否 validation。composite atomic bundle は defer 明記 (実装しない)。coverage row flip。 |
 | EQM-116 | BACKLOG | EQM-115 | `docs/plan/2026-06-09_event_queue_manager/EQM-116_race_pattern/` | Race pattern (coverage: race-pattern)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `runtime/ui/eq_debug_overlay.gd`, `tests/trigger/`, `tests/golden/` | SEM §5.2/§5.4: race-group id (deterministic 採番); OR 解決の racing events 発行 API; 勝者 = hook → 発行順, 敗者は OR invalidation で一掃 (`closed_by`); trace に race_group field; debug overlay で race group を候補群として集約表示 (3 表示分離の最小実装 — EQM 内部 debug と開発者 debug)。coverage row flip。 |
 | EQM-117 | BACKLOG | EQM-116 | `docs/plan/2026-06-09_event_queue_manager/EQM-117_snapshot_v2/` | Snapshot v2 + save 境界 enforcement (coverage: snapshot-v2 + save-enforcement)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `runtime/eq_manager.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/core/`, `tests/transaction/` | SEM §10: schema_version 2 (event_lines/windows/armed_triggers additive, 条件 inline); v1→v2 migrator (欠落 = 空); v2-in-v1 = 安定 error; `is_save_allowed` を save 経路へ配線 (chunk 非空 = 安定 error, force flag なし); draft save 既定 = rollback to boundary; replay 証明拡張 (条件/line/window を跨ぐ roundtrip → 同一 pop 順 + 同一 trace)。coverage row flip。 |
@@ -162,7 +162,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: `EQM-113` (Phase 11; EQM-110/111/112 COMPLETE 2026-07-02)。
+Current: `EQM-114` (Phase 11; EQM-110/111/112/113 COMPLETE 2026-07-02)。
 
 ## Proof log
 
@@ -964,3 +964,28 @@ proof:
 ```
 
 Dependency sweep: EQM-112 COMPLETE → EQM-113 READY (解決 pipeline 統合)。Current pointer → EQM-113。
+
+### EQM-113 — COMPLETE (2026-07-02)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-113_resolution_pipeline/
+  review: docs/review/autopilot/EQM-113_SELF_REVIEW_2026-07-02.md
+  pattern: P0 (orchestrator-direct); repair 1/3 (新規 file の EOF 改行欠落 → parse error 修正のみ; 挙動変更なし)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS; files=54 checks=839 failures=0; [api-surface] ok (no L3 leak); [contract-coverage] violations=0
+  gate: §4 core (5-step pipeline / 宣言 linkage / chunk=save 境界 / Q27 検出 tick push / lazy+sweep invalidation / invalidation-wins / invalidate_actor mode 中立)
+      + trigger (reaction schedule 化 / round trace / 有界 cascade / expiry event closed_by 三種)
+  surface: api_surface.json re-baselined via explicit --update
+    (+EQActionDefinition.priority/effect_name/expiry_effect_name; +EQRuntime.register_effect/has_effect/effects/invalidate_actor;
+     EQReservationRuntime pipeline 面 (+lines/chunk/engine/last_drained/max_cascade_rounds/step_tick/invalidate_actor/pending_conditional, submit +reaction_condition);
+     EQTriggerEngine: -fire_cascade/-max_chain/-faults, +disarm/+disarm_for/+expired — in-place cascade の廃止, replace stance)
+  goldens: demo/dogfood trace golden は不変 (fire_cascade/EQReservationRuntime 非使用を確認; sync_primary は無記録の鏡に変更)
+  coverage: resolution-pipeline / reaction-schedule / expiry-event / invalidate-actor -> implemented
+  major files:
+    - addons/event_queue_manager/runtime/eq_reservation_runtime.gd (pipeline 再構成), eq_runtime.gd (+effect registry/+invalidate_actor), eq_trigger_engine.gd (契約変更), eq_node_bridge.gd (正規経路配線), eq_event_lines.gd (sync_primary 無記録化)
+    - addons/event_queue_manager/resources/eq_action_definition.gd (+3 fields), runtime/eq_error.gd (+1 code), docs/design/ERROR_CONTRACT.md, docs/design/EVENT_MODEL_SEMANTICS.md (§11 kinds 追記)
+    - test_project/tests/core/test_eq_resolution_pipeline.gd (new), tests/trigger/test_eq_reaction_pipeline.gd (new), tests/trigger/test_eq_rumination_cycle_guard.gd (新契約へ更新)
+```
+
+Dependency sweep: EQM-113 COMPLETE → EQM-114 READY (window object model)。Current pointer → EQM-114。

@@ -1,43 +1,76 @@
 class_name EQReservationRuntime
 extends RefCounted
-## L2 reservation scheduling/resolution pipeline over an EQRuntime.
+## L2 resolution pipeline over an EQRuntime — THE one integration contract
+## (SEM §6.1, EQM-113). One resolution is exactly:
 ##
-## submit() places a reservation on the queue according to its kind; resolve_next()
-## pops the next ready reservation, marks it resolved, and applies its effect:
-##   immediate  -> resolves at delay 0
-##   prepared   -> resolves after delay
-##   ready      -> the turn-grant (delay = AP recovery; the AP model is EQM-052)
-##   wait       -> schedules a READY reservation (the actor's next turn)
-##   operation  -> on resolution, causes a reservation on the target
-##   reaction_preparation -> armed (no scheduled event); the trigger that fires it
-##                           is EQM-061
+##   1. pop    — runtime.advance() (lazy invalidation: level-evaluated
+##               invalidation terms drop the event with `closed_by`)
+##   2. effect — the declared named effect handler (empty = effect-less;
+##               set-but-unregistered = stable error, never a silent skip)
+##   3. chunk  — returned EQEffectRecords append to the effect chunk
+##   4. sweep  — triggers fire and are SCHEDULED (never resolved in place,
+##               §6.2), numeric invalidation is re-checked, pending
+##               condition-gated reservations are pushed at the detection
+##               tick (Q27 key assignment)
+##   5. trace/drain — the chunk drains into `last_drained`; chunk-empty =
+##               the save boundary (§10)
 ##
-## Conditions (EQM-060) and trigger firing / rumination cycle guard (EQM-061/062)
-## build on this skeleton. Resolution events flow through EQRuntime.advance, so
-## they appear in the canonical trace (kind = "reservation").
+## Reservation kinds behave as EQM-051/052 defined (immediate/prepared/ready/
+## wait/operation/rumination). Duration expiry is an expiry EVENT on the master
+## timeline (§6.3): `closed_by: duration / reaction_count / already_closed`.
+## Actor departure is the normal path `invalidate_actor` (§13, Q39) — mode-
+## neutral, `closed_by: actor_removed`.
+##
+## This class owns the L3 EQEventLines; it never appears in an L0/L1 signature.
 
 const EQRuntime := preload("eq_runtime.gd")
 const EQReservation := preload("eq_reservation.gd")
 const EQActionDefinition := preload("../resources/eq_action_definition.gd")
+const EQConditionSpec := preload("../resources/eq_condition_spec.gd")
+const EQConditionEval := preload("eq_condition_eval.gd")
+const EQEventLines := preload("eq_event_lines.gd")
+const EQEffectChunk := preload("eq_effect_chunk.gd")
+const EQTriggerEngine := preload("eq_trigger_engine.gd")
 
 var runtime: EQRuntime
-var _by_event: Dictionary = {}        # event_id -> EQReservation
-var _armed: Array[EQReservation] = []  # reaction preparations awaiting a trigger
+var lines: EQEventLines
+var chunk: EQEffectChunk
+var engine: EQTriggerEngine
+
+## Records drained from the chunk by the last resolve_next() call (§6.1 step 5).
+var last_drained: Array = []
+## Engineering backstop for same-tick reaction cascades (§6.2 bounded rounds).
+var max_cascade_rounds: int = 8
+
+var _by_event: Dictionary = {}          # event_id -> EQReservation (scheduled)
+var _bound_inv: Dictionary = {}         # event_id -> Array bound invalidation terms
+var _expiry_by_event: Dictionary = {}   # expiry event_id -> EQReservation
+var _pending_conditional: Array[Dictionary] = []  # {res, solve, inv, view} in submit order
+var _cascade_tick: int = -1
+var _cascade_round: int = 0
 
 
 func _init(p_runtime = null) -> void:
 	runtime = p_runtime if p_runtime != null else EQRuntime.new()
+	lines = EQEventLines.new(runtime.trace())
+	chunk = EQEffectChunk.new()
+	engine = EQTriggerEngine.new()
 
 
-## Schedules (or arms) a reservation per its kind. Returns the scheduler event_id,
-## or -1 for a reaction preparation (armed, not scheduled) or a rejected schedule.
-func submit(res: EQReservation) -> int:
+## Schedules (or arms) a reservation per its kind. A reservation with solve
+## conditions is condition-gated: it stays pending and is pushed at the tick
+## its conditions are detected to hold (Q27). For a REACTION_PREPARATION,
+## `reaction_condition` (EQCondition) selects the triggering events; a
+## duration > 0 schedules its expiry event (§6.3). Returns the scheduler
+## event_id, or -1 (armed / condition-gated / rejected).
+func submit(res: EQReservation, reaction_condition = null) -> int:
+	var v := res.validate()
+	if not v.is_valid():
+		var issue = v.errors()[0] if not v.errors().is_empty() else v.issues[0]
+		runtime._fault(issue["code"], issue["message"], {"actor_id": String(res.actor_id)}, true)
+		return -1
 	var kind := res.definition.kind
 	match kind:
-		EQActionDefinition.Kind.IMMEDIATE:
-			return _schedule(res, 0)
-		EQActionDefinition.Kind.PREPARED, EQActionDefinition.Kind.READY, EQActionDefinition.Kind.OPERATION:
-			return _schedule(res, res.definition.delay)
 		EQActionDefinition.Kind.WAIT:
 			# ending the turn schedules the actor's next turn as a READY reservation
 			res.status = EQReservation.Status.RESOLVED
@@ -47,13 +80,59 @@ func submit(res: EQReservation) -> int:
 			return submit(EQReservation.new(res.actor_id, ready_def))
 		EQActionDefinition.Kind.REACTION_PREPARATION:
 			res.status = EQReservation.Status.ARMED
-			_armed.append(res)
+			engine.arm(res, reaction_condition, runtime.scheduler.current_tick)
+			if res.definition.duration > 0:
+				var expiry_id := runtime.schedule(res.actor_id, runtime.scheduler.current_tick + res.definition.duration, 0, &"expiry")
+				if expiry_id > 0:
+					_expiry_by_event[expiry_id] = res
 			return -1
+		_:
+			var bound := _bind_conditions(res)
+			if not (bound["solve"] as Array).is_empty():
+				res.status = EQReservation.Status.PENDING
+				_pending_conditional.append({
+					"res": res, "solve": bound["solve"], "inv": bound["inv"], "view": _view_of(res),
+				})
+				return -1
+			var id := _schedule(res, res.definition.delay if kind != EQActionDefinition.Kind.IMMEDIATE else 0)
+			if id > 0 and not (bound["inv"] as Array).is_empty():
+				_bound_inv[id] = bound["inv"]
+			return id
 	return -1
 
 
+## Binds the normalized condition sets (SEM §5.6 sugar folded in) into
+## evaluator terms. Declared COUNTER specs get their runtime counter line here
+## (deterministic issuance). The rumination sugar keeps its runtime store
+## (`remaining_ruminations`, POLICY.md) and the duration sugar for reactions is
+## realized as an expiry event — both are skipped from polled terms.
+func _bind_conditions(res: EQReservation) -> Dictionary:
+	var n: Dictionary = res.definition.normalized_conditions()
+	var ctx := {"lines": lines.ctx_lines()}
+	var solve: Array = []
+	var seq := 0
+	for spec in n["solve"]:
+		solve.append(_bind_one(spec, "solve", seq, ctx))
+		seq += 1
+	var inv: Array = []
+	seq = 0
+	for spec in n["invalidation"]:
+		if spec.condition_id == &"reaction_count":
+			seq += 1
+			continue
+		inv.append(_bind_one(spec, "invalidation", seq, ctx))
+		seq += 1
+	return {"solve": solve, "inv": inv}
+
+
+func _bind_one(spec: EQConditionSpec, group: String, index: int, ctx: Dictionary) -> Dictionary:
+	if spec.type == EQConditionSpec.Type.COUNTER:
+		return EQConditionEval.bind(spec, group, index, ctx, lines.issue_counter(spec.counter_start))
+	return EQConditionEval.bind(spec, group, index, ctx)
+
+
 func _schedule(res: EQReservation, delay: int) -> int:
-	var id := runtime.schedule(res.actor_id, runtime.scheduler.current_tick + delay, 0, &"reservation")
+	var id := runtime.schedule(res.actor_id, runtime.scheduler.current_tick + delay, res.definition.priority, &"reservation")
 	if id > 0:
 		res.event_id = id
 		res.status = EQReservation.Status.PENDING
@@ -61,26 +140,236 @@ func _schedule(res: EQReservation, delay: int) -> int:
 	return id
 
 
-## Resolves the next ready reservation, applying its effect. Returns the resolved
-## reservation, or null when the next event is not a tracked reservation / queue
-## is empty.
+## Resolves the next ready reservation through the §6.1 pipeline. Returns the
+## resolved reservation; null when the queue is empty or the next event is not
+## a tracked reservation (the L0 path). Expiry events are consumed internally.
 func resolve_next() -> EQReservation:
-	var e := runtime.advance()
-	if e == null:
-		return null
-	var res = _by_event.get(e.event_id, null)
-	if res == null:
-		return null
-	_by_event.erase(e.event_id)
-	res.status = EQReservation.Status.RESOLVED
-	if res.definition.kind == EQActionDefinition.Kind.OPERATION:
-		_cause_target_reservation(res)
-	# rumination: a resolved reservation with ruminations left decrements and
-	# reschedules itself (count-bounded, so it cannot loop forever).
-	if res.remaining_ruminations > 0:
-		res.remaining_ruminations -= 1
-		submit(res)
-	return res
+	last_drained = []
+	while true:
+		var e := runtime.advance()
+		if e == null:
+			return null
+		lines.sync_primary(runtime.scheduler.current_tick)
+		if _expiry_by_event.has(e.event_id):
+			_resolve_expiry(e)
+			continue
+		var res = _by_event.get(e.event_id, null)
+		if res == null:
+			return null
+		_by_event.erase(e.event_id)
+		# step 1b — lazy invalidation at reference time (level semantics)
+		var inv_terms = _bound_inv.get(e.event_id, [])
+		_bound_inv.erase(e.event_id)
+		if not inv_terms.is_empty():
+			var inv := EQConditionEval.invalidation_check(inv_terms, _ctx(_view_of(res)))
+			if int(inv["result"]) == EQConditionEval.Result.YES:
+				res.status = EQReservation.Status.INVALIDATED
+				_trace_invalidated(e.event_id, res.actor_id, StringName(inv["closed_by"]))
+				continue
+			if int(inv["result"]) == EQConditionEval.Result.FAULT:
+				var f: Dictionary = inv["fault"]
+				runtime._fault(f["code"], f["message"], f.get("context", {}), true)
+				continue
+		res.status = EQReservation.Status.RESOLVED
+		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
+			_cause_target_reservation(res)
+		# step 2/3 — declared effect into the chunk
+		for r in _apply_effect(res.definition.effect_name, _view_of(res)):
+			chunk.add(r)
+		# rumination reschedule (count-bounded; reactions re-arm in the ENGINE
+		# at fire time instead — re-submitting here would double-arm them)
+		if res.definition.kind != EQActionDefinition.Kind.REACTION_PREPARATION and res.remaining_ruminations > 0:
+			res.remaining_ruminations -= 1
+			submit(res)
+		# step 4 — sweep
+		_sweep(_view_of(res))
+		# step 5 — drain; chunk-empty = save boundary
+		last_drained.append_array(chunk.drain())
+		return res
+	return null
+
+
+## Advances time by one tick when no event is due: syncs the primary line,
+## polls watched lines, runs the pattern-(2) sweep rules, and evaluates pending
+## conditions (a held condition pushes its event at THIS tick — Q27).
+func step_tick() -> void:
+	runtime.scheduler.current_tick += 1
+	var tick := runtime.scheduler.current_tick
+	lines.sync_primary(tick)
+	lines.poll_tick(_watched())
+	lines.run_sweep_rules(runtime.registry)
+	_recheck_scheduled_invalidation()
+	_evaluate_pending_conditional()
+
+
+## Normal-path departure (SEM §13, Q39): disarms the actor's reactions, drops
+## its pending condition-gated reservations, cancels its scheduled events (via
+## EQRuntime.invalidate_actor), all with `closed_by: <cause>` traces. Mode-
+## neutral. Returns the number of cancelled scheduler events.
+func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed") -> int:
+	for r in engine.disarm_for(actor_id):
+		(r as EQReservation).status = EQReservation.Status.INVALIDATED
+		_trace_invalidated(-1, actor_id, cause)
+	var still: Array[Dictionary] = []
+	for p in _pending_conditional:
+		if (p["res"] as EQReservation).actor_id == actor_id:
+			(p["res"] as EQReservation).status = EQReservation.Status.INVALIDATED
+			_trace_invalidated(-1, actor_id, cause)
+		else:
+			still.append(p)
+	_pending_conditional = still
+	for event_id in _by_event.keys():
+		if (_by_event[event_id] as EQReservation).actor_id == actor_id:
+			(_by_event[event_id] as EQReservation).status = EQReservation.Status.INVALIDATED
+			_by_event.erase(event_id)
+			_bound_inv.erase(event_id)
+	for event_id in _expiry_by_event.keys():
+		if (_expiry_by_event[event_id] as EQReservation).actor_id == actor_id:
+			_expiry_by_event.erase(event_id)
+	return runtime.invalidate_actor(actor_id, cause)
+
+
+# --- pipeline internals ----------------------------------------------------
+
+## §6.3 — an expiry event resolves: still armed -> close with `closed_by:
+## duration` (+ optional expiry effect, through the pipeline); already closed
+## -> a lightweight `closed_by: already_closed` record.
+func _resolve_expiry(e) -> void:
+	var res: EQReservation = _expiry_by_event[e.event_id]
+	_expiry_by_event.erase(e.event_id)
+	if res.status == EQReservation.Status.ARMED:
+		engine.disarm(res)
+		res.status = EQReservation.Status.INVALIDATED
+		_trace_invalidated(e.event_id, res.actor_id, &"duration")
+		for r in _apply_effect(res.definition.expiry_effect_name, _view_of(res)):
+			chunk.add(r)
+		_sweep(_view_of(res))
+		last_drained.append_array(chunk.drain())
+	else:
+		_trace_invalidated(e.event_id, res.actor_id, &"already_closed")
+
+
+## §6.1 step 2 — declared linkage: empty = effect-less; set-but-unregistered =
+## stable error (dev halt / shipped skip), never a silent skip.
+func _apply_effect(name: StringName, view: Dictionary) -> Array:
+	if name == &"":
+		return []
+	if not runtime.has_effect(name):
+		runtime._fault(EQError.EFFECT_UNREGISTERED, "effect '%s' has no registered handler" % name, {"effect": String(name)}, true)
+		return []
+	var out = (runtime.effects()[name] as Callable).call(view)
+	return out if out is Array else []
+
+
+## §6.2/§6.1 step 4 — the sweep point: fire triggers (fired reactions are
+## SCHEDULED at the current tick with their declared priority, bounded by
+## same-tick rounds), re-check numeric invalidation, evaluate pending
+## conditions.
+func _sweep(view: Dictionary) -> void:
+	var tick := runtime.scheduler.current_tick
+	var fired := engine.on_event_resolved(view, tick)
+	if not fired.is_empty():
+		if tick == _cascade_tick:
+			_cascade_round += 1
+		else:
+			_cascade_tick = tick
+			_cascade_round = 1
+		if _cascade_round > max_cascade_rounds:
+			runtime._fault(EQError.TRIGGER_CHAIN_LIMIT, "same-tick reaction cascade exceeded %d rounds" % max_cascade_rounds, {"tick": tick}, true)
+		else:
+			for res in fired:
+				var consumed: bool = (res as EQReservation).status == EQReservation.Status.RESOLVED
+				if consumed:
+					# the armed slot closed by count exhaustion (its final
+					# resolution still happens through the schedule below)
+					_trace_invalidated(-1, (res as EQReservation).actor_id, &"reaction_count")
+				var id := _schedule(res, 0)
+				runtime.trace().record({
+					"kind": "reaction_fired",
+					"round": _cascade_round,
+					"actor": String((res as EQReservation).actor_id),
+					"event_id": id,
+				})
+	_recheck_scheduled_invalidation()
+	_evaluate_pending_conditional()
+
+
+## §5.3 numeric "eager": invalidation terms of scheduled reservations are
+## re-evaluated at every sweep; a holding term cancels the event with its
+## `closed_by` — looks eager, evaluated at a defined point.
+func _recheck_scheduled_invalidation() -> void:
+	for event_id in _bound_inv.keys():
+		var res: EQReservation = _by_event.get(event_id, null)
+		if res == null:
+			_bound_inv.erase(event_id)
+			continue
+		var inv := EQConditionEval.invalidation_check(_bound_inv[event_id], _ctx(_view_of(res)))
+		if int(inv["result"]) == EQConditionEval.Result.YES:
+			runtime.scheduler.cancel(event_id)
+			res.status = EQReservation.Status.INVALIDATED
+			_by_event.erase(event_id)
+			_bound_inv.erase(event_id)
+			_trace_invalidated(event_id, res.actor_id, StringName(inv["closed_by"]))
+
+
+## §5.4 — pending condition-gated reservations: a held solve set pushes the
+## event at the detection tick (fresh sequence, declared priority); a held
+## invalidation drops it (invalidation-wins).
+func _evaluate_pending_conditional() -> void:
+	var still: Array[Dictionary] = []
+	for p in _pending_conditional:
+		var res: EQReservation = p["res"]
+		var ctx := _ctx(p["view"])
+		var solve := EQConditionEval.solve_holds(p["solve"], ctx)
+		var inv := EQConditionEval.invalidation_check(p["inv"], ctx)
+		match EQConditionEval.decide(solve, inv):
+			EQConditionEval.Outcome.INVALIDATE:
+				res.status = EQReservation.Status.INVALIDATED
+				_trace_invalidated(-1, res.actor_id, StringName(inv["closed_by"]))
+			EQConditionEval.Outcome.RESOLVE:
+				var id := _schedule(res, 0)
+				if id > 0 and not (p["inv"] as Array).is_empty():
+					_bound_inv[id] = p["inv"]
+			EQConditionEval.Outcome.FAULT:
+				var f: Dictionary = (inv["fault"] if inv["fault"] != null else solve["fault"])
+				runtime._fault(f["code"], f["message"], f.get("context", {}), true)
+			_:
+				still.append(p)
+	_pending_conditional = still
+
+
+func _watched() -> Dictionary:
+	var term_sets: Array = []
+	for p in _pending_conditional:
+		term_sets.append(p["solve"])
+		term_sets.append(p["inv"])
+	for event_id in _bound_inv:
+		term_sets.append(_bound_inv[event_id])
+	return EQEventLines.derive_watched(term_sets)
+
+
+func _ctx(view: Dictionary) -> Dictionary:
+	return {"lines": lines.ctx_lines(), "predicates": runtime.predicates(), "view": view}
+
+
+func _view_of(res: EQReservation) -> Dictionary:
+	return {
+		"kind": &"reservation",
+		"source": res.actor_id,
+		"target": res.target_id,
+		"tags": res.definition.tags if res.definition != null else [],
+	}
+
+
+func _trace_invalidated(event_id: int, actor_id: StringName, closed_by: StringName) -> void:
+	var fields := {
+		"kind": "event_invalidated",
+		"actor": String(actor_id),
+		"closed_by": String(closed_by),
+	}
+	if event_id > 0:
+		fields["event_id"] = event_id
+	runtime.trace().record(fields)
 
 
 ## An OPERATION reservation, on resolving, makes its target hold a reaction
@@ -95,9 +384,14 @@ func _cause_target_reservation(op_res: EQReservation) -> void:
 
 ## Reaction preparations currently armed for an actor.
 func armed_for(actor_id: StringName) -> Array:
-	return _armed.filter(func(r): return r.actor_id == actor_id)
+	return engine.armed_for(actor_id).map(func(a): return a["reservation"])
 
 
-## Reservations scheduled (pending) but not yet resolved, optionally filtered by kind.
+## Reservations scheduled (pending) but not yet resolved.
 func pending() -> Array:
 	return _by_event.values()
+
+
+## Condition-gated reservations awaiting their solve conditions (SEM §5.4).
+func pending_conditional() -> Array:
+	return _pending_conditional.map(func(p): return p["res"])
