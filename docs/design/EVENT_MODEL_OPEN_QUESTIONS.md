@@ -30,7 +30,7 @@ semantics は確定し `docs/design/EVENT_MODEL_SEMANTICS.md` (契約) と `docs
 | Q09 effect 順序/trigger 収集 | SEM §6 (sweep) / §7 (composite) |
 | Q10 actor lifecycle | SEM §13 |
 | Q11 数値域 | SEM §12 |
-| Q12 感知分類 | SEM §11 (presentation reserved; impl Phase 8) |
+| Q12 感知分類 | SEM §11 (classification は simulation 側 data と明記, v1.1 追記) — 実装は EQM-080/081 (`EQEffectRecord.classification`) |
 | Q13 timeline 単一性 | SEM §15 + COV row 5 (4X) |
 | Q14 反芻経済 | SEM §16 (reservation field reserved; impl EQM-050/062) |
 | Q15 replay 製品化 | deferred (registry; post-v1) |
@@ -484,25 +484,45 @@ user意見:
 
 経緯: v1.0 RC 完了後の契約監査 (`docs/review/EVENT_MODEL_DESIGN_GAP_AUDIT_2026-07-02.md`) で、(a) SEM §16 凍結契約が予約のみで未実装であること、(b) それらを実装するには SEM の記述粒度では足りない設計詳細が残ることを確認した。本 round はその設計詳細を確定し、v1.x 実装 queue (EQM-110 系、監査報告 §5) の入力にする。各項目は Q16–Q26 と同じ形式で、`user意見:` 欄へ inline 注釈を入れてください。決定後は SEM v1.1 (EQM-110) へ確定記述し、各項目を pointer に置き換える。
 
+### Finalization (EQM-110, 2026-07-02)
+
+全 17 項目がユーザー注釈により確定した (Q31 は相談つき条件承認 → reconciliation で解決)。確定記述は `EVENT_MODEL_SEMANTICS.md` **v1.1** の *(v1.1)* 節、根拠は `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`。実装対応は `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md` が追跡する。
+
+| Q | 決定の記録先 (SEM v1.1) | 実装 owner |
+|---|---|---|
+| Q27 key 導出 / Q28 invalidation-wins・race 勝者 / Q29 level AND | SEM §5.4 | EQM-111/113 |
+| Q30 named predicate registry | SEM §5.5 | EQM-111 |
+| Q31 解決 pipeline (宣言 linkage の effect callback) | SEM §6.1 | EQM-113 |
+| Q32 reaction schedule 化 | SEM §6.2 | EQM-113 |
+| Q33 event-line data model / Q34 threshold level 意味論 | SEM §4.6 | EQM-112 |
+| Q35 sweep rule registry (effect grouping は declared follow-up) | SEM §4.7 | EQM-112 |
+| Q36 window object model / Q37 deadline 既定 | SEM §8.1 / §9 | EQM-114 |
+| Q38 ordering hook (bundle は後段) | SEM §7.1 | EQM-115 |
+| Q39 invalidate_actor 正規経路 | SEM §13 | EQM-113 |
+| Q40 expiry event 化 | SEM §6.3 / §11 | EQM-113 |
+| Q41 snapshot v2 + save 配線 | SEM §10 | EQM-117 |
+| Q42 authoring surface (受け入れ基準凍結) | SEM §5.6 | EQM-119 (schema は EQM-111) |
+| Q43 性能予算 | SEM §12.1 | EQM-112 |
+
 | id | status | 領域 |
 |---|---|---|
-| Q27 | RECOMMENDED | 条件成立 event の ordering key 導出 |
-| Q28 | RECOMMENDED | solve/invalidation 同時成立・race 勝者 |
-| Q29 | RECOMMENDED | solve AND の評価様式 (level / latched) |
-| Q30 | RECOMMENDED | predicate 条件の serialize (named registry) |
-| Q31 | PIVOT | 解決 pipeline の callback 契約 |
-| Q32 | RECOMMENDED | fired reaction の解決方式 (nest / schedule) |
-| Q33 | RECOMMENDED | event-line update rule の表現 (data 限定) |
-| Q34 | RECOMMENDED | threshold 意味論 (level 統一 / repeating) |
-| Q35 | RECOMMENDED | pattern (2) sweep rule の宣言・serialize |
-| Q36 | RECOMMENDED | window の object model |
-| Q37 | RECOMMENDED | deadline 到達時の既定動作 |
-| Q38 | RECOMMENDED | composite 形成規則と hook signature |
-| Q39 | RECOMMENDED | actor 離脱の正規 invalidation 経路 (Q05 是正) |
-| Q40 | RECOMMENDED | duration expiry の event 化形 (Q06 是正) |
-| Q41 | RECOMMENDED | snapshot schema v2 (additive) |
-| Q42 | RECOMMENDED | L2 authoring surface (行動解決ターン制) |
-| Q43 | OPEN | event-line polling 性能予算数値 |
+| Q27 | DECIDED(user) | 条件成立 event の ordering key 導出 |
+| Q28 | DECIDED(user) | solve/invalidation 同時成立・race 勝者 |
+| Q29 | DECIDED(user) | solve AND の評価様式 (level / latched) |
+| Q30 | DECIDED(user) | predicate 条件の serialize (named registry) |
+| Q31 | DECIDED(user) | 解決 pipeline の callback 契約 (PIVOT; reconciliation 済み) |
+| Q32 | DECIDED(user) | fired reaction の解決方式 (nest / schedule) |
+| Q33 | DECIDED(user) | event-line update rule の表現 (data 限定) |
+| Q34 | DECIDED(user) | threshold 意味論 (level 統一 / repeating) |
+| Q35 | DECIDED(user) | pattern (2) sweep rule の宣言・serialize |
+| Q36 | DECIDED(user) | window の object model |
+| Q37 | DECIDED(user) | deadline 到達時の既定動作 |
+| Q38 | DECIDED(user) | composite 形成規則と hook signature |
+| Q39 | DECIDED(user) | actor 離脱の正規 invalidation 経路 (Q05 是正) |
+| Q40 | DECIDED(user) | duration expiry の event 化形 (Q06 是正) |
+| Q41 | DECIDED(user) | snapshot schema v2 (additive) |
+| Q42 | DECIDED(user) | L2 authoring surface (行動解決ターン制) |
+| Q43 | DECIDED(user) | event-line polling 性能予算数値 |
 
 ## Q27 — 条件成立 event の ordering key 導出 [RECOMMENDED]
 
@@ -570,6 +590,8 @@ consumer 実装点は effect callback / (optional) comparator hook / (optional) 
 擦り合わせたい点: effect callback を必須にするか (L0/L1 の現行 `finish_action` 流儀は「effect なし解決」として残す)。chunk drain のタイミング (各 event 後 / 各 sweep 後)。
 
 user意見: 詳しく相談したい。effect callbackがない場合、開発者が管理しにくくならないだろうか？そうでなければ任意項目で構わない。
+
+→ reconciliation (2026-07-02): 管理しやすさは「必須化」ではなく「**宣言したら必ず結線される**」ことで担保する — 宣言 linkage 方式。`EQActionDefinition.effect_name` (optional) を導入し、設定された reservation の解決は named effect registry (`register_effect(name, callable)`, Q30/Q35 と同一機構) の handler を呼び、返る EffectRecords を chunk へ積む。**設定済み + 未登録 = 安定 error** (silent skip 禁止)。空 = 明示的 effect なしで合法 (WAIT/READY、L0/L1 の `finish_action` 流儀)。「callback を書いたのに呼ばれない / 宣言したのに handler がない」が error で塞がれるため、任意項目でも管理性は落ちない — user の条件節を満たし**任意項目で確定**。L2 の natural path は named-effect (docs/template/dogfood で提示)。SEM §6.1。
 
 ## Q32 — fired reaction の解決方式 (nest / schedule) [RECOMMENDED]
 

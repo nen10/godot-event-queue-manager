@@ -66,6 +66,11 @@ if command -v python3 >/dev/null 2>&1; then
       python3 tools/check_api_surface.py | tee "${OUT_DIR}/api_surface.log" || PY_FAIL=1
     fi
   fi
+  if [[ -f tools/check_contract_coverage.py ]]; then
+    log "running tools/check_contract_coverage.py (frozen-contract coverage gate, EQM-110)"
+    python3 tools/check_contract_coverage.py --self-test | tee "${OUT_DIR}/contract_coverage_selftest.log" || PY_FAIL=1
+    python3 tools/check_contract_coverage.py | tee "${OUT_DIR}/contract_coverage.log" || PY_FAIL=1
+  fi
 else
   log "skip python checks (python3 not found)"
 fi

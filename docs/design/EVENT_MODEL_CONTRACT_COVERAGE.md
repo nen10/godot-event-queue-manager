@@ -1,0 +1,40 @@
+# Event Model Contract Coverage
+
+目的: `EVENT_MODEL_SEMANTICS.md` の凍結契約ごとに { owning task, 実装 file, test } を対応させ、「宣言のみで未実装」の再発 (2026-07-02 監査で確定した v1.0 の drift) を機械検査で防ぐ。検査は `tools/check_contract_coverage.py` が行い、`./tools/test.sh` の gate である。
+
+規則:
+
+- `status = implemented` の行は、`implementation` / `tests` 列の**全 path が実在**しなければ FAIL。
+- `status = reserved` の行は、`owning task` 列の task が**すべて** `COMPLETE` / `COMPLETE_WITH_BACKLOG` になった時点で reserved のままなら FAIL (task を閉じる前に本表を flip する)。
+- 行の追加・変更は SEM の契約変更 (re-freeze 記録) と同じ commit で行う。
+- path は repo root 相対。複数 path は `<br>` 区切り。
+
+<!-- coverage-table: DO NOT reformat column order; parsed by tools/check_contract_coverage.py -->
+
+| contract | SEM | owning task | status | implementation | tests |
+|---|---|---|---|---|---|
+| master-ordering (comparator / reschedule-only) | §3 | EQM-010, EQM-011 | implemented | addons/event_queue_manager/runtime/eq_ordering.gd<br>addons/event_queue_manager/runtime/eq_scheduler.gd | test_project/tests/core/test_eq_ordering.gd<br>test_project/tests/core/test_eq_scheduler.gd |
+| snapshot-v1 (schema_version / stable load error) | §10 | EQM-012 | implemented | addons/event_queue_manager/runtime/eq_snapshot.gd | test_project/tests/core/test_eq_snapshot.gd |
+| trace-open-schema (canonical trace / golden) | §11 | EQM-013 | implemented | addons/event_queue_manager/runtime/eq_trace.gd | test_project/tests/core/test_eq_trace_golden.gd<br>test_project/tests/core/test_eq_trace_properties.gd |
+| resilience-two-mode (dev fail-fast / shipped fail-safe) | §16 | EQM-022 | implemented | addons/event_queue_manager/runtime/eq_runtime.gd | test_project/tests/core/test_eq_runtime.gd |
+| actor-registry (actor_id 再利用禁止) | §13 | EQM-021 | implemented | addons/event_queue_manager/runtime/eq_actor_registry.gd | test_project/tests/resource/test_eq_actor_registry.gd |
+| sim-classification (Q12 感知分類 = simulation data) | §11 | EQM-080, EQM-081 | implemented | addons/event_queue_manager/runtime/eq_effect_record.gd<br>addons/event_queue_manager/runtime/eq_presentation_buffer.gd | test_project/tests/presentation/test_eq_effect_record.gd<br>test_project/tests/presentation/test_eq_presentation_buffer.gd |
+| conditions-contract (solve AND / invalidation OR / level 評価 / invalidation-wins / key 導出 / EQConditionSpec) | §5.4, §5.6 | EQM-111 | reserved | — | — |
+| named-predicate-registry (predicate 条件の serialize) | §5.5 | EQM-111 | reserved | — | — |
+| event-line-backend (data model / watched sparse polling / event_line_progressed) | §4.3, §4.6 | EQM-112 | reserved | — | — |
+| sweep-rule-registry (pattern (2) 実行) | §4.7 | EQM-112 | reserved | — | — |
+| progression-budgets (Q43 数値) | §12.1 | EQM-112 | reserved | — | — |
+| resolution-pipeline (5-step / 宣言 linkage effect callback / chunk 配線) | §6.1 | EQM-113 | reserved | — | — |
+| reaction-schedule (cascade bounded rounds) | §6.2 | EQM-113 | reserved | — | — |
+| expiry-event + closed_by vocabulary | §6.3, §11 | EQM-113 | reserved | — | — |
+| invalidate-actor (正規離脱経路) | §13 | EQM-113 | reserved | — | — |
+| window-object-model (EQWindow / 暗黙 L0 window / budget / deadline 既定) | §8.1, §9 | EQM-114 | reserved | — | — |
+| ordering-hook (order_simultaneous / golden 被覆) | §7.1 | EQM-115 | reserved | — | — |
+| race-pattern (race-group id / 敗者一掃 / 表示分離) | §5.2 | EQM-116 | reserved | — | — |
+| snapshot-v2 + save-enforcement (is_save_allowed 配線 / migrator) | §10 | EQM-117 | reserved | — | — |
+| reducibility-product-proof (EQM-053 の product model 再証明) | §16.1 | EQM-118 | reserved | — | — |
+| authoring-acceptance (反撃準備 .tres 受け入れ基準) | §5.6 | EQM-119 | reserved | — | — |
+
+## Deferred (coverage 対象外, 記録のみ)
+
+- composite atomic bundle (§7.1 staging 後段) / grouped・micro-event-line (Q24) / replay 製品化 (Q15) / effect grouping (Q35 follow-up)。
