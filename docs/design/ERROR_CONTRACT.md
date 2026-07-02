@@ -54,6 +54,12 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.reservation.operation_needs_target` | RESOURCE_INVALID | ERROR | editor, game | OPERATION with empty `operation_target_tag` |
 | `eqm.reservation.missing_definition` | RESOURCE_INVALID | ERROR | editor, game | `EQReservation` has no definition |
 | `eqm.trigger.chain_limit` | BUDGET_EXCEEDED | ERROR | editor, game | a trigger cascade exceeded `EQTriggerEngine.max_chain` (chain truncated, recorded) |
+| `eqm.presentation.policy_class_conflict` | RESOURCE_INVALID | ERROR | editor, game | a classification appears in both immediate and skip classes (EQM-081; row backfilled by EQM-111) |
+| `eqm.condition.line_id_empty` | RESOURCE_INVALID | ERROR | editor, game | LINE_THRESHOLD spec without a `line_id` (EQM-111) |
+| `eqm.condition.predicate_name_empty` | RESOURCE_INVALID | ERROR | editor, game | NAMED_PREDICATE spec / registration without a name |
+| `eqm.condition.counter_start_invalid` | RESOURCE_INVALID | ERROR | editor, game | COUNTER spec with `counter_start < 1` |
+| `eqm.condition.predicate_unregistered` | CONTRACT_VIOLATION | ERROR | editor, game | evaluating / loading a condition whose predicate name is not registered (SEM §5.5 stable error) |
+| `eqm.condition.line_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | a condition reads an event-line absent from the evaluation context |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

@@ -20,7 +20,7 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 | `core` | foundational infra below the user layers | EQEntry, EQOrdering, EQScheduler, EQBackend, EQSortedArrayBackend, EQBinaryHeapBackend, EQSnapshot, EQTrace, EQError, EQValidation, EQVersion, EQRng, EQEffectRecord, EQEffectChunk, EQOrderExplanation |
 | `L0` | turn order ("who acts next") | EQRuntime, EQActorRegistry, EQActorState, EQActionResult, EQManager, EQPrediction, EQSaveAdapter, EQNodeBridge |
 | `L1` | policy selection | EQConfig, EQPolicy, EQFixedRoundPolicy, EQCTBPolicy, EQEnergyPolicy, EQWaitTurnPolicy |
-| `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime, EQActionResolutionPolicy, EQCondition, EQTagMatcher, EQTriggerEngine, EQTransaction, EQTriggerIndex |
+| `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime, EQActionResolutionPolicy, EQCondition, EQTagMatcher, EQTriggerEngine, EQTransaction, EQTriggerIndex, EQConditionSpec (EQM-111), EQConditionEval (EQM-111) |
 | `L3` | event-line internals | *(Phase 5+)* |
 | `presentation` | simulation/presentation split (must not leak into L0/L1) | EQPresentationEvent, EQPresentationPolicy, EQPresentationBuffer |
 | `ui` | runtime/editor UI projections (must not leak into L0/L1) | EQTimelineHud, EQDebugOverlay, EQTimelineDock, EQDebugInspector, EQTemplateGenerator |

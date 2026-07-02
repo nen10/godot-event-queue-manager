@@ -281,9 +281,24 @@
           "returns": "-> int"
         },
         {
+          "name": "has_predicate",
+          "params": "name: StringName",
+          "returns": "-> bool"
+        },
+        {
+          "name": "predicates",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
           "name": "register_actor",
           "params": "actor_id: StringName",
           "returns": "-> EQActorState"
+        },
+        {
+          "name": "register_predicate",
+          "params": "name: StringName, predicate: Callable",
+          "returns": "-> bool"
         },
         {
           "name": "schedule",
@@ -484,7 +499,8 @@
   "L2": {
     "EQActionDefinition": {
       "consts": [
-        "DURATION_UNLIMITED"
+        "DURATION_UNLIMITED",
+        "PRIMARY_LINE_ID"
       ],
       "enums": [
         "Kind"
@@ -494,6 +510,11 @@
           "name": "from_dict",
           "params": "d: Dictionary",
           "returns": "-> EQActionDefinition"
+        },
+        {
+          "name": "normalized_conditions",
+          "params": "",
+          "returns": "-> Dictionary"
         },
         {
           "name": "to_dict",
@@ -510,9 +531,11 @@
       "vars": [
         "delay",
         "duration",
+        "invalidation_conditions",
         "kind",
         "operation_target_tag",
         "rumination",
+        "solve_conditions",
         "tags"
       ]
     },
@@ -571,6 +594,79 @@
         "match_target",
         "require_tags",
         "sensing_required"
+      ]
+    },
+    "EQConditionEval": {
+      "consts": [
+        "EQConditionSpec"
+      ],
+      "enums": [
+        "Outcome",
+        "Result"
+      ],
+      "methods": [
+        {
+          "name": "bind",
+          "params": "spec: EQConditionSpec, group: String, index: int, ctx: Dictionary, counter_line_id: StringName = &\"\"",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "decide",
+          "params": "solve: Dictionary, invalidation: Dictionary",
+          "returns": "-> int"
+        },
+        {
+          "name": "invalidation_check",
+          "params": "terms: Array, ctx: Dictionary",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "solve_holds",
+          "params": "terms: Array, ctx: Dictionary",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "term_holds",
+          "params": "term: Dictionary, ctx: Dictionary",
+          "returns": "-> Dictionary"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
+    "EQConditionSpec": {
+      "consts": [],
+      "enums": [
+        "Comparison",
+        "Type"
+      ],
+      "methods": [
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> EQConditionSpec"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "validate",
+          "params": "",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "comparison",
+        "condition_id",
+        "counter_start",
+        "line_id",
+        "predicate_name",
+        "relative",
+        "threshold",
+        "type"
       ]
     },
     "EQReservation": {
@@ -1004,6 +1100,11 @@
         "ACTOR_DUPLICATE_ID",
         "ACTOR_EMPTY_ID",
         "ACTOR_ID_REUSED",
+        "CONDITION_COUNTER_START_INVALID",
+        "CONDITION_LINE_ID_EMPTY",
+        "CONDITION_LINE_UNKNOWN",
+        "CONDITION_PREDICATE_NAME_EMPTY",
+        "CONDITION_PREDICATE_UNREGISTERED",
         "POLICY_BASE_INSTANCE",
         "POLICY_MISSING",
         "POLICY_NAME_EMPTY",

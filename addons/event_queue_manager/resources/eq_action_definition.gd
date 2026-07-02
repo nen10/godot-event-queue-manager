@@ -33,6 +33,15 @@ const DURATION_UNLIMITED := -1
 @export var rumination: int = 0
 ## For OPERATION: the tag of the reservation caused on the target.
 @export var operation_target_tag: StringName = &""
+## Solve terms — AND, level-triggered (SEM §5.4, EQM-111). Empty = no gate.
+@export var solve_conditions: Array[EQConditionSpec] = []
+## Invalidation terms — OR, invalidation-wins (SEM §5.4). `duration` and
+## `rumination` above are sugar over these; see normalized_conditions().
+@export var invalidation_conditions: Array[EQConditionSpec] = []
+
+## The primary event-line (global tick) id, referenced by the duration sugar.
+## The event-line backend (EQM-112) adopts this constant as the canonical id.
+const PRIMARY_LINE_ID := &"eqm.line.primary"
 
 
 func validate() -> EQValidation:
@@ -43,6 +52,14 @@ func validate() -> EQValidation:
 		v.add(EQError.RESERVATION_NEGATIVE_RUMINATION, "rumination must be >= 0 (got %d)" % rumination)
 	if duration < DURATION_UNLIMITED:
 		v.add(EQError.RESERVATION_INVALID_DURATION, "duration must be >= -1 (-1 = unlimited) (got %d)" % duration)
+	for i in range(solve_conditions.size()):
+		if solve_conditions[i] != null:
+			for issue in solve_conditions[i].validate().issues:
+				v.issues.append(issue)
+	for i in range(invalidation_conditions.size()):
+		if invalidation_conditions[i] != null:
+			for issue in invalidation_conditions[i].validate().issues:
+				v.issues.append(issue)
 	match kind:
 		Kind.IMMEDIATE:
 			if delay != 0:
@@ -61,6 +78,39 @@ func validate() -> EQValidation:
 	return v
 
 
+## The full condition sets with the sugar fields folded in (SEM §5.6):
+## `duration` > 0 becomes a relative LINE_THRESHOLD on the primary line
+## (condition_id "duration"; the pipeline realizes it as an expiry event, §6.3);
+## `rumination` > 0 becomes a COUNTER allowing rumination+1 resolutions
+## (condition_id "reaction_count"). Declared conditions keep their order and
+## precede the sugar terms. Returns {"solve": [...], "invalidation": [...]}.
+func normalized_conditions() -> Dictionary:
+	var solve: Array[EQConditionSpec] = []
+	for s in solve_conditions:
+		if s != null:
+			solve.append(s)
+	var invalidation: Array[EQConditionSpec] = []
+	for s in invalidation_conditions:
+		if s != null:
+			invalidation.append(s)
+	if duration > 0:
+		var dur := EQConditionSpec.new()
+		dur.type = EQConditionSpec.Type.LINE_THRESHOLD
+		dur.line_id = PRIMARY_LINE_ID
+		dur.threshold = duration
+		dur.comparison = EQConditionSpec.Comparison.GE
+		dur.relative = true
+		dur.condition_id = &"duration"
+		invalidation.append(dur)
+	if rumination > 0:
+		var uses := EQConditionSpec.new()
+		uses.type = EQConditionSpec.Type.COUNTER
+		uses.counter_start = rumination + 1
+		uses.condition_id = &"reaction_count"
+		invalidation.append(uses)
+	return {"solve": solve, "invalidation": invalidation}
+
+
 func to_dict() -> Dictionary:
 	return {
 		"kind": int(kind),
@@ -69,6 +119,8 @@ func to_dict() -> Dictionary:
 		"duration": duration,
 		"rumination": rumination,
 		"operation_target_tag": String(operation_target_tag),
+		"solve_conditions": solve_conditions.filter(func(s): return s != null).map(func(s): return s.to_dict()),
+		"invalidation_conditions": invalidation_conditions.filter(func(s): return s != null).map(func(s): return s.to_dict()),
 	}
 
 
@@ -83,4 +135,12 @@ static func from_dict(d: Dictionary) -> EQActionDefinition:
 	def.duration = int(d.get("duration", 0))
 	def.rumination = int(d.get("rumination", 0))
 	def.operation_target_tag = StringName(d.get("operation_target_tag", ""))
+	var solve: Array[EQConditionSpec] = []
+	for sd in d.get("solve_conditions", []):
+		solve.append(EQConditionSpec.from_dict(sd))
+	def.solve_conditions = solve
+	var invalidation: Array[EQConditionSpec] = []
+	for sd in d.get("invalidation_conditions", []):
+		invalidation.append(EQConditionSpec.from_dict(sd))
+	def.invalidation_conditions = invalidation
 	return def

@@ -19,8 +19,8 @@
 | resilience-two-mode (dev fail-fast / shipped fail-safe) | §16 | EQM-022 | implemented | addons/event_queue_manager/runtime/eq_runtime.gd | test_project/tests/core/test_eq_runtime.gd |
 | actor-registry (actor_id 再利用禁止) | §13 | EQM-021 | implemented | addons/event_queue_manager/runtime/eq_actor_registry.gd | test_project/tests/resource/test_eq_actor_registry.gd |
 | sim-classification (Q12 感知分類 = simulation data) | §11 | EQM-080, EQM-081 | implemented | addons/event_queue_manager/runtime/eq_effect_record.gd<br>addons/event_queue_manager/runtime/eq_presentation_buffer.gd | test_project/tests/presentation/test_eq_effect_record.gd<br>test_project/tests/presentation/test_eq_presentation_buffer.gd |
-| conditions-contract (solve AND / invalidation OR / level 評価 / invalidation-wins / key 導出 / EQConditionSpec) | §5.4, §5.6 | EQM-111 | reserved | — | — |
-| named-predicate-registry (predicate 条件の serialize) | §5.5 | EQM-111 | reserved | — | — |
+| conditions-contract (solve AND / invalidation OR / level 評価 / invalidation-wins / key 導出 / EQConditionSpec) | §5.4, §5.6 | EQM-111 | implemented | addons/event_queue_manager/resources/eq_condition_spec.gd<br>addons/event_queue_manager/runtime/eq_condition_eval.gd<br>addons/event_queue_manager/resources/eq_action_definition.gd | test_project/tests/resource/test_eq_condition_spec.gd<br>test_project/tests/trigger/test_eq_condition_eval.gd |
+| named-predicate-registry (predicate 条件の serialize) | §5.5 | EQM-111 | implemented | addons/event_queue_manager/runtime/eq_runtime.gd | test_project/tests/trigger/test_eq_condition_eval.gd |
 | event-line-backend (data model / watched sparse polling / event_line_progressed) | §4.3, §4.6 | EQM-112 | reserved | — | — |
 | sweep-rule-registry (pattern (2) 実行) | §4.7 | EQM-112 | reserved | — | — |
 | progression-budgets (Q43 数値) | §12.1 | EQM-112 | reserved | — | — |

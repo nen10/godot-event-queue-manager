@@ -45,6 +45,11 @@ const RESERVATION_OPERATION_NEEDS_TARGET := &"eqm.reservation.operation_needs_ta
 const RESERVATION_MISSING_DEFINITION := &"eqm.reservation.missing_definition"
 const TRIGGER_CHAIN_LIMIT := &"eqm.trigger.chain_limit"
 const PRESENTATION_POLICY_CLASS_CONFLICT := &"eqm.presentation.policy_class_conflict"
+const CONDITION_LINE_ID_EMPTY := &"eqm.condition.line_id_empty"
+const CONDITION_PREDICATE_NAME_EMPTY := &"eqm.condition.predicate_name_empty"
+const CONDITION_COUNTER_START_INVALID := &"eqm.condition.counter_start_invalid"
+const CONDITION_PREDICATE_UNREGISTERED := &"eqm.condition.predicate_unregistered"
+const CONDITION_LINE_UNKNOWN := &"eqm.condition.line_unknown"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -70,6 +75,11 @@ const _META := {
 	RESERVATION_MISSING_DEFINITION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	TRIGGER_CHAIN_LIMIT: {"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 	PRESENTATION_POLICY_CLASS_CONFLICT: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_LINE_ID_EMPTY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_PREDICATE_NAME_EMPTY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_COUNTER_START_INVALID: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_PREDICATE_UNREGISTERED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_LINE_UNKNOWN: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
 }
 
 

@@ -52,6 +52,34 @@ func set_mode(m: int) -> void:
 	mode = m
 
 
+# --- named predicate registry (SEM §5.5, EQM-111) -------------------------
+# Predicate-type conditions serialize a name, never a Callable, so pending
+# conditions survive save/load. Instance-scoped (scene-local rule); the
+# predicate input is a serializable view dict only.
+
+var _predicates: Dictionary = {}
+
+
+## Registers (or replaces — idempotent setup) a named predicate. An empty name
+## is rejected as a fault. Returns whether the predicate was registered.
+func register_predicate(name: StringName, predicate: Callable) -> bool:
+	if name == &"":
+		_fault(EQError.CONDITION_PREDICATE_NAME_EMPTY, "predicate name must not be empty", {}, true)
+		return false
+	_predicates[name] = predicate
+	return true
+
+
+func has_predicate(name: StringName) -> bool:
+	return _predicates.has(name)
+
+
+## Evaluation-context view (EQConditionEval ctx["predicates"]). A copy: register
+## through register_predicate, never by mutating the returned dict.
+func predicates() -> Dictionary:
+	return _predicates.duplicate()
+
+
 ## Validates the config (if any) and reports it. A missing config is not an
 ## anomaly (scene-local default is config-less); an invalid config is surfaced
 ## per mode. Returns the config's EQValidation (empty when no config).
