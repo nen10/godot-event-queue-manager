@@ -33,8 +33,8 @@
 | race-pattern (race-group id / 敗者一掃 / 表示分離) | §5.2 | EQM-116 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd<br>addons/event_queue_manager/runtime/ui/eq_debug_overlay.gd | test_project/tests/trigger/test_eq_race_pattern.gd |
 | snapshot-v2 + save-enforcement (is_save_allowed 配線 / migrator) | §10 | EQM-117 | implemented | addons/event_queue_manager/runtime/eq_save_adapter.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/transaction/test_eq_snapshot_v2.gd |
 | reducibility-product-proof (EQM-053 の product model 再証明) | §16.1 | EQM-118 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/policy/test_eq_reducibility_product.gd<br>test_project/tests/golden/reducibility_ctb_pipeline.trace.jsonl |
-| authoring-acceptance (反撃準備 .tres 受け入れ基準) | §5.6 | EQM-119 | reserved | — | — |
+| authoring-acceptance (反撃準備 .tres 受け入れ基準) | §5.6 | EQM-119 | implemented | dogfood/action_resolution/counterattack_preparation.tres<br>dogfood/action_resolution/battle.gd | test_project/tests/resource/test_eq_authoring_acceptance.gd<br>test_project/tests/golden/authoring_counterattack.trace.jsonl |
 
 ## Deferred (coverage 対象外, 記録のみ)
 
-- composite atomic bundle (§7.1 staging 後段) / grouped・micro-event-line (Q24) / replay 製品化 (Q15) / effect grouping (Q35 follow-up)。
+- composite atomic bundle (§7.1 staging 後段) / grouped・micro-event-line (Q24) / replay 製品化 (Q15) / effect grouping (Q35 follow-up — **EQM-119 で再評価し defer 確定**: `EQEffectRecord.tags` + classification で grouping 表現が既に可能、実需要の信号が出るまで専用 field は追加しない)。

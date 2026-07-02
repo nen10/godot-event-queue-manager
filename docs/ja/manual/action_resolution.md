@@ -88,3 +88,27 @@ Guarantees:
 
 `demos/action_resolution/demo_battle.gd` は end-to-end の public-API-only slice です。この policy による AP turn、armed counter (reservation + trigger)、simulation effects、flushed visuals、deterministic trace を含みます。copy 元にする reference であり、§2.1 の通り manager-driven path として `manager.finish_action` を使っています。
 
+
+---
+
+## L2 natural path (v1.1)
+
+v1.1 の pipeline (`EQReservationRuntime`, SEM §6.1) では、配線は 3 つの宣言に畳まれます。
+条件・反応・効果を使う場合の推奨形です:
+
+```gdscript
+var rr := EQReservationRuntime.new()
+rr.runtime.register_effect(&"counterattack", func(view): return [ ...EQEffectRecord... ])
+rr.submit(load("res://.../counterattack_preparation.tres") ...)
+```
+
+- **宣言 linkage**: .tres の `effect_name` が handler を名指しします。設定済みで未登録なら
+  安定 error (`eqm.effect.unregistered`) — silent skip はしません。
+- **単一の解決サイクル**: pop → effect → chunk → sweep → drain (`last_drained`)。
+  解決の間 chunk は空なので、`EQSaveAdapter.save(rr.runtime, rr)` は save 境界
+  (`is_save_boundary()`) でのみ成立します (境界外は `eqm.save.blocked`)。
+- **発火した反応は schedule されます** (その場で解決しない) — master timeline が唯一の
+  解決権威のまま、全 step が trace に残ります。
+
+dogfood の手動配線 `run_trace()` はこの path 以前の対照であり、同 file の
+`run_l2_trace()` が natural path のリファレンスです。

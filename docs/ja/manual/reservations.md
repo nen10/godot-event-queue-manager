@@ -74,3 +74,33 @@ for fired in trigger.on_event_resolved(view, current_tick):
 
 reservation は plain event と同じ全順序 comparator `(due_tick, priority, sequence)` で解決されます。reaction firing は resolved-event sweep point で駆動されます。したがって reaction が順序へ与える影響は deterministic であり、canonical trace に現れます。trace record を消しても outcome は変わりません (`concepts.md` §2.3)。
 
+
+---
+
+## 宣言的な条件と閉路 (v1.1)
+
+v1.1 から reservation は条件集合を宣言できます (SEM §5.4–§5.6):
+
+```text
+solve_conditions          Array[EQConditionSpec] — AND、level 評価。空 = gate なし
+invalidation_conditions   Array[EQConditionSpec] — OR。同時成立は invalidation-wins
+```
+
+`EQConditionSpec` は serializable な 1 項: `LINE_THRESHOLD` (event-line 値と閾値)、
+`COUNTER` (減算カウンタ)、`NAMED_PREDICATE` (`register_predicate` で登録した名前 —
+save を跨ぐのは名前だけ)。既存の `duration` / `rumination` はこの**糖衣**です
+(duration = 期限閉路、rumination = 使用回数カウンタ)。
+
+最頻ケースは spec すら不要 — 「3 回 or 5 ターンで閉じる反撃準備」は .tres 1 個・
+コード 0 行で宣言できます (`dogfood/action_resolution/counterattack_preparation.tres`):
+
+```text
+kind = REACTION_PREPARATION
+duration = 5          # OR 閉路: 5 tick (-1 で deadline ∞)
+rumination = 2        # OR 閉路: 計 3 回
+effect_name = &"counterattack"   # 宣言 linkage — register_effect が結線
+```
+
+すべての閉路は canonical trace の `closed_by` で説明されます: 宣言した条件 id、
+または予約語 `duration` / `reaction_count` / `already_closed` / `actor_removed` /
+`race_lost`。silent に閉じるものはありません。

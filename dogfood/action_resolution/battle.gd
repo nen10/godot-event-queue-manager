@@ -26,6 +26,7 @@ const EQPresentationBuffer := preload("res://addons/event_queue_manager/runtime/
 const EQPresentationEvent := preload("res://addons/event_queue_manager/runtime/eq_presentation_event.gd")
 const EQRng := preload("res://addons/event_queue_manager/runtime/eq_rng.gd")
 const EQTrace := preload("res://addons/event_queue_manager/runtime/eq_trace.gd")
+const EQReservationRuntime := preload("res://addons/event_queue_manager/runtime/eq_reservation_runtime.gd")
 
 
 ## Runs a fixed slice and returns the canonical trace. `turns` ready-turns are
@@ -92,6 +93,51 @@ static func run_trace(turns: int) -> String:
 
 	manager.free()
 	return trace.to_jsonl()
+
+
+## DOGFOOD (EQM-119) — the L2 NATURAL PATH (SEM §5.6/§6.1), contrasted with the
+## hand-wired run_trace() above. The counterattack preparation is a CHECKED-IN
+## .tres (zero GDScript in the declaration: 3 uses OR 5 ticks, whichever comes
+## first); the game registers the named effect once and submits the loaded
+## asset. Closure is explained by the trace, never silent:
+##   closed_by: reaction_count  — the 3rd use consumed the preparation
+##   closed_by: duration        — an unused preparation timed out (its expiry EVENT)
+##   closed_by: already_closed  — a stale expiry after a count-closure
+static func run_l2_trace() -> String:
+	var rr := EQReservationRuntime.new()
+	rr.runtime.emit_engine_diagnostics = false
+	rr.runtime.register_actor(&"hero")
+	rr.runtime.register_actor(&"orc")
+	# declared linkage: the .tres names the effect; the game wires it ONCE.
+	rr.runtime.register_effect(&"counterattack", func(view: Dictionary) -> Array:
+		var rec := EQEffectRecord.new(&"damage", &"orc", &"hp", -6)
+		rec.source = StringName(view["source"])
+		rec.tags = [&"damage", &"counter"]
+		rec.classification = EQEffectRecord.CLASS_IMPORTANT
+		return [rec])
+	var counter_cond := EQCondition.new()
+	counter_cond.match_target = &"hero"
+	counter_cond.require_tags = [&"damage"]
+
+	# phase 1 — COUNT closure: three incoming hits use the preparation up.
+	var prep_a = load("res://dogfood/action_resolution/counterattack_preparation.tres")
+	rr.submit(EQReservation.new(&"hero", prep_a), counter_cond)
+	for _hit in 3:
+		var atk := EQActionDefinition.new()
+		atk.kind = EQActionDefinition.Kind.IMMEDIATE
+		atk.tags = [&"damage"]
+		var attack := EQReservation.new(&"orc", atk)
+		attack.target_id = &"hero"
+		rr.submit(attack)
+		rr.resolve_next()  # the hit resolves -> the counter fires (SCHEDULED, §6.2)
+		rr.resolve_next()  # the scheduled counter resolves through the named effect
+
+	# phase 2 — DURATION closure: a fresh preparation is armed and never used;
+	# its expiry EVENT closes it at armed_at + 5 (Q40 — never a silent removal).
+	var prep_b = load("res://dogfood/action_resolution/counterattack_preparation.tres").duplicate()
+	rr.submit(EQReservation.new(&"hero", prep_b), counter_cond)
+	rr.resolve_next()  # drains the expiry events (already_closed for A, duration for B)
+	return rr.runtime.trace_jsonl()
 
 
 func _ready() -> void:

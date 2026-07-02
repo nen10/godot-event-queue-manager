@@ -110,3 +110,29 @@ AP turns via this policy, an armed counter (reservation + trigger), simulation
 effects, flushed visuals, and a deterministic trace. It is the reference to copy
 from — and it uses `manager.finish_action` (the manager-driven path) exactly as §2.1
 prescribes.
+
+---
+
+## The L2 natural path (v1.1)
+
+With the v1.1 pipeline (`EQReservationRuntime`, SEM §6.1) the wiring above
+collapses into three declarations — this is the recommended shape once you use
+conditions, reactions, or effects:
+
+```gdscript
+var rr := EQReservationRuntime.new()
+rr.runtime.register_effect(&"counterattack", func(view): return [ ...EQEffectRecord... ])
+rr.submit(load("res://.../counterattack_preparation.tres") as EQActionDefinition ...)
+```
+
+- **Declared linkage**: `effect_name` on the `.tres` names the handler; a set-but-
+  unregistered name is a stable error (`eqm.effect.unregistered`) — never a silent skip.
+- **One resolution cycle**: pop → effect → chunk → sweep → drain (`last_drained`).
+  Between resolutions the chunk is empty, so `EQSaveAdapter.save(rr.runtime, rr)`
+  succeeds exactly at the save boundary (`is_save_boundary()`; off-boundary saves
+  are the stable error `eqm.save.blocked`).
+- **Fired reactions are scheduled**, never resolved in place — the master timeline
+  stays the only resolution authority, and every step is in the trace.
+
+The hand-wired `run_trace()` in the dogfood slice predates this path and remains
+as a contrast; `run_l2_trace()` in the same file is the natural-path reference.

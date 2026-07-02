@@ -90,3 +90,36 @@ Reservations resolve through the same total-order comparator as plain events
 points — so a reaction's effect on order is deterministic and shows up in the
 canonical trace. Removing the trace records never changes the outcome (see
 `concepts.md` §2.3).
+
+---
+
+## Declarative conditions & closure (v1.1)
+
+Since v1.1 a reservation can carry full condition sets (SEM §5.4–§5.6):
+
+```text
+solve_conditions          Array[EQConditionSpec] — AND, level-triggered; empty = no gate
+invalidation_conditions   Array[EQConditionSpec] — OR; invalidation-wins on a tie
+```
+
+An `EQConditionSpec` is one serializable term: `LINE_THRESHOLD` (an event-line
+value vs a threshold), `COUNTER` (a decremental use counter), or
+`NAMED_PREDICATE` (a name registered via `runtime.register_predicate`; only the
+NAME crosses a save). The `duration` / `rumination` fields above are **sugar**
+over this: `duration` becomes the expiry closure, `rumination` the use counter.
+
+The most common case therefore needs no spec at all — one checked-in `.tres`
+declares a counterattack that closes on 3 uses OR 5 ticks, whichever first
+(`dogfood/action_resolution/counterattack_preparation.tres`, zero script lines):
+
+```text
+kind = REACTION_PREPARATION
+duration = 5          # OR-closure: 5 ticks (set -1 for deadline ∞)
+rumination = 2        # OR-closure: 3 total uses
+effect_name = &"counterattack"   # declared linkage — wired by register_effect
+```
+
+Every closure is explained in the canonical trace via `closed_by`:
+condition ids you declared, or the reserved causes `duration`,
+`reaction_count`, `already_closed`, `actor_removed`, `race_lost`.
+Nothing closes silently.
