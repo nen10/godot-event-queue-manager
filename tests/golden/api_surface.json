@@ -890,6 +890,110 @@
       "vars": []
     }
   },
+  "L3": {
+    "EQEventLines": {
+      "consts": [
+        "PRIMARY_LINE_ID"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "advance",
+          "params": "id: StringName, amount: int",
+          "returns": "-> bool"
+        },
+        {
+          "name": "ctx_lines",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "derive_watched",
+          "params": "bound_term_sets: Array",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary, trace = null",
+          "returns": "-> EQEventLines"
+        },
+        {
+          "name": "has_line",
+          "params": "id: StringName",
+          "returns": "-> bool"
+        },
+        {
+          "name": "issue",
+          "params": "id: StringName, value: int = 0, rate: int = 0",
+          "returns": "-> bool"
+        },
+        {
+          "name": "issue_counter",
+          "params": "start: int",
+          "returns": "-> StringName"
+        },
+        {
+          "name": "line_ids",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "poll_tick",
+          "params": "watched: Dictionary",
+          "returns": "-> void"
+        },
+        {
+          "name": "rate_of",
+          "params": "id: StringName",
+          "returns": "-> int"
+        },
+        {
+          "name": "re_rate",
+          "params": "id: StringName, new_rate: int",
+          "returns": "-> bool"
+        },
+        {
+          "name": "register_sweep_rule",
+          "params": "name: StringName, rule: Callable",
+          "returns": "-> bool"
+        },
+        {
+          "name": "run_sweep_rules",
+          "params": "registry",
+          "returns": "-> void"
+        },
+        {
+          "name": "set_trace",
+          "params": "trace",
+          "returns": "-> void"
+        },
+        {
+          "name": "sweep_rule_names",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "sync_primary",
+          "params": "tick: int",
+          "returns": "-> void"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "value_of",
+          "params": "id: StringName",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "faults"
+      ]
+    }
+  },
   "core": {
     "EQBackend": {
       "consts": [
