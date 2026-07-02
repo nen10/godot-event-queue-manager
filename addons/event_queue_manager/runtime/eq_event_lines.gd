@@ -203,12 +203,19 @@ func to_dict() -> Dictionary:
 ## by acceptance; the stored names let the loader verify registration (EQM-117).
 static func from_dict(d: Dictionary, trace = null) -> EQEventLines:
 	var el := EQEventLines.new(trace)
-	el._lines.clear()
-	el._lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0}
-	for line in d.get("lines", []):
-		el._lines[StringName(line["id"])] = {"value": int(line["value"]), "rate": int(line["rate"])}
-	el._counter_seq = int(d.get("counter_seq", 0))
+	el.restore_values(d)
 	return el
+
+
+## In-place restore that PRESERVES the registered sweep rules and the attached
+## trace (the load path, EQM-117: acceptance re-registers rules on the live
+## instance before loading; only the data is replaced).
+func restore_values(d: Dictionary) -> void:
+	_lines.clear()
+	_lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0}
+	for line in d.get("lines", []):
+		_lines[StringName(line["id"])] = {"value": int(line["value"]), "rate": int(line["rate"])}
+	_counter_seq = int(d.get("counter_seq", 0))
 
 
 func _record(fields: Dictionary) -> void:

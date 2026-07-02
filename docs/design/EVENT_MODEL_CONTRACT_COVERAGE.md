@@ -31,7 +31,7 @@
 | window-object-model (EQWindow / 暗黙 L0 window / budget / deadline 既定) | §8.1, §9 | EQM-114 | implemented | addons/event_queue_manager/runtime/eq_window.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd<br>addons/event_queue_manager/runtime/eq_transaction.gd | test_project/tests/transaction/test_eq_window.gd |
 | ordering-hook (order_simultaneous / golden 被覆) | §7.1 | EQM-115 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_order_hook.gd |
 | race-pattern (race-group id / 敗者一掃 / 表示分離) | §5.2 | EQM-116 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd<br>addons/event_queue_manager/runtime/ui/eq_debug_overlay.gd | test_project/tests/trigger/test_eq_race_pattern.gd |
-| snapshot-v2 + save-enforcement (is_save_allowed 配線 / migrator) | §10 | EQM-117 | reserved | — | — |
+| snapshot-v2 + save-enforcement (is_save_allowed 配線 / migrator) | §10 | EQM-117 | implemented | addons/event_queue_manager/runtime/eq_save_adapter.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/transaction/test_eq_snapshot_v2.gd |
 | reducibility-product-proof (EQM-053 の product model 再証明) | §16.1 | EQM-118 | reserved | — | — |
 | authoring-acceptance (反撃準備 .tres 受け入れ基準) | §5.6 | EQM-119 | reserved | — | — |
 

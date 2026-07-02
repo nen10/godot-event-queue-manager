@@ -370,12 +370,12 @@
         },
         {
           "name": "load",
-          "params": "into_runtime, data: Dictionary, rebind: Dictionary = {}",
+          "params": "into_runtime, data: Dictionary, rebind: Dictionary = {}, pipeline = null",
           "returns": "-> bool"
         },
         {
           "name": "save",
-          "params": "runtime",
+          "params": "runtime, pipeline = null",
           "returns": "-> Dictionary"
         }
       ],
@@ -603,9 +603,19 @@
       "enums": [],
       "methods": [
         {
+          "name": "from_dict",
+          "params": "d: Dictionary",
+          "returns": "-> EQCondition"
+        },
+        {
           "name": "matches",
           "params": "view: Dictionary",
           "returns": "-> bool"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
         }
       ],
       "signals": [],
@@ -730,6 +740,7 @@
     "EQReservationRuntime": {
       "consts": [
         "EQActionDefinition",
+        "EQCondition",
         "EQConditionEval",
         "EQConditionSpec",
         "EQEffectChunk",
@@ -742,6 +753,11 @@
       ],
       "enums": [],
       "methods": [
+        {
+          "name": "apply_state",
+          "params": "data: Dictionary",
+          "returns": "-> void"
+        },
         {
           "name": "armed_for",
           "params": "actor_id: StringName",
@@ -788,6 +804,11 @@
           "returns": "-> EQReservation"
         },
         {
+          "name": "save_state",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
           "name": "set_order_hook",
           "params": "hook: Callable",
           "returns": "-> void"
@@ -806,6 +827,11 @@
           "name": "submit_race",
           "params": "members: Array",
           "returns": "-> StringName"
+        },
+        {
+          "name": "verify_state",
+          "params": "data: Dictionary",
+          "returns": "-> bool"
         },
         {
           "name": "window_depth",
@@ -914,6 +940,11 @@
           "name": "armed_count",
           "params": "",
           "returns": "-> int"
+        },
+        {
+          "name": "armed_entries",
+          "params": "",
+          "returns": "-> Array"
         },
         {
           "name": "armed_for",
@@ -1081,6 +1112,11 @@
           "name": "register_sweep_rule",
           "params": "name: StringName, rule: Callable",
           "returns": "-> bool"
+        },
+        {
+          "name": "restore_values",
+          "params": "d: Dictionary",
+          "returns": "-> void"
         },
         {
           "name": "run_sweep_rules",
@@ -1350,6 +1386,7 @@
         "RESERVATION_REACTION_NEEDS_DURATION",
         "RUNTIME_SCHEDULE_UNREGISTERED_ACTOR",
         "RUNTIME_UNREGISTERED_ACTOR_EVENT",
+        "SAVE_BLOCKED",
         "TIE_BREAK_AMBIGUOUS",
         "TIE_BREAK_UNKNOWN",
         "TRIGGER_CHAIN_LIMIT",

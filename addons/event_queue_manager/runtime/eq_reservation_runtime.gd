@@ -27,6 +27,7 @@ const EQRuntime := preload("eq_runtime.gd")
 const EQReservation := preload("eq_reservation.gd")
 const EQActionDefinition := preload("../resources/eq_action_definition.gd")
 const EQConditionSpec := preload("../resources/eq_condition_spec.gd")
+const EQCondition := preload("../resources/eq_condition.gd")
 const EQConditionEval := preload("eq_condition_eval.gd")
 const EQEventLines := preload("eq_event_lines.gd")
 const EQEffectChunk := preload("eq_effect_chunk.gd")
@@ -239,6 +240,117 @@ func _check_deadlines() -> void:
 ## effect chunk is empty AND no explicit window is open above the base level.
 func is_save_boundary() -> bool:
 	return chunk.is_save_allowed() and window_depth() == 0
+
+
+# --- snapshot v2 pipeline tables (SEM §10, EQM-117) -------------------------
+# The save bundle carries these ADDITIVE tables next to the scheduler snapshot.
+# Callables are never serialized; the loader verifies name registrations before
+# mutating anything (verify-before-mutate). Open race groups are NOT persisted
+# (POLICY: members are; only the winner's bulk loser-sweep is lost across a
+# save — losers still close by their own invalidation conditions).
+
+func save_state() -> Dictionary:
+	var expiry_of := {}
+	for event_id in _expiry_by_event:
+		expiry_of[(_expiry_by_event[event_id] as EQReservation).get_instance_id()] = event_id
+	var armed: Array = []
+	for entry in engine.armed_entries():
+		var res: EQReservation = entry["reservation"]
+		armed.append({
+			"reservation": res.to_dict(),
+			"condition": entry["condition"].to_dict() if entry["condition"] != null else {},
+			"armed_at": int(entry["armed_at"]),
+			"expiry_event_id": int(expiry_of.get(res.get_instance_id(), -1)),
+		})
+	var conditional: Array = []
+	for p in _pending_conditional:
+		conditional.append({
+			"reservation": (p["res"] as EQReservation).to_dict(),
+			"solve": (p["solve"] as Array).duplicate(true),
+			"inv": (p["inv"] as Array).duplicate(true),
+			"view": (p["view"] as Dictionary).duplicate(true),
+		})
+	var scheduled: Array = []
+	for event_id in _by_event:
+		scheduled.append({
+			"event_id": int(event_id),
+			"reservation": (_by_event[event_id] as EQReservation).to_dict(),
+			"inv": (_bound_inv.get(event_id, []) as Array).duplicate(true),
+		})
+	return {
+		"event_lines": lines.to_dict(),
+		"windows": [],  # boundary-gated saves always have depth 0 (POLICY)
+		"armed_triggers": armed,
+		"pending_conditional": conditional,
+		"scheduled_reservations": scheduled,
+	}
+
+
+## Verify-before-mutate (SEM §5.5/§6.1): every name the bundle references must
+## already be registered on THIS instance. Returns true when safe to apply.
+func verify_state(data: Dictionary) -> bool:
+	var lines_d: Dictionary = data.get("event_lines", {})
+	var registered := lines.sweep_rule_names()
+	for name in lines_d.get("sweep_rules", []):
+		if not registered.has(StringName(name)):
+			runtime._fault(EQError.CONDITION_PREDICATE_UNREGISTERED, "sweep rule '%s' in the save is not registered" % name, {"name": String(name)}, true)
+			return false
+	var term_sets: Array = []
+	for c in data.get("pending_conditional", []):
+		term_sets.append(c.get("solve", []))
+		term_sets.append(c.get("inv", []))
+	for s in data.get("scheduled_reservations", []):
+		term_sets.append(s.get("inv", []))
+	for terms in term_sets:
+		for term in terms:
+			if int(term.get("type", -1)) == EQConditionSpec.Type.NAMED_PREDICATE and not runtime.has_predicate(StringName(term.get("predicate_name", ""))):
+				runtime._fault(EQError.CONDITION_PREDICATE_UNREGISTERED, "predicate '%s' in the save is not registered" % term.get("predicate_name", ""), {}, true)
+				return false
+	var reservation_dicts: Array = []
+	for a in data.get("armed_triggers", []):
+		reservation_dicts.append(a.get("reservation", {}))
+	for c in data.get("pending_conditional", []):
+		reservation_dicts.append(c.get("reservation", {}))
+	for s in data.get("scheduled_reservations", []):
+		reservation_dicts.append(s.get("reservation", {}))
+	for rd in reservation_dicts:
+		var def: Dictionary = rd.get("definition", {})
+		for key in ["effect_name", "expiry_effect_name"]:
+			var name := StringName(def.get(key, ""))
+			if name != &"" and not runtime.has_effect(name):
+				runtime._fault(EQError.EFFECT_UNREGISTERED, "effect '%s' in the save is not registered" % name, {"effect": String(name)}, true)
+				return false
+	return true
+
+
+## Applies the verified tables (call verify_state first; the adapter does).
+func apply_state(data: Dictionary) -> void:
+	lines.restore_values(data.get("event_lines", {}))
+	for a in data.get("armed_triggers", []):
+		var res := EQReservation.from_dict(a.get("reservation", {}))
+		var cond = null
+		var cd: Dictionary = a.get("condition", {})
+		if not cd.is_empty():
+			cond = EQCondition.from_dict(cd)
+		res.status = EQReservation.Status.ARMED
+		engine.arm(res, cond, int(a.get("armed_at", 0)))
+		var expiry_id := int(a.get("expiry_event_id", -1))
+		if expiry_id > 0:
+			_expiry_by_event[expiry_id] = res
+	for c in data.get("pending_conditional", []):
+		_pending_conditional.append({
+			"res": EQReservation.from_dict(c.get("reservation", {})),
+			"solve": c.get("solve", []),
+			"inv": c.get("inv", []),
+			"view": c.get("view", {}),
+		})
+	for s in data.get("scheduled_reservations", []):
+		var res := EQReservation.from_dict(s.get("reservation", {}))
+		var event_id := int(s.get("event_id", -1))
+		_by_event[event_id] = res
+		var inv: Array = s.get("inv", [])
+		if not inv.is_empty():
+			_bound_inv[event_id] = inv
 
 
 ## Schedules (or arms) a reservation per its kind. A reservation with solve

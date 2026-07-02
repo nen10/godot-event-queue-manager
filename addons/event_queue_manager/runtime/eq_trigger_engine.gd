@@ -110,6 +110,12 @@ func armed_count() -> int:
 	return _armed.size()
 
 
+## Read-only view of the armed entries ({reservation, condition, owner,
+## armed_at, duration}) for serialization (EQM-117).
+func armed_entries() -> Array:
+	return _armed.duplicate()
+
+
 ## Armed reactions owned by an actor (for inspection).
 func armed_for(actor_id: StringName) -> Array:
 	return _armed.filter(func(a): return a["owner"] == actor_id)

@@ -1,5 +1,19 @@
 # Snapshot schema compatibility — v1.0 stance
 
+> **v1.1 (EQM-117, 2026-07-02): bundle `SCHEMA_VERSION` is now 2.** Additive
+> pipeline tables (`event_lines` / `windows` / `armed_triggers` /
+> `pending_conditional` / `scheduled_reservations`, SEM §10) sit next to the v1
+> keys. The declared **migrate** path shipped with it: a v1 bundle loads with
+> the missing tables defaulted to empty; a v2 bundle on a v1.0 reader is
+> rejected cleanly (unchanged fail-safe). Saving through the pipeline is gated
+> on the save boundary (chunk empty, no explicit window; `eqm.save.blocked`
+> otherwise, no force flag). Loading verifies referenced predicate / effect /
+> sweep-rule names BEFORE mutating anything (stable error, never a half-load).
+> The `windows` table is always empty in a save (the boundary gate implies
+> depth 0); the key exists for schema shape / future rollback bundles. Open
+> race groups are not persisted — members are, but the winner's bulk
+> loser-sweep does not survive a save (EQM-117 POLICY).
+
 The serialized scheduler snapshot (`EQSnapshot`, `SCHEMA_VERSION = 1`) and the
 save bundle (`EQSaveAdapter`, `schema_version`) are the on-disk contracts a
 consumer's save files depend on. This declares the v1.0 compatibility stance so a

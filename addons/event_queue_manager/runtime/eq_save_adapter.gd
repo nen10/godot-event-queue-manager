@@ -9,26 +9,49 @@ extends RefCounted
 ## is rebound to a live node via the `rebind` map (actor_id -> node). The node
 ## bridge (EQNodeBridge) is the usual source of that map.
 
-const SCHEMA_VERSION := 1
+## v2 (EQM-117, SEM §10): additive pipeline tables (event_lines / windows /
+## armed_triggers / pending_conditional / scheduled_reservations) next to the
+## v1 keys. A v1 bundle loads via the migrator (missing tables = empty); an
+## unknown/newer version is rejected (SNAPSHOT_COMPAT_V1.md fail-safe).
+const SCHEMA_VERSION := 2
 
 
-## A plain, node-free save bundle.
-static func save(runtime) -> Dictionary:
+## A plain, node-free save bundle. With a pipeline (EQReservationRuntime), the
+## save is GATED on the boundary (SEM §10: chunk empty, no explicit window) —
+## off-boundary saves record `eqm.save.blocked` and return {} (no force flag).
+static func save(runtime, pipeline = null) -> Dictionary:
+	if pipeline != null and not pipeline.is_save_boundary():
+		runtime._fault(EQError.SAVE_BLOCKED, "save requested off the boundary (chunk non-empty or a window is open)", {}, true)
+		return {}
 	var actors: Array = []
 	for actor_id in runtime.registry.actor_ids():
 		actors.append(runtime.registry.get_state(actor_id).to_dict())
-	return {
+	var bundle := {
 		"schema_version": SCHEMA_VERSION,
 		"scheduler": runtime.scheduler.snapshot(),
 		"actors": actors,
 	}
+	if pipeline != null:
+		bundle.merge(pipeline.save_state())
+	else:
+		bundle.merge({
+			"event_lines": {}, "windows": [], "armed_triggers": [],
+			"pending_conditional": [], "scheduled_reservations": [],
+		})
+	return bundle
 
 
 ## Restores into `into_runtime` (expected fresh): scheduler state, re-registered
 ## actors with their data, and live-node rebinding via `rebind` (actor_id ->
-## node). Returns false on an unknown schema (runtime left as-is).
-static func load(into_runtime, data: Dictionary, rebind: Dictionary = {}) -> bool:
-	if int(data.get("schema_version", -1)) != SCHEMA_VERSION:
+## node). With a pipeline, its tables are restored too — after a
+## verify-before-mutate pass (unregistered predicate/effect/sweep-rule names =
+## stable error, nothing applied). Returns false on an unknown schema or a
+## failed verification (runtime left as-is). v1 bundles load with empty tables.
+static func load(into_runtime, data: Dictionary, rebind: Dictionary = {}, pipeline = null) -> bool:
+	var version := int(data.get("schema_version", -1))
+	if version < 1 or version > SCHEMA_VERSION:
+		return false
+	if pipeline != null and not pipeline.verify_state(data):
 		return false
 	into_runtime.scheduler.restore(data.get("scheduler", {}))
 	for actor_dict in data.get("actors", []):
@@ -38,6 +61,8 @@ static func load(into_runtime, data: Dictionary, rebind: Dictionary = {}) -> boo
 			state.data = (actor_dict.get("data", {}) as Dictionary).duplicate(true)
 			if rebind.has(actor_id):
 				state.bind(rebind[actor_id])
+	if pipeline != null:
+		pipeline.apply_state(data)
 	return true
 
 

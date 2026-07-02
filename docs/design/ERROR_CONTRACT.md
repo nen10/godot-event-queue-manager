@@ -66,6 +66,7 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.window.close_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | closing a non-top window or the implicit root |
 | `eqm.window.commit_conflict` | CONTRACT_VIOLATION | ERROR | editor, game | close_window(commit) while the live scheduler changed since open — commit would clobber; the draft rolls back instead (EQM-114 POLICY) |
 | `eqm.order.hook_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | the ordering hook returned a non-permutation (wrong length / duplicate / out of range); issuance order is used and the fault recorded (SEM §7.1, EQM-115) |
+| `eqm.save.blocked` | CONTRACT_VIOLATION | ERROR | editor, game | save requested off the boundary (effect chunk non-empty or an explicit window open) — SEM §10, no force flag (EQM-117) |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

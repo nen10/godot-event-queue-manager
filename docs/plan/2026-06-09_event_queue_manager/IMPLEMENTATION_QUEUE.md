@@ -144,8 +144,8 @@ Source: `docs/review/EVENT_MODEL_DESIGN_GAP_AUDIT_2026-07-02.md` (v1.0 凍結契
 | EQM-114 | COMPLETE | EQM-113 | `docs/plan/2026-06-09_event_queue_manager/EQM-114_window_model/` | Window object model (coverage: window-object-model)。 | `runtime/eq_window.gd`, `runtime/eq_runtime.gd`, `runtime/eq_transaction.gd`, `tests/transaction/`, `tests/runtime/` | SEM §8.1/§9: EQWindow {id, owner, nest_level, kind, deadline, budget_paid, draft}; EQTransaction 従属 (互換 wrapper); 暗黙 L0 window (turn_ready→suspend); meta-cost budget (owner state 支払い, chain 中非回復, 絶対 max depth backstop); deadline 既定 = rollback + close + `window_closed(cause: deadline)`, close 前 hook で明示 commit; `window_opened/closed` trace 実 emit。coverage row flip。 |
 | EQM-115 | COMPLETE | EQM-114 | `docs/plan/2026-06-09_event_queue_manager/EQM-115_ordering_hook/` | Ordering hook (coverage: ordering-hook)。 | `runtime/eq_runtime.gd`, `resources/eq_config.gd`, `tests/core/`, `tests/golden/` | SEM §7.1: `order_simultaneous(candidates) -> permutation`; candidates view = serializable (entity stat / event tag / event-line 値 / nest level); 既定 = 発行順; hook 出力の golden 被覆; live object 拒否 validation。composite atomic bundle は defer 明記 (実装しない)。coverage row flip。 |
 | EQM-116 | COMPLETE | EQM-115 | `docs/plan/2026-06-09_event_queue_manager/EQM-116_race_pattern/` | Race pattern (coverage: race-pattern)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `runtime/ui/eq_debug_overlay.gd`, `tests/trigger/`, `tests/golden/` | SEM §5.2/§5.4: race-group id (deterministic 採番); OR 解決の racing events 発行 API; 勝者 = hook → 発行順, 敗者は OR invalidation で一掃 (`closed_by`); trace に race_group field; debug overlay で race group を候補群として集約表示 (3 表示分離の最小実装 — EQM 内部 debug と開発者 debug)。coverage row flip。 |
-| EQM-117 | READY | EQM-116 | `docs/plan/2026-06-09_event_queue_manager/EQM-117_snapshot_v2/` | Snapshot v2 + save 境界 enforcement (coverage: snapshot-v2 + save-enforcement)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `runtime/eq_manager.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/core/`, `tests/transaction/` | SEM §10: schema_version 2 (event_lines/windows/armed_triggers additive, 条件 inline); v1→v2 migrator (欠落 = 空); v2-in-v1 = 安定 error; `is_save_allowed` を save 経路へ配線 (chunk 非空 = 安定 error, force flag なし); draft save 既定 = rollback to boundary; replay 証明拡張 (条件/line/window を跨ぐ roundtrip → 同一 pop 順 + 同一 trace)。coverage row flip。 |
-| EQM-118 | BACKLOG | EQM-117 | `docs/plan/2026-06-09_event_queue_manager/EQM-118_reducibility_reproof/` | Reducibility 再証明 (coverage: reducibility-product-proof)。EQM-053 の縮小 (test 内手書き sim) を解消。 | `tests/policy/`, `tests/golden/` | SEM §16.1: CTB / energy / wait-turn 構成を **product の** conditions + event-line model (EQM-111/112 実装) で組み、dedicated policy の golden trace と比較 (order 配列でなく trace); tie-break/speed/delay matrix + 非約数 speed; 差分は model gap として記録。coverage row flip。 |
+| EQM-117 | COMPLETE | EQM-116 | `docs/plan/2026-06-09_event_queue_manager/EQM-117_snapshot_v2/` | Snapshot v2 + save 境界 enforcement (coverage: snapshot-v2 + save-enforcement)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `runtime/eq_manager.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/core/`, `tests/transaction/` | SEM §10: schema_version 2 (event_lines/windows/armed_triggers additive, 条件 inline); v1→v2 migrator (欠落 = 空); v2-in-v1 = 安定 error; `is_save_allowed` を save 経路へ配線 (chunk 非空 = 安定 error, force flag なし); draft save 既定 = rollback to boundary; replay 証明拡張 (条件/line/window を跨ぐ roundtrip → 同一 pop 順 + 同一 trace)。coverage row flip。 |
+| EQM-118 | READY | EQM-117 | `docs/plan/2026-06-09_event_queue_manager/EQM-118_reducibility_reproof/` | Reducibility 再証明 (coverage: reducibility-product-proof)。EQM-053 の縮小 (test 内手書き sim) を解消。 | `tests/policy/`, `tests/golden/` | SEM §16.1: CTB / energy / wait-turn 構成を **product の** conditions + event-line model (EQM-111/112 実装) で組み、dedicated policy の golden trace と比較 (order 配列でなく trace); tie-break/speed/delay matrix + 非約数 speed; 差分は model gap として記録。coverage row flip。 |
 | EQM-119 | BACKLOG | EQM-118 | `docs/plan/2026-06-09_event_queue_manager/EQM-119_authoring_surface/` | L2 authoring surface + dogfood/manual 更新 (coverage: authoring-acceptance)。 | `resources/eq_action_definition.gd`, `dogfood/`, `demos/action_resolution/`, `docs/manual/reservations.md`, `docs/manual/action_resolution.md`, `tests/resource/`, `tests/golden/` | SEM §5.6 凍結基準: 「反撃準備 — 3 回 or 5 ターン or どちらか / deadline ∞」を .tres 1 個・GDScript 0 行で宣言し、`closed_by` がどちらで閉じたか golden で可視; dogfood slice を named-effect natural path へ更新; manual 更新 (三面モデル + 条件宣言); Q35 effect grouping follow-up の要否をここで再評価。coverage row 最終 flip。 |
 
 ## Dynamic follow-up area
@@ -162,7 +162,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: `EQM-117` (Phase 11; EQM-110..116 COMPLETE 2026-07-02)。
+Current: `EQM-118` (Phase 11; EQM-110..117 COMPLETE 2026-07-02)。
 
 ## Proof log
 
@@ -1049,3 +1049,27 @@ proof:
 ```
 
 Dependency sweep: EQM-116 COMPLETE → EQM-117 READY (snapshot v2 + save 境界 enforcement)。Current pointer → EQM-117。
+
+### EQM-117 — COMPLETE (2026-07-02)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-117_snapshot_v2/
+  review: docs/review/autopilot/EQM-117_SELF_REVIEW_2026-07-02.md
+  pattern: P0 (orchestrator-direct); repair 0 (Godot 初回 green)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS; files=58 checks=938 failures=0; [api-surface] ok; [contract-coverage] violations=0
+  gate: §4 transaction/core (save gate: chunk 非空 / window open で eqm.save.blocked + 空 bundle; bundle v2 shape + live object 不含;
+      v1 migrator (欠落 = 空) + 未知 version 拒否; verify-before-mutate (未登録 effect/predicate/sweep rule = 安定 error + 無変更);
+      lines/conditional/armed(+expiry link)/scheduled を跨ぐ roundtrip → 同一継続 resolution 列)
+  surface: api_surface.json re-baselined (+EQSaveAdapter save/load の pipeline 引数; +EQReservationRuntime save_state/verify_state/apply_state;
+      +EQTriggerEngine.armed_entries; +EQEventLines.restore_values; +EQCondition to_dict/from_dict; SCHEMA_VERSION 1→2) via explicit --update
+  coverage: snapshot-v2 + save-enforcement -> implemented
+  limitations (POLICY 記録): windows table は boundary gate により常に空 (schema shape として保持) / open race 帳簿は非 serialize (member は保存、敗者一掃のみ非継続) / EQManager への save API は不採用 (L0 に gate 対象なし)
+  major files:
+    - addons/event_queue_manager/runtime/eq_save_adapter.gd (v2), eq_reservation_runtime.gd (+state 三対), eq_event_lines.gd (+restore_values), eq_trigger_engine.gd (+armed_entries), eq_error.gd (+1)
+    - addons/event_queue_manager/resources/eq_condition.gd (+serialize), docs/design/SNAPSHOT_COMPAT_V1.md (v2 追記), docs/design/ERROR_CONTRACT.md (+1)
+    - test_project/tests/transaction/test_eq_snapshot_v2.gd (new)
+```
+
+Dependency sweep: EQM-117 COMPLETE → EQM-118 READY (reducibility 再証明)。Current pointer → EQM-118。
