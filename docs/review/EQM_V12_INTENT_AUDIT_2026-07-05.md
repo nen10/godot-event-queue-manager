@@ -4,6 +4,15 @@
 
 背景: 実装は codex (GPT-5.3/5.5 系) への P2 委譲。executor の縮小傾向は既知リスク (QUEUE_EXECUTION_PATTERNS §1)。加えて orchestrator の委任 contract / SEM 起草自体が意図を狭めた可能性を独立に点検した。
 
+## 消化状況 (repair round 完了, 2026-07-05 追記)
+
+- **A1 → EQM-129 で消化** (wrapper 標準 2 種 inv_chain/relation_chain、user 承認の語彙)。
+- **A2 → EQM-130 で消化** (既定 sweep = step_tick 自動評価、カスタム sweep は §4.7 連動)。
+- **B1/B2 → EQM-131 で消化** (焦点コスト閉包 golden / retarget stage int)。**B3 は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で「コスト単独・メタとは別系」と確定 — 現行実装が正、変更なし**。
+- **C1/C2 → EQM-130 で消化** (公平合成 golden / 迎撃標準形例示)。R08 は EBS A-R08-1 へ整合 (EQM-131)。
+- **D1–D4 は記録のまま** — EBS 側のスキル執筆で実需要が出た時点で再評価。
+- repair 中の検収でさらに 2 件の executor 起因回帰を捕捉・修正 (不活性 wrapper の applied-trace 誤発火 / targets_expanded 記録の guard 外し)。
+
 ## 結論 (要約)
 
 - 凍結契約 (SEM v1.2) ↔ 実装の対応は coverage 31/31 で正しい。**しかし依頼意図 ↔ SEM/実装の間に縮小が 5 件 (重大 2・中 3)、acceptance の縮小が 2 件、要確認の段階化が 4 件**見つかった。
