@@ -750,6 +750,7 @@
         "EQEventLines",
         "EQReservation",
         "EQRuntime",
+        "EQSnapshot",
         "EQTransaction",
         "EQTriggerEngine",
         "EQWindow"
@@ -765,6 +766,11 @@
           "name": "armed_for",
           "params": "actor_id: StringName",
           "returns": "-> Array"
+        },
+        {
+          "name": "close_phase",
+          "params": "commit: bool = true",
+          "returns": "-> bool"
         },
         {
           "name": "close_window",
@@ -794,6 +800,11 @@
         {
           "name": "is_save_boundary",
           "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "open_phase",
+          "params": "name: StringName, inputs: Array = []",
           "returns": "-> bool"
         },
         {
@@ -1072,6 +1083,7 @@
         "meta_level",
         "nest_level",
         "owner_actor",
+        "phase_checkpoints",
         "pre_close",
         "window_id"
       ]

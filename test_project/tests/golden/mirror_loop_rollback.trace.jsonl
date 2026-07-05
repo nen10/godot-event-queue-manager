@@ -1,0 +1,5 @@
+{"deadline":-1,"i":0,"kind":"window_opened","nest_level":1,"owner":"hero","window_id":1,"window_kind":"command"}
+{"i":1,"kind":"phase_opened","phase":"target_select","seq":1,"window_id":1}
+{"i":2,"kind":"phase_opened","phase":"mirror_input","seq":2,"window_id":1}
+{"i":3,"kind":"phase_opened","phase":"confirm","seq":3,"window_id":1}
+{"cleared_inputs":["mirror.a"],"i":4,"kind":"phase_rolled_back","phase":"mirror_input","rolled_back_from":["confirm"],"window_id":1}

@@ -23,6 +23,8 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 | `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime, EQActionResolutionPolicy, EQCondition, EQTagMatcher, EQTriggerEngine, EQTransaction, EQTriggerIndex, EQConditionSpec (EQM-111), EQConditionEval (EQM-111), EQWindow (EQM-114) |
 | `L3` | event-line internals | EQEventLines (EQM-112), EQStateAlgebra (EQM-121), EQRelationGraph (EQM-122) |
 
+EQM-126 surface note: `EQReservationRuntime.open_phase` / `close_phase` / `current_window` (操作フェーズ sub-checkpoint, SEM v1.2 §8.4)。
+
 EQM-125 surface note: `EQReservationRuntime.intervene_close` (介入の標準効果) / `open_window` の `meta_level` 末尾 param / `EQWindow.meta_level` (SEM v1.2 §8.2–8.3)。
 
 EQM-124 surface note: `EQReservationRuntime.submit_bundle` (atomic bundle 発行, SEM v1.2 §7.2)。

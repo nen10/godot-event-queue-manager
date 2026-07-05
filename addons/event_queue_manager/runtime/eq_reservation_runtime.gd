@@ -32,6 +32,7 @@ const EQConditionEval := preload("eq_condition_eval.gd")
 const EQEventLines := preload("eq_event_lines.gd")
 const EQEffectChunk := preload("eq_effect_chunk.gd")
 const EQTriggerEngine := preload("eq_trigger_engine.gd")
+const EQSnapshot := preload("eq_snapshot.gd")
 const EQWindow := preload("eq_window.gd")
 const EQTransaction := preload("eq_transaction.gd")
 
@@ -295,6 +296,8 @@ var _bundle_of: Dictionary = {}          # event_id -> bundle id
 var _bundle_members: Dictionary = {}      # bundle id -> Array[event_id]
 ## Safety bound for recursive transform rounds.
 var max_transform_rounds: int = 8
+## Deterministic phase checkpoint sequence.
+var _phase_seq: int = 0
 
 
 func _init(p_runtime = null) -> void:
@@ -362,6 +365,95 @@ func open_window(owner: StringName, kind: StringName, deadline: int = EQWindow.D
 	return w
 
 
+func _as_string_array(values: Array) -> Array:
+	var out: Array = []
+	for v in values:
+		out.append(String(v))
+	return out
+
+
+## Opens a phase checkpoint inside the top explicit window. `inputs` are mirrored
+## mirror-input slots for loop rollback.
+func open_phase(name: StringName, inputs: Array = []) -> bool:
+	if window_depth() <= 0:
+		runtime._fault(EQError.WINDOW_CLOSE_INVALID, "open_phase requires an explicit window", {}, true)
+		return false
+	if name == &"":
+		runtime._fault(EQError.POLICY_NAME_EMPTY, "open_phase name must not be empty", {}, true)
+		return false
+	var w: EQWindow = current_window()
+	if w == null:
+		runtime._fault(EQError.WINDOW_CLOSE_INVALID, "open_phase target window does not exist", {}, true)
+		return false
+	var history: Array = w.phase_checkpoints
+	var reopening := -1
+	for i in range(history.size()):
+		if String(history[i].get("name", "")) == String(name):
+			reopening = i
+			break
+	if reopening >= 0:
+		var replay_from: Dictionary = history[reopening]
+		var rolled_back_from: Array = []
+		var cleared_inputs: Array = _as_string_array(replay_from.get("inputs", []))
+		while history.size() > reopening + 1:
+			var cp: Dictionary = history.pop_back()
+			rolled_back_from.append(String(cp.get("name", "")))
+			cleared_inputs.append_array(_as_string_array(cp.get("inputs", [])))
+		if runtime.scheduler.restore(replay_from.get("snapshot", {})) != EQSnapshot.Load.OK:
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "phase checkpoint restore failed", {"phase": String(name)}, true)
+			return false
+		_reconcile_runtime_state_after_snapshot_restore()
+		cleared_inputs.sort()
+		runtime.trace().record({
+			"kind": "phase_rolled_back",
+			"window_id": w.window_id,
+			"phase": String(name),
+			"rolled_back_from": rolled_back_from,
+			"cleared_inputs": cleared_inputs,
+		})
+		return false
+	_phase_seq += 1
+	var cp := {
+		"name": name,
+		"snapshot": runtime.scheduler.snapshot(),
+		"inputs": _as_string_array(inputs),
+		"seq": _phase_seq,
+	}
+	history.append(cp)
+	runtime.trace().record({
+		"kind": "phase_opened",
+		"window_id": w.window_id,
+		"phase": String(name),
+		"seq": _phase_seq,
+	})
+	return true
+
+
+## Closes the top phase checkpoint in the explicit window.
+## commit=true: discard the checkpoint only. commit=false: restore snapshot.
+func close_phase(commit: bool = true) -> bool:
+	if window_depth() <= 0:
+		runtime._fault(EQError.WINDOW_CLOSE_INVALID, "close_phase has no explicit window", {}, true)
+		return false
+	var w: EQWindow = current_window()
+	if w == null or w.phase_checkpoints.is_empty():
+		runtime._fault(EQError.WINDOW_CLOSE_INVALID, "close_phase requires an open phase", {}, true)
+		return false
+	var cp: Dictionary = w.phase_checkpoints.pop_back()
+	if not commit:
+		if runtime.scheduler.restore(cp.get("snapshot", {})) != EQSnapshot.Load.OK:
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "phase checkpoint restore failed", {"phase": String(cp.get("name", ""))}, true)
+			return false
+		_reconcile_runtime_state_after_snapshot_restore()
+	runtime.trace().record({
+		"kind": "phase_closed",
+		"window_id": w.window_id,
+		"phase": String(cp.get("name", "")),
+		"committed": commit,
+	})
+	return true
+
+
 ## Attempts an intervention close on a target explicit window. Insufficient meta
 ## levels only avoid the close (non-fault); equal-or-greater levels close the
 ## target and all explicitly nested windows above it.
@@ -403,6 +495,7 @@ func intervene_close(window_id: int, intervener: Dictionary) -> bool:
 		_cancel_window_pending_members(top.window_id)
 		if top.draft != null:
 			top.draft.rollback()
+		top.phase_checkpoints = []
 		top.closed = true
 		_windows.pop_back()
 		var closed := {
@@ -433,6 +526,7 @@ func close_window(commit: bool = false, cause: StringName = &"closed") -> bool:
 func _close_top(commit: bool, cause: StringName) -> bool:
 	var w: EQWindow = _windows.pop_back()
 	w.closed = true
+	w.phase_checkpoints = []
 	if w.draft != null:
 		if commit:
 			# The clock may flow during a deadline window; only entry/counter
@@ -453,6 +547,43 @@ func _close_top(commit: bool, cause: StringName) -> bool:
 		"cause": String(cause),
 	})
 	return true
+
+
+func _reconcile_runtime_state_after_snapshot_restore() -> void:
+	var live_event_ids: Dictionary = {}
+	for e in runtime.scheduler.peek(runtime.scheduler.size()):
+		live_event_ids[int(e.event_id)] = true
+	for event_id in _window_of_event.keys():
+		if not live_event_ids.has(int(event_id)):
+			_window_of_event.erase(event_id)
+	for event_id in _bound_inv.keys():
+		if not live_event_ids.has(int(event_id)):
+			_bound_inv.erase(event_id)
+	for event_id in _bundle_of.keys():
+		if not live_event_ids.has(int(event_id)):
+			_bundle_of.erase(event_id)
+	for event_id in _by_event.keys():
+		if not live_event_ids.has(int(event_id)):
+			_by_event.erase(event_id)
+			_clear_bundle_event_link(int(event_id))
+			_window_of_event.erase(event_id)
+			_bound_inv.erase(event_id)
+	var dead_bundles: Array[StringName] = []
+	for bid in _bundle_members.keys():
+		var members: Array = _bundle_members[bid]
+		var kept: Array = []
+		for raw in members:
+			if live_event_ids.has(int(raw)):
+				kept.append(int(raw))
+		if kept.is_empty():
+			dead_bundles.append(bid)
+		else:
+			_bundle_members[bid] = kept
+	for bid in dead_bundles:
+		_bundle_members.erase(bid)
+	for event_id in _expiry_by_event.keys():
+		if not live_event_ids.has(int(event_id)):
+			_expiry_by_event.erase(event_id)
 
 
 ## Deadline check at the deterministic points (post-pop and tick boundary,

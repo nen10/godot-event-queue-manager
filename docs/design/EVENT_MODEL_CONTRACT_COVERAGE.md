@@ -41,7 +41,7 @@
 | provenance-chain (発行連鎖 / 段ごとメタレベル) | §6.5 | EQM-123 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
 | atomic-bundle (member 一括 → 単一 sweep) | §7.2 | EQM-124 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_atomic_bundle.gd<br>test_project/tests/golden/fairness_bundle.trace.jsonl |
 | meta-level-premature-close (単一 int / 同値 = 介入成功 / cause: intervention) | §8.2, §8.3 | EQM-125 | implemented | addons/event_queue_manager/runtime/eq_window.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/transaction/test_eq_premature_close.gd<br>test_project/tests/golden/interception_close.trace.jsonl |
-| phase-recursion (sub-checkpoint / ループ巻き戻し + 入力解除) | §8.4 | EQM-126 | reserved | addons/event_queue_manager/runtime/eq_window.gd | test_project/tests/transaction/test_eq_phase_rollback.gd |
+| phase-recursion (sub-checkpoint / ループ巻き戻し + 入力解除) | §8.4 | EQM-126 | implemented | addons/event_queue_manager/runtime/eq_window.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/transaction/test_eq_phase_rollback.gd<br>test_project/tests/golden/mirror_loop_rollback.trace.jsonl |
 | snapshot-v3 (modifier / relation / provenance / checkpoint tables) | §10.1 | EQM-127 | reserved | addons/event_queue_manager/runtime/eq_snapshot.gd | test_project/tests/transaction/test_eq_snapshot_v3.gd |
 | ebs-acceptance-suite (Q54 確認系 golden 束 + authoring 追加) | §16.2 | EQM-128 | reserved | dogfood/ | test_project/tests/golden/ |
 

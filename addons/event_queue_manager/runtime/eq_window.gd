@@ -34,6 +34,8 @@ var draft = null
 ## silent default action). Transient (never serialized).
 var pre_close: Callable = Callable()
 var closed: bool = false
+## Phase checkpoint stack for operation-phase sub-checkpoints (§8.4).
+var phase_checkpoints: Array = []
 
 
 func is_frozen() -> bool:
@@ -41,6 +43,12 @@ func is_frozen() -> bool:
 
 
 func to_dict() -> Dictionary:
+	var phases: Array = []
+	for cp in phase_checkpoints:
+		phases.append({
+			"name": String(cp.get("name", "")),
+			"seq": int(cp.get("seq", -1)),
+		})
 	return {
 		"window_id": window_id,
 		"owner_actor": String(owner_actor),
@@ -49,4 +57,5 @@ func to_dict() -> Dictionary:
 		"deadline": deadline,
 		"budget_paid": budget_paid,
 		"meta_level": meta_level,
+		"phase_history": phases,
 	}
