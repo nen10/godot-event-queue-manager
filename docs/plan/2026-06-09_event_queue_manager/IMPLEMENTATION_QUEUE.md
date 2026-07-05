@@ -164,8 +164,8 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 | EQM-127 | COMPLETE | EQM-126 | `docs/plan/2026-06-09_event_queue_manager/EQM-127_snapshot_v3/` | snapshot v3 + replay 証明拡張 (coverage: snapshot-v3)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/transaction/` | SEM §10.1: schema_version 3 (line_modifiers / relations / phase_checkpoints additive、wrapper・provenance inline); v2→v3 migrator (欠落 = 空); v3-in-v2 = 安定 error; roundtrip 証明 (modifier/relation/provenance/checkpoint を跨ぐ → 同一 pop 順 + 同一 trace)。coverage row flip。 |
 | EQM-128 | COMPLETE | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
 | EQM-129 | COMPLETE | EQM-128 | `docs/plan/2026-06-09_event_queue_manager/EQM-129_wrapper_semantics/` | [repair, 意図監査 A1] wrapper 意味論の標準 2 種 (inv 反転 / 関係連鎖付与)。 | `runtime/eq_state_algebra.gd`, `runtime/eq_relation_graph.gd`, `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | SEM §5.7 改訂 (標準 wrapper 2 種): kind=inv_chain は包まれた状態の grant を dual へ反転、kind=relation_chain は grant 時に関係沿いに連鎖付与 (展開機構と同一の cost 停止、連鎖の再帰なし)。未知 kind = 不活性 data (互換)。`state_wrapper_applied` trace (SEM §11 additive)。透徹連鎖・反転連鎖 acceptance golden。既存 golden 不変。 |
-| EQM-130 | READY | EQM-129 | `docs/plan/2026-06-09_event_queue_manager/EQM-130_maintenance_autodrive/` | [repair, 意図監査 A2/C1/C2] 維持条件 sweep の自動駆動 + 公平合成 acceptance + 迎撃標準形。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_runtime.gd`, `tests/core/`, `tests/golden/` | 相談4「EQM が評価タイミングを固定」の実装: 既定 sweep は step_tick で自動評価、カスタム sweep 名は同名 sweep rule (§4.7) 実行直後に自動評価。predicates は named registry から自動供給。公平: 公平関係 → 展開 → 非対称反射の合成 golden。迎撃: effect handler から intervene_close を呼ぶ標準形の例示。既存 golden 不変。 |
-| EQM-131 | BACKLOG | EQM-130 | `docs/plan/2026-06-09_event_queue_manager/EQM-131_acceptance_repair/` | [repair, 意図監査 B1/B2 + EBS A-R08-1] R06 資源述語停止 / retarget 中間段 / R08 消費順整合。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | R06: 焦点 counter line decrement + `<= 0` invalidation で停止する golden 変種 (「コスト述語の閉包」の証明) + 常真 assert の実質化。retarget: `params.stage` に int (連鎖 index、reach 検査) を additive 追加。R08: 例を EBS A-R08-1 (メタレベル昇順・同率付与順) に揃える。既存 golden 不変 (mutual_counter_stop は変種追加のみ)。 |
+| EQM-130 | COMPLETE | EQM-129 | `docs/plan/2026-06-09_event_queue_manager/EQM-130_maintenance_autodrive/` | [repair, 意図監査 A2/C1/C2] 維持条件 sweep の自動駆動 + 公平合成 acceptance + 迎撃標準形。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_runtime.gd`, `tests/core/`, `tests/golden/` | 相談4「EQM が評価タイミングを固定」の実装: 既定 sweep は step_tick で自動評価、カスタム sweep 名は同名 sweep rule (§4.7) 実行直後に自動評価。predicates は named registry から自動供給。公平: 公平関係 → 展開 → 非対称反射の合成 golden。迎撃: effect handler から intervene_close を呼ぶ標準形の例示。既存 golden 不変。 |
+| EQM-131 | READY | EQM-130 | `docs/plan/2026-06-09_event_queue_manager/EQM-131_acceptance_repair/` | [repair, 意図監査 B1/B2 + EBS A-R08-1] R06 資源述語停止 / retarget 中間段 / R08 消費順整合。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | R06: 焦点 counter line decrement + `<= 0` invalidation で停止する golden 変種 (「コスト述語の閉包」の証明) + 常真 assert の実質化。retarget: `params.stage` に int (連鎖 index、reach 検査) を additive 追加。R08: 例を EBS A-R08-1 (メタレベル昇順・同率付与順) に揃える。既存 golden 不変 (mutual_counter_stop は変種追加のみ)。 |
 
 ## Dynamic follow-up area
 
@@ -1412,3 +1412,25 @@ proof:
 ```
 
 Dependency sweep: EQM-129 COMPLETE → EQM-130 READY。Current pointer → EQM-130。
+
+### EQM-130 — COMPLETE (2026-07-05) — repair (意図監査 A2/C1/C2)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-130_maintenance_autodrive/
+  review: docs/review/autopilot/EQM-130_SELF_REVIEW_2026-07-05.md
+  pattern: P2 (codex 委譲 1 run; 検収指摘なし)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS ×2 (files=70 checks=1342 failures=0)
+  gate: §4 core (自動駆動 test = predicate false が step_tick だけで解消 / カスタム sweep 連動 /
+        未接続不変; golden fairness_relation_chain = 公平関係 → targets_expanded → 事後の片側反射)
+  key contracts: 相談4「EQM が評価タイミングを固定」の実装 — 既定 sweep は step_tick で自動評価、
+    カスタム sweep 名は §4.7 sweep rule 実行と連動 (同 tick 重複抑止)。predicates は named registry
+    から自動供給。迎撃標準形 (effect handler 内 intervene_close) を例示 test 化 (C2 消化)。
+  golden: tests/golden/fairness_relation_chain.trace.jsonl (new baseline)
+  major files:
+    - addons/event_queue_manager/runtime/eq_reservation_runtime.gd (step_tick 統合)
+    - test_project/tests/core/test_eq_fairness_relation.gd (new)
+```
+
+Dependency sweep: EQM-130 COMPLETE → EQM-131 READY。Current pointer → EQM-131。

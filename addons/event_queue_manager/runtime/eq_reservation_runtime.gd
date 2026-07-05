@@ -1402,6 +1402,14 @@ func _cancel_window_pending_members(window_id: int) -> void:
 			_trace_invalidated(int(event_id), res.actor_id, &"intervention")
 
 
+## Optional maintenance pass for a declared relation graph sweep. If no relation
+## graph is attached, this is a strict no-op (compatibility behavior).
+func _run_relation_maintenance(sweep: StringName) -> void:
+	if relations == null:
+		return
+	relations.run_maintenance(sweep, {"lines": lines.ctx_lines(), "view": {}}, runtime.predicates())
+
+
 func _clear_bundle_group(bundle_id: StringName) -> void:
 	if not _bundle_members.has(bundle_id):
 		return
@@ -1420,6 +1428,17 @@ func step_tick() -> void:
 	_check_deadlines()
 	lines.poll_tick(_watched())
 	lines.run_sweep_rules(runtime.registry)
+	var sweep := &"eqm.sweep.primary_threshold"
+	if relations != null:
+		sweep = relations.DEFAULT_SWEEP
+	_run_relation_maintenance(sweep)
+	var sweep_names := {}
+	sweep_names[String(sweep)] = true
+	for sweep_name in lines.sweep_rule_names():
+		if sweep_names.has(String(sweep_name)):
+			continue
+		sweep_names[String(sweep_name)] = true
+		_run_relation_maintenance(sweep_name)
 	_recheck_scheduled_invalidation()
 	_evaluate_pending_conditional()
 

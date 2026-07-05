@@ -2,6 +2,9 @@ extends RefCounted
 ## EQM-122: relation graph backend contract tests.
 
 const EQRelationGraph = preload("res://addons/event_queue_manager/runtime/eq_relation_graph.gd")
+const EQReservationRuntime = preload("res://addons/event_queue_manager/runtime/eq_reservation_runtime.gd")
+const EQReservation = preload("res://addons/event_queue_manager/runtime/eq_reservation.gd")
+const EQActionDefinition = preload("res://addons/event_queue_manager/resources/eq_action_definition.gd")
 const EQTrace = preload("res://addons/event_queue_manager/runtime/eq_trace.gd")
 const EQConditionSpec = preload("res://addons/event_queue_manager/resources/eq_condition_spec.gd")
 
@@ -12,9 +15,27 @@ static func run(t) -> void:
 	_test_serial_rebound_chain(t)
 	_test_invalidate_actor(t)
 	_test_maintenance(t)
+	_test_step_tick_relation_maintenance_auto_default_sweep(t)
+	_test_step_tick_relation_maintenance_auto_custom_sweep(t)
+	_test_step_tick_without_relations_keeps_behavior(t)
 	_test_roundtrip(t)
 	_test_lunar_stellar_acceptance_example(t)
 	_test_reservation_runtime_wiring(t)
+
+
+static func _rr(actors: Array) -> EQReservationRuntime:
+	var rr := EQReservationRuntime.new()
+	rr.runtime.emit_engine_diagnostics = false
+	for actor in actors:
+		rr.runtime.register_actor(actor)
+	return rr
+
+
+static func _def(kind: int, delay: int = 0) -> EQActionDefinition:
+	var d := EQActionDefinition.new()
+	d.kind = kind
+	d.delay = delay
+	return d
 
 
 ## EQM-122 wiring: an attached relation graph is swept by the normal-path
@@ -229,6 +250,61 @@ static func _test_maintenance(t) -> void:
 	t.eq(rg2.run_maintenance(&"eqm.sweep.primary_threshold", {"lines": {&"eqm.line.primary": 9}, "view": {}}, {}), 0, "maintenance-less type under its sweep dissolves nothing (regression: typed-null crash)")
 	t.eq(rg2.faults.size(), 0, "maintenance-less type records no fault")
 	t.ok(rg2.relation(r4).has("relation_id"), "maintenance-less relation survives the sweep")
+
+
+## Runtime bridge: with a connected relation graph, default-sweep maintenance
+## must be auto-driven from step_tick via the runtime helper.
+static func _test_step_tick_relation_maintenance_auto_default_sweep(t) -> void:
+	var rr := _rr([&"moon", &"star"])
+	rr.runtime.register_predicate(&"is_live", func(_view): return false)
+	var rg := EQRelationGraph.new()
+	rg.declare_relation_type({
+		"name": &"追跡",
+		"structure": EQRelationGraph.Structure.GRAPH,
+		"maintenance": {
+			"type": EQConditionSpec.Type.NAMED_PREDICATE,
+			"predicate_name": &"is_live",
+		},
+	})
+	rr.relations = rg
+	var rel := rg.bind(&"追跡", &"moon", &"star")
+	rr.step_tick()
+	t.ok(rg.relation(rel).is_empty(), "default sweep is automatically run by step_tick")
+	t.eq(rg.faults.size(), 0, "missing predicate registration path is not used for runtime-driven default sweep")
+
+
+## Custom sweep names must be evaluated from step_tick by sweep-rule registration order.
+static func _test_step_tick_relation_maintenance_auto_custom_sweep(t) -> void:
+	var rr := _rr([&"moon", &"star"])
+	rr.runtime.register_predicate(&"allow", func(_view): return false)
+	var rg := EQRelationGraph.new()
+	rg.declare_relation_type({
+		"name": &"視界",
+		"structure": EQRelationGraph.Structure.GRAPH,
+		"sweep": &"turn_start",
+		"maintenance": {
+			"type": EQConditionSpec.Type.NAMED_PREDICATE,
+			"predicate_name": &"allow",
+		},
+	})
+	rr.relations = rg
+	var rel := rg.bind(&"視界", &"moon", &"star")
+	var called := {"count": 0}
+	rr.lines.register_sweep_rule(&"turn_start", func(_actor_id: StringName, _data: Dictionary, _lines) -> void:
+		called["count"] += 1
+	)
+	rr.step_tick()
+	t.eq(called["count"], 2, "registered turn_start sweep rule is still executed per actor")
+	t.ok(rg.relation(rel).is_empty(), "custom sweep rule name triggers linked relation maintenance")
+	t.ok(rg.relation(rel).is_empty(), "custom sweep test does not depend on default sweep")
+
+
+## No relation graph means step_tick keeps behavior (no maintenance errors, no new effects).
+static func _test_step_tick_without_relations_keeps_behavior(t) -> void:
+	var rr := _rr([&"moon", &"star"])
+	rr.runtime.register_predicate(&"always", func(_view): return false)
+	rr.step_tick()
+	t.eq(rr.runtime.faults.size(), 0, "step_tick is safe when no relation graph is attached")
 
 
 static func _test_roundtrip(t) -> void:
