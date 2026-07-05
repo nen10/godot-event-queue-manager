@@ -23,6 +23,8 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 | `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime, EQActionResolutionPolicy, EQCondition, EQTagMatcher, EQTriggerEngine, EQTransaction, EQTriggerIndex, EQConditionSpec (EQM-111), EQConditionEval (EQM-111), EQWindow (EQM-114) |
 | `L3` | event-line internals | EQEventLines (EQM-112), EQStateAlgebra (EQM-121), EQRelationGraph (EQM-122) |
 
+EQM-129 surface note: `EQRelationGraph.expand` (決定的 BFS の公開 helper — pipeline 2a と wrapper 連鎖が共用) / `EQStateAlgebra.relations` (optional 接続) / wrapper dict の optional `kind` (標準 2 種: inv_chain / relation_chain, SEM v1.2 §5.7)。
+
 EQM-127 surface note: `EQReservationRuntime.state_algebra` (optional 接続) / save bundle schema_version 3 (relations / state_algebra additive tables, SEM v1.2 §10.1)。
 
 EQM-126 surface note: `EQReservationRuntime.open_phase` / `close_phase` / `current_window` (操作フェーズ sub-checkpoint, SEM v1.2 §8.4)。

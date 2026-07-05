@@ -226,6 +226,54 @@ func relation_ids() -> Array:
 	return ids
 
 
+# --- traversal ---------------------------------------------------------------
+
+## Expands neighbors from `origin` over undirected `relation_type` edges.
+## - first entry is origin
+## - relation ids are visited in sorted id order
+## - each hop consumes `hop_cost` and cumulative cost above budget is rejected
+## - revisiting an actor still consumes cost and is enqueued
+## - each actor is added to the output only once
+func expand(origin: StringName, relation_type: StringName, hop_cost: int, budget: int) -> Array:
+	var out: Array[StringName] = [origin]
+	if relation_type == &"" or hop_cost <= 0 or budget <= 0:
+		return out
+
+	var rel_ids: Array = relation_ids()
+	var frontier: Array = [{"actor": origin, "cost": 0}]
+	var idx := 0
+	while idx < frontier.size():
+		var frame: Dictionary = frontier[idx]
+		idx += 1
+		var current := StringName(frame.get("actor", ""))
+		var spent := int(frame.get("cost", 0))
+		for rel_id in rel_ids:
+			var rel: Dictionary = relation(StringName(rel_id))
+			if rel.is_empty():
+				continue
+			if StringName(rel.get("type", "")) != relation_type:
+				continue
+			var next: StringName = &""
+			if rel.get("from_actor", &"") == current:
+				next = StringName(rel.get("to_actor", ""))
+			elif rel.get("to_actor", &"") == current:
+				next = StringName(rel.get("from_actor", ""))
+			else:
+				continue
+			var next_cost := spent + hop_cost
+			if next_cost > budget:
+				continue
+			var should_append := true
+			for v in out:
+				if String(v) == String(next):
+					should_append = false
+					break
+			if should_append:
+				out.append(next)
+			frontier.append({"actor": next, "cost": next_cost})
+	return out
+
+
 # --- maintenance ---------------------------------------------------------------
 
 func run_maintenance(sweep: StringName, ctx: Dictionary, predicates: Dictionary) -> int:

@@ -12,6 +12,7 @@ enum Rule { CANCEL, EXCLUDE, COEXIST }
 var faults: Array[Dictionary] = []
 
 var lines: EQEventLines
+var relations = null
 
 ## declaration key -> {state_a: StringName, state_b: StringName, rule: Rule}
 var _pair_rules: Dictionary = {}
@@ -21,9 +22,10 @@ var _wrappers: Dictionary = {}
 var _trace = null
 
 
-func _init(p_lines: EQEventLines, p_trace = null) -> void:
+func _init(p_lines: EQEventLines, p_trace = null, p_relations = null) -> void:
 	lines = p_lines if p_lines != null else EQEventLines.new(p_trace)
 	_trace = p_trace
+	relations = p_relations
 	if p_trace != null:
 		lines.set_trace(p_trace)
 
@@ -103,8 +105,84 @@ func _clear_to_zero(line_id: StringName) -> void:
 ## Grant adds or subtracts from the state's visible stack.
 ## For CANCEL, the pair declaration decides sign by declaration order.
 func grant_state(actor: StringName, state: StringName, amount: int = 1) -> void:
+	_grant_state(actor, state, amount, true)
+
+
+func _grant_state(actor: StringName, state: StringName, amount: int, allow_relation_chain: bool) -> void:
 	if not _is_valid_target(actor, state, &"grant_state"):
 		return
+
+	var current_state: StringName = state
+	var actor_key := String(actor)
+	var state_key := String(state)
+	var state_wrappers: Array = []
+	if _wrappers.has(actor_key) and (_wrappers[actor_key] as Dictionary).has(state_key):
+		state_wrappers = _wrappers[actor_key][state_key]
+
+	var relation_chain_wrappers: Array = []
+	for w in state_wrappers:
+		var wrapper: Dictionary = w
+		var wrapper_name := StringName(wrapper.get("name", ""))
+		var wrapper_kind := StringName(wrapper.get("kind", ""))
+		match String(wrapper_kind):
+			"inv_chain":
+				current_state = _dual_of(current_state)
+				_record_state_wrapper_applied(actor, current_state, wrapper_name, wrapper_kind)
+			"relation_chain":
+				if allow_relation_chain:
+					relation_chain_wrappers.append({"state": current_state, "wrapper": wrapper})
+				# Suppressed on chained grants (single level, no transitivity):
+				# nothing applied, so nothing is traced.
+			_:
+				# Unknown/absent kind = inert declarative data (acceptance
+				# vocabulary room) — never traced as an application.
+				pass
+
+	_apply_state_delta(actor, current_state, amount)
+	for entry in relation_chain_wrappers:
+		var wrapper: Dictionary = entry["wrapper"]
+		var target_state: StringName = entry["state"]
+		var wrapped := _apply_relation_chain(actor, target_state, amount, wrapper)
+		var wrapper_name := StringName(wrapper.get("name", ""))
+		var params := wrapper.get("params", {})
+		if not (params is Dictionary):
+			continue
+		_record_state_wrapper_applied(actor, target_state, wrapper_name, &"relation_chain", wrapped)
+
+
+func _dual_of(state: StringName) -> StringName:
+	var pair := _pair_for_state(state)
+	if pair.is_empty():
+		_fault("inv_chain wrapper requires a declared pair for state: %s" % state, EQError.CONDITION_LINE_UNKNOWN)
+		return state
+	if pair["state_a"] == state:
+		return pair["state_b"]
+	if pair["state_b"] == state:
+		return pair["state_a"]
+	return state
+
+
+func _apply_relation_chain(actor: StringName, state: StringName, amount: int, wrapper: Dictionary) -> Array:
+	if relations == null:
+		_fault("relation_chain wrapper requires relations to expand state grants", EQError.CONDITION_LINE_UNKNOWN)
+		return []
+	var params := wrapper.get("params", {})
+	if not (params is Dictionary):
+		return []
+	var relation_type := StringName(params.get("relation_type", ""))
+	var hop_cost := int(params.get("hop_cost", 0))
+	var budget := int(params.get("budget", 0))
+	var expanded: Array = relations.expand(actor, relation_type, hop_cost, budget)
+	var chained: Array = []
+	for target in expanded:
+		if String(target) == String(actor):
+			continue
+		_grant_state(target, state, amount, false)
+		chained.append(target)
+	return chained
+
+
+func _apply_state_delta(actor: StringName, state: StringName, amount: int) -> void:
 	var pair := _pair_for_state(state)
 	var rule := int(pair.get("rule", Rule.COEXIST))
 	match rule:
@@ -126,6 +204,28 @@ func grant_state(actor: StringName, state: StringName, amount: int = 1) -> void:
 			if not lines.has_line(line):
 				lines.issue(line, 0, 0)
 			lines.advance(line, amount)
+
+
+func _record_state_wrapper_applied(actor: StringName, state: StringName, wrapper: StringName, kind: StringName, chained: Array = []) -> void:
+	if _trace == null:
+		return
+	var row := {
+		"kind": "state_wrapper_applied",
+		"actor": String(actor),
+		"state": String(state),
+		"wrapper": String(wrapper),
+		"wrapper_kind": String(kind),
+	}
+	if not chained.is_empty() or kind == &"relation_chain":
+		row["chained"] = _string_array(chained)
+	_trace.record(row)
+
+
+func _string_array(values: Array) -> Array:
+	var out: Array = []
+	for value in values:
+		out.append(String(value))
+	return out
 
 
 ## Sets the state's resolved stack to 0.
@@ -172,13 +272,17 @@ func stacks_of(actor: StringName, state: StringName) -> int:
 	return max(0, lines.value_of(line))
 
 
-## wrapper = {"name": StringName, "params": Dictionary}
+## wrapper = {"name": StringName, "params": Dictionary, "kind": StringName (optional)}
 ## Params must be serializable data (no float / no callable).
 func wrap_state(actor: StringName, state: StringName, wrapper: Dictionary) -> void:
 	if not _is_valid_target(actor, state, &"wrap_state"):
 		return
 	if not _is_serializable_wrapper(wrapper):
-		_fault("wrap_state wrapper must be {name: StringName, params: Dictionary} and serializable", EQError.CONDITION_LINE_UNKNOWN)
+		_fault("wrap_state wrapper must be {name: StringName, params: Dictionary[, kind: StringName]} and serializable", EQError.CONDITION_LINE_UNKNOWN)
+		return
+	var wrapper_kind := StringName(wrapper.get("kind", ""))
+	if wrapper_kind == &"relation_chain" and not _is_valid_relation_chain_params(wrapper.get("params", {})):
+		_fault("relation_chain wrapper params must be {relation_type: StringName, hop_cost: int > 0, budget: int > 0}", EQError.CONDITION_LINE_UNKNOWN)
 		return
 	var actor_key := String(actor)
 	var state_key := String(state)
@@ -188,6 +292,8 @@ func wrap_state(actor: StringName, state: StringName, wrapper: Dictionary) -> vo
 	if not actor_wrappers.has(state_key):
 		actor_wrappers[state_key] = []
 	var entry := {"name": StringName(wrapper["name"]), "params": wrapper["params"].duplicate(true)}
+	if wrapper.has("kind"):
+		entry["kind"] = StringName(wrapper["kind"])
 	actor_wrappers[state_key].append(entry)
 	_wrappers[actor_key] = actor_wrappers
 	if _trace != null:
@@ -266,6 +372,8 @@ func to_dict() -> Dictionary:
 					"name": String(w["name"]),
 					"params": (w["params"] as Dictionary).duplicate(true),
 				})
+				if w.has("kind"):
+					serialized[serialized.size() - 1]["kind"] = String(w["kind"])
 			wrappers.append({"actor": actor_key, "state": state_key, "stack": serialized})
 	return {
 		"inv_pairs": pairs,
@@ -287,7 +395,13 @@ static func from_dict(d: Dictionary, lines: EQEventLines, trace = null) -> RefCo
 		var state := StringName(entry.get("state", ""))
 		for sw in entry.get("stack", []):
 			var wrapper := sw as Dictionary
-			out.wrap_state(actor, state, {"name": StringName(wrapper.get("name", "")), "params": wrapper.get("params", {})})
+			var payload := {
+				"name": StringName(wrapper.get("name", "")),
+				"params": wrapper.get("params", {}),
+			}
+			if wrapper.has("kind"):
+				payload["kind"] = wrapper.get("kind", "")
+			out.wrap_state(actor, state, payload)
 	return out
 
 
@@ -310,14 +424,17 @@ func restore(d: Dictionary) -> void:
 		var stack: Array = []
 		for sw in entry.get("stack", []):
 			var wrapper := sw as Dictionary
-			stack.append({"name": StringName(wrapper.get("name", "")), "params": wrapper.get("params", {}).duplicate(true)})
+			var wrapped := {"name": StringName(wrapper.get("name", "")), "params": wrapper.get("params", {}).duplicate(true)}
+			if wrapper.has("kind"):
+				wrapped["kind"] = StringName(wrapper.get("kind", ""))
+			stack.append(wrapped)
 		if not _wrappers.has(actor_key):
 			_wrappers[actor_key] = {}
 		(_wrappers[actor_key] as Dictionary)[state_key] = stack
 
 
 func _is_serializable_wrapper(wrapper: Dictionary) -> bool:
-	if wrapper.size() != 2:
+	if wrapper.size() < 2 or wrapper.size() > 3:
 		return false
 	if not wrapper.has("name") or not wrapper.has("params"):
 		return false
@@ -328,6 +445,24 @@ func _is_serializable_wrapper(wrapper: Dictionary) -> bool:
 	if typeof(wrapper["params"]) != TYPE_DICTIONARY:
 		return false
 	if not _is_serializable(wrapper["params"]):
+		return false
+	if wrapper.has("kind"):
+		if typeof(wrapper.get("kind", "")) != TYPE_STRING and typeof(wrapper.get("kind", "")) != TYPE_STRING_NAME:
+			return false
+	return true
+
+
+func _is_valid_relation_chain_params(params) -> bool:
+	if not (params is Dictionary):
+		return false
+	var relation_type: Variant = params.get("relation_type", "")
+	if typeof(relation_type) != TYPE_STRING and typeof(relation_type) != TYPE_STRING_NAME:
+		return false
+	if StringName(relation_type) == &"":
+		return false
+	if typeof(params.get("hop_cost", 0)) != TYPE_INT or int(params.get("hop_cost", 0)) <= 0:
+		return false
+	if typeof(params.get("budget", 0)) != TYPE_INT or int(params.get("budget", 0)) <= 0:
 		return false
 	return true
 

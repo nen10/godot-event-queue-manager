@@ -1,0 +1,9 @@
+{"from":"moon","i":0,"kind":"relation_bound","relation":"eqm.rel.1","to":"star","type":"summon"}
+{"actor":"moon","depth":1,"i":1,"kind":"state_wrapped","state":"summon","wrapper":"chain_moon"}
+{"actor":"star","depth":1,"i":2,"kind":"state_wrapped","state":"summon","wrapper":"inverse_star"}
+{"cause":"issued","i":3,"kind":"event_line_progressed","line":"eqm.axis.moon.summon__shimmer","rate":0,"to":0}
+{"cause":"advanced","from":0,"i":4,"kind":"event_line_progressed","line":"eqm.axis.moon.summon__shimmer","to":2}
+{"actor":"star","i":5,"kind":"state_wrapper_applied","state":"shimmer","wrapper":"inverse_star","wrapper_kind":"inv_chain"}
+{"cause":"issued","i":6,"kind":"event_line_progressed","line":"eqm.axis.star.summon__shimmer","rate":0,"to":0}
+{"cause":"advanced","from":0,"i":7,"kind":"event_line_progressed","line":"eqm.axis.star.summon__shimmer","to":-2}
+{"actor":"moon","chained":["star"],"i":8,"kind":"state_wrapper_applied","state":"summon","wrapper":"chain_moon","wrapper_kind":"relation_chain"}

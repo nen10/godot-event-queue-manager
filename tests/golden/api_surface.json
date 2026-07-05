@@ -1242,6 +1242,11 @@
           "returns": "-> bool"
         },
         {
+          "name": "expand",
+          "params": "origin: StringName, relation_type: StringName, hop_cost: int, budget: int",
+          "returns": "-> Array"
+        },
+        {
           "name": "invalidate_actor",
           "params": "actor_id: StringName",
           "returns": "-> int"
@@ -1360,7 +1365,8 @@
       "signals": [],
       "vars": [
         "faults",
-        "lines"
+        "lines",
+        "relations"
       ]
     }
   },
