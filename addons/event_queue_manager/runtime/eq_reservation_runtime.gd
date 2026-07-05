@@ -39,6 +39,10 @@ var runtime: EQRuntime
 var lines: EQEventLines
 var chunk: EQEffectChunk
 var engine: EQTriggerEngine
+## Optional relation graph (EQRelationGraph, L3 — SEM §13.1). When attached,
+## actor departure dissolves its incident relations through the declared
+## on_dissolve rules (EQM-122); the §6.4 expansion consumes it (EQM-123).
+var relations = null
 
 ## Records drained from the chunk by the last resolve_next() call (§6.1 step 5).
 var last_drained: Array = []
@@ -597,6 +601,8 @@ func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed"
 	for event_id in _expiry_by_event.keys():
 		if (_expiry_by_event[event_id] as EQReservation).actor_id == actor_id:
 			_expiry_by_event.erase(event_id)
+	if relations != null:
+		relations.invalidate_actor(actor_id)
 	return runtime.invalidate_actor(actor_id, cause)
 
 

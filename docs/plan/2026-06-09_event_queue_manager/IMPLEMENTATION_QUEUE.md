@@ -156,8 +156,8 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 |---|---|---|---|---|---|---|
 | EQM-120 | COMPLETE | — | `docs/plan/2026-06-09_event_queue_manager/EQM-120_semantics_round3/` | Semantics round 3: Q44–Q54 確定記述 (SEM v1.2) + registry finalization + synthesis + coverage reserved 行 + queue Phase 12 起票 + EBS 原本同期。 | `docs/design/EVENT_MODEL_SEMANTICS.md`, `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`, `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`, `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md` | SEM v1.2 が Q44–Q54 を *(v1.2)* 節として additive 記録 (§4.8/§5.7/§6.4–6.5/§7.2/§8.2–8.4/§10.1/§11/§13.1/§16.2)。registry 全 Q DECIDED/SETTLED + 相談ラウンド2・3 表 + pointer 表。coverage reserved 10 行 (owning = EQM-121..128)。`./tools/test.sh` PASS。 |
 | EQM-121 | COMPLETE | EQM-120 | `docs/plan/2026-06-09_event_queue_manager/EQM-121_state_algebra/` | 状態代数 backend (coverage: state-algebra, rate-modifier-stack)。 | `runtime/eq_state_algebra.gd`, `runtime/eq_event_lines.gd`, `resources/`, `tests/core/` | SEM §5.7/§4.8: inv ペア宣言 + 共存規則 (相殺 = 符号付き 1 本 / 排他 = 解除→付与 / 共存); wrapper 合成構造 (wrap 順適用・LIFO unwrap・trace); rate modifier-stack (加算 + override、実効再計算、寿命 = 既存 invalidation 語彙); 寿命 3 種 acceptance (スタック系/ターン系/現象 golden)。coverage rows flip。 |
-| EQM-122 | READY | EQM-121 | `docs/plan/2026-06-09_event_queue_manager/EQM-122_relation_graph/` | 関係グラフ backend (coverage: relation-graph)。 | `runtime/eq_relation_graph.gd`, `runtime/eq_runtime.gd`, `tests/core/` | SEM §13.1: 関係 instance table (決定的採番) + 関係型宣言 (分類 / inv 反転形 / TREE 制約 validation / 維持条件 / 宣言 sweep / 解消時規則); 直列縫合; invalidate_actor 連動; relation trace kinds; 月/星 acceptance 例。coverage row flip。 |
-| EQM-123 | BACKLOG | EQM-122 | `docs/plan/2026-06-09_event_queue_manager/EQM-123_resolution_rewrites/` | pipeline 拡張: 展開 + 変換 + provenance (coverage: expansion-transform, provenance-chain)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `tests/core/` | SEM §6.4/§6.5: 2a target 展開 (BFS 関係 id 昇順、メタ/コスト停止規律 — §8 語彙); 2b パターン変換 (パラメータ別型: target 差し替え / 状態代数 inv、メタ降順→priority→sequence、多重適用 + 有界 round 安全弁、適用ごと trace); provenance 連鎖の自動継承・追記 (event 側)。鑑波の損害波及 golden。coverage rows flip。 |
+| EQM-122 | COMPLETE | EQM-121 | `docs/plan/2026-06-09_event_queue_manager/EQM-122_relation_graph/` | 関係グラフ backend (coverage: relation-graph)。 | `runtime/eq_relation_graph.gd`, `runtime/eq_runtime.gd`, `tests/core/` | SEM §13.1: 関係 instance table (決定的採番) + 関係型宣言 (分類 / inv 反転形 / TREE 制約 validation / 維持条件 / 宣言 sweep / 解消時規則); 直列縫合; invalidate_actor 連動; relation trace kinds; 月/星 acceptance 例。coverage row flip。 |
+| EQM-123 | READY | EQM-122 | `docs/plan/2026-06-09_event_queue_manager/EQM-123_resolution_rewrites/` | pipeline 拡張: 展開 + 変換 + provenance (coverage: expansion-transform, provenance-chain)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `tests/core/` | SEM §6.4/§6.5: 2a target 展開 (BFS 関係 id 昇順、メタ/コスト停止規律 — §8 語彙); 2b パターン変換 (パラメータ別型: target 差し替え / 状態代数 inv、メタ降順→priority→sequence、多重適用 + 有界 round 安全弁、適用ごと trace); provenance 連鎖の自動継承・追記 (event 側)。鑑波の損害波及 golden。coverage rows flip。 |
 | EQM-124 | BACKLOG | EQM-123 | `docs/plan/2026-06-09_event_queue_manager/EQM-124_atomic_bundle/` | composite atomic bundle (coverage: atomic-bundle)。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | SEM §7.2: bundle API (member 全 effect 適用 → 単一 sweep、member 順 = §7.1 hook → 発行順、`bundle_resolved` trace); 公平の並列 golden (composite 解決 + 事後の個別反射誘発 — 相談3 意味論)。coverage row flip。 |
 | EQM-125 | BACKLOG | EQM-124 | `docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/` | メタレベル + window premature close (coverage: meta-level-premature-close)。 | `runtime/eq_window.gd`, `runtime/eq_reservation_runtime.gd`, `resources/eq_action_definition.gd`, `tests/transaction/` | SEM §8.2/§8.3: meta_level 宣言 (default 0) を event/window が運ぶ; 介入 close 判定 (intervener >= window、同値 = 介入成功); 解決済み維持・pending 一掃・`window_closed(cause: intervention)` + 両メタ値 trace; 迎撃 (5 歩移動の 2 歩目) golden。coverage row flip。 |
 | EQM-126 | BACKLOG | EQM-125 | `docs/plan/2026-06-09_event_queue_manager/EQM-126_phase_recursion/` | 操作フェーズ再帰 + ループ解消 (coverage: phase-recursion)。 | `runtime/eq_window.gd`, `runtime/eq_transaction.gd`, `tests/transaction/` | SEM §8.4: フェーズ内 sub-checkpoint (順序付き・決定的 id); 遷移履歴によるループ検出 (同一フェーズ再訪 = 最小 cycle); ループ開始点へ巻き戻し + cycle 上の鏡面入力解除 + `phase_rolled_back` trace; 水鏡の再帰入力 golden。coverage row flip。 |
@@ -1192,3 +1192,28 @@ proof:
 ```
 
 Dependency sweep: EQM-121 COMPLETE → EQM-122 READY (EQM-123..128 BACKLOG)。Current pointer → EQM-122。
+
+### EQM-122 — COMPLETE (2026-07-05)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-122_relation_graph/
+  review: docs/review/autopilot/EQM-122_SELF_REVIEW_2026-07-05.md
+  pattern: P2 (codex GPT-5.5 委譲 1 run; orchestrator 検収で 1 修正 + 配線追加)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS ×2 (files=62 checks=1103 failures=0; api-surface ok;
+      contract-coverage rows=31 implemented=24 reserved=7 violations=0)
+  gate: §4 core (trace 内容 test — relation_bound/dissolved/rebound/inverted; TREE 拒否; 直列縫合;
+        maintenance sweep = EQConditionEval 流用; 月/星 acceptance 例)
+  repair-now: run_maintenance の typed-null 代入が maintenance 無し型で engine error + 誤 fault
+    (orchestrator 検収 probe で発見) → untyped 化 + 隔離 regression test
+  wiring: EQReservationRuntime.relations (optional) + invalidate_actor が incident 関係を
+    解消時規則経由で dissolve (配線 test 含む)
+  golden: tests/golden/api_surface.json (EQRelationGraph L3 追加、明示 --update + doc note)
+  major files:
+    - addons/event_queue_manager/runtime/eq_relation_graph.gd (new, L3)
+    - addons/event_queue_manager/runtime/eq_reservation_runtime.gd (relations 配線)
+    - test_project/tests/core/test_eq_relation_graph.gd (new)
+```
+
+Dependency sweep: EQM-122 COMPLETE → EQM-123 READY (EQM-124..128 BACKLOG)。Current pointer → EQM-123。

@@ -36,7 +36,7 @@
 | authoring-acceptance (反撃準備 .tres 受け入れ基準) | §5.6 | EQM-119 | implemented | dogfood/action_resolution/counterattack_preparation.tres<br>dogfood/action_resolution/battle.gd | test_project/tests/resource/test_eq_authoring_acceptance.gd<br>test_project/tests/golden/authoring_counterattack.trace.jsonl |
 | state-algebra (inv ペア / 共存規則 / wrapping) | §5.7 | EQM-121 | implemented | addons/event_queue_manager/runtime/eq_state_algebra.gd | test_project/tests/core/test_eq_state_algebra.gd<br>test_project/tests/golden/lifetime_composition.trace.jsonl |
 | rate-modifier-stack (suspension / 加算 + override) | §4.8 | EQM-121 | implemented | addons/event_queue_manager/runtime/eq_event_lines.gd | test_project/tests/core/test_eq_event_lines.gd |
-| relation-graph (型宣言 / 維持 sweep / 直列縫合 / 離脱連動) | §13.1 | EQM-122 | reserved | addons/event_queue_manager/runtime/eq_relation_graph.gd | test_project/tests/core/test_eq_relation_graph.gd |
+| relation-graph (型宣言 / 維持 sweep / 直列縫合 / 離脱連動) | §13.1 | EQM-122 | implemented | addons/event_queue_manager/runtime/eq_relation_graph.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_relation_graph.gd |
 | expansion-transform (target 展開 / パターン変換 / 多重適用) | §6.4 | EQM-123 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
 | provenance-chain (発行連鎖 / 段ごとメタレベル) | §6.5 | EQM-123 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
 | atomic-bundle (member 一括 → 単一 sweep) | §7.2 | EQM-124 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_atomic_bundle.gd |

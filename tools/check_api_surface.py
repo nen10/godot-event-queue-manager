@@ -56,6 +56,8 @@ LAYER_MAP = {
     "EQEventLines": "L3",
     # L3 state algebra (EQM-121): inv pairs / coexistence rules / wrapping (SEM v1.2 §5.7)
     "EQStateAlgebra": "L3",
+    # L3 relation graph (EQM-122): typed directed relations / suture / maintenance (SEM v1.2 §13.1)
+    "EQRelationGraph": "L3",
 }
 
 LAYERS = ["core", "L0", "L1", "L2", "L3", "presentation", "ui"]

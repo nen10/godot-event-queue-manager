@@ -847,6 +847,7 @@
         "lines",
         "max_cascade_rounds",
         "max_window_depth",
+        "relations",
         "runtime"
       ]
     },
@@ -1162,6 +1163,84 @@
           "name": "value_of",
           "params": "id: StringName",
           "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "faults"
+      ]
+    },
+    "EQRelationGraph": {
+      "consts": [
+        "DEFAULT_SWEEP",
+        "EQConditionEval",
+        "EQConditionSpec",
+        "EQError"
+      ],
+      "enums": [
+        "Dissolve",
+        "Structure"
+      ],
+      "methods": [
+        {
+          "name": "bind",
+          "params": "type: StringName, from_actor: StringName, to_actor: StringName",
+          "returns": "-> StringName"
+        },
+        {
+          "name": "declare_relation_type",
+          "params": "decl: Dictionary",
+          "returns": "-> bool"
+        },
+        {
+          "name": "dissolve",
+          "params": "relation_id: StringName, cause: StringName = &\"dissolved\"",
+          "returns": "-> bool"
+        },
+        {
+          "name": "invalidate_actor",
+          "params": "actor_id: StringName",
+          "returns": "-> int"
+        },
+        {
+          "name": "invert",
+          "params": "relation_id: StringName",
+          "returns": "-> bool"
+        },
+        {
+          "name": "relation",
+          "params": "relation_id: StringName",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "relation_ids",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "relations_of",
+          "params": "actor: StringName",
+          "returns": "-> Array"
+        },
+        {
+          "name": "restore",
+          "params": "d: Dictionary",
+          "returns": "-> void"
+        },
+        {
+          "name": "run_maintenance",
+          "params": "sweep: StringName, ctx: Dictionary, predicates: Dictionary",
+          "returns": "-> int"
+        },
+        {
+          "name": "set_trace",
+          "params": "trace",
+          "returns": "-> void"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
         }
       ],
       "signals": [],
