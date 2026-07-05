@@ -807,6 +807,11 @@
           "returns": "-> Array"
         },
         {
+          "name": "plan_append_bundle_member",
+          "params": "planned: Array, event_id: int, _res: EQReservation",
+          "returns": "-> void"
+        },
+        {
           "name": "register_transform",
           "params": "decl: Dictionary",
           "returns": "-> bool"
@@ -835,6 +840,11 @@
           "name": "submit",
           "params": "res: EQReservation, reaction_condition = null",
           "returns": "-> int"
+        },
+        {
+          "name": "submit_bundle",
+          "params": "reservations: Array, delay: int = 0",
+          "returns": "-> StringName"
         },
         {
           "name": "submit_race",

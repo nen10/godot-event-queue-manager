@@ -23,6 +23,8 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 | `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime, EQActionResolutionPolicy, EQCondition, EQTagMatcher, EQTriggerEngine, EQTransaction, EQTriggerIndex, EQConditionSpec (EQM-111), EQConditionEval (EQM-111), EQWindow (EQM-114) |
 | `L3` | event-line internals | EQEventLines (EQM-112), EQStateAlgebra (EQM-121), EQRelationGraph (EQM-122) |
 
+EQM-124 surface note: `EQReservationRuntime.submit_bundle` (atomic bundle 発行, SEM v1.2 §7.2)。
+
 EQM-123 surface note: `EQReservationRuntime` gains `declare_expansion_rule` / `register_transform` / `max_transform_rounds` / `relations` (L2 面、引数は serializable Dictionary のみ); `EQReservation.provenance`, `EQActionDefinition.meta_level` / `state_name` は additive な宣言 field (SEM v1.2 §6.4–6.5, §8.2)。
 | `presentation` | simulation/presentation split (must not leak into L0/L1) | EQPresentationEvent, EQPresentationPolicy, EQPresentationBuffer |
 | `ui` | runtime/editor UI projections (must not leak into L0/L1) | EQTimelineHud, EQDebugOverlay, EQTimelineDock, EQDebugInspector, EQTemplateGenerator |

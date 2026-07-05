@@ -287,6 +287,10 @@ var _expansion_rules: Dictionary = {}
 var _transforms: Dictionary = {}
 var _transform_order: Array[String] = []
 var _transform_seq: int = 0
+## Bundle bookkeeping (ephemeral, intra-tick).
+var _bundle_seq: int = 0
+var _bundle_of: Dictionary = {}          # event_id -> bundle id
+var _bundle_members: Dictionary = {}      # bundle id -> Array[event_id]
 ## Safety bound for recursive transform rounds.
 var max_transform_rounds: int = 8
 
@@ -592,6 +596,90 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 	return -1
 
 
+## Submits multiple reservations as one deterministic atomic bundle. All bundled
+## members are scheduled for the same due_tick (current_tick + delay) and a
+## deterministic bundle id is returned.
+func submit_bundle(reservations: Array, delay: int = 0) -> StringName:
+	if reservations == null or reservations.is_empty():
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "submit_bundle requires a non-empty reservation array", {}, true)
+		return &""
+	if delay < 0:
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "submit_bundle delay must be >= 0", {"delay": delay}, true)
+		return &""
+	var planned: Array = []
+	for item in reservations:
+		if item == null or not (item is EQReservation):
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "submit_bundle accepts only EQReservation entries", {}, true)
+			_rollback_bundle_plan(planned)
+			return &""
+		var res: EQReservation = item
+		var v := res.validate()
+		if not v.is_valid():
+			var issue = v.errors()[0] if not v.errors().is_empty() else v.issues[0]
+			runtime._fault(issue["code"], issue["message"], {"actor_id": String(res.actor_id)}, true)
+			_rollback_bundle_plan(planned)
+			return &""
+		if not runtime.registry.is_registered(res.actor_id):
+			runtime._fault(EQError.RUNTIME_SCHEDULE_UNREGISTERED_ACTOR, "submit_bundle actor is not registered", {"actor_id": String(res.actor_id)}, true)
+			_rollback_bundle_plan(planned)
+			return &""
+		var kind := res.definition.kind
+		if kind == EQActionDefinition.Kind.WAIT or kind == EQActionDefinition.Kind.READY or kind == EQActionDefinition.Kind.OPERATION:
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "submit_bundle rejects WAIT/READY/OPERATION members", {"actor_id": String(res.actor_id), "kind": str(kind)}, true)
+			_rollback_bundle_plan(planned)
+			return &""
+		var bound := _bind_conditions(res)
+		if not (bound["solve"] as Array).is_empty():
+			var ctx := _ctx(_view_of(res))
+			var solve := EQConditionEval.solve_holds(bound["solve"], ctx)
+			var inv := EQConditionEval.invalidation_check(bound["inv"], ctx)
+			match EQConditionEval.decide(solve, inv):
+				EQConditionEval.Outcome.RESOLVE:
+					pass
+				EQConditionEval.Outcome.INVALIDATE:
+					runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "bundle member is currently invalid and cannot be bundled", {"actor_id": String(res.actor_id), "closed_by": String(inv["closed_by"])}, true)
+					_rollback_bundle_plan(planned)
+					return &""
+				EQConditionEval.Outcome.FAULT:
+					var f: Dictionary = (inv["fault"] if inv["fault"] != null else solve["fault"])
+					runtime._fault(f["code"], f["message"], f.get("context", {}), true)
+					_rollback_bundle_plan(planned)
+					return &""
+				_:
+					runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "bundle member is pending and cannot be bundled", {"actor_id": String(res.actor_id)}, true)
+					_rollback_bundle_plan(planned)
+					return &""
+		var id := _schedule(res, delay)
+		if id <= 0:
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "submit_bundle failed to schedule a member", {"actor_id": String(res.actor_id)}, true)
+			_rollback_bundle_plan(planned)
+			return &""
+		if not (bound["inv"] as Array).is_empty():
+			_bound_inv[id] = bound["inv"]
+		plan_append_bundle_member(planned, id, res)
+	var bundle_id := StringName("eqm.bundle.%d" % (_bundle_seq + 1))
+	_bundle_seq += 1
+	var members: Array = []
+	for p in planned:
+		members.append(int(p.get("event_id", -1)))
+		_bundle_of[p.get("event_id", -1)] = bundle_id
+	_bundle_members[bundle_id] = members
+	return bundle_id
+
+
+func plan_append_bundle_member(planned: Array, event_id: int, _res: EQReservation) -> void:
+	planned.append({"event_id": event_id, "reservation": _res})
+
+
+func _rollback_bundle_plan(planned: Array) -> void:
+	for p in planned:
+		var event_id := int(p.get("event_id", -1))
+		if event_id > 0 and runtime.scheduler.cancel(event_id):
+			_by_event.erase(event_id)
+			_bound_inv.erase(event_id)
+			_clear_bundle_event_link(event_id)
+
+
 ## OR-resolution race (SEM §5.2, Q18/Q28): several reservations for the SAME
 ## effect, each with different solve_conditions, usually racing on shared
 ## lines. Each member goes through the normal pipeline; the first to resolve
@@ -633,6 +721,7 @@ func _settle_race(gid: StringName, winner: EQReservation, winner_event_id: int) 
 		# scheduled loser
 		if res.event_id > 0 and _by_event.has(res.event_id):
 			runtime.scheduler.cancel(res.event_id)
+			_clear_bundle_event_link(res.event_id)
 			_by_event.erase(res.event_id)
 			_bound_inv.erase(res.event_id)
 		res.status = EQReservation.Status.INVALIDATED
@@ -936,9 +1025,13 @@ func resolve_next() -> EQReservation:
 		if res == null:
 			return null
 		_by_event.erase(e.event_id)
-		# step 1b — lazy invalidation at reference time (level semantics)
-		var inv_terms = _bound_inv.get(e.event_id, [])
+		var bundle_id := _bundle_of.get(e.event_id, &"")
+		var inv_terms_bundle := _bound_inv.get(e.event_id, [])
 		_bound_inv.erase(e.event_id)
+		if bundle_id != &"":
+			return _resolve_bundle(e.event_id, res, inv_terms_bundle, bundle_id)
+		# step 1b — lazy invalidation at reference time (level semantics)
+		var inv_terms = inv_terms_bundle
 		if not inv_terms.is_empty():
 			var inv := EQConditionEval.invalidation_check(inv_terms, _ctx(_view_of(res)))
 			if int(inv["result"]) == EQConditionEval.Result.YES:
@@ -966,11 +1059,138 @@ func resolve_next() -> EQReservation:
 			res.remaining_ruminations -= 1
 			submit(res)
 		# step 4 — sweep
-		_sweep(_view_of(res))
+		_sweep(raw_view)
 		# step 5 — drain; chunk-empty = save boundary
 		last_drained.append_array(chunk.drain())
 		return res
 	return null
+
+
+func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array, bundle_id: StringName) -> EQReservation:
+	var member_ids := _bundle_members.get(bundle_id, []) as Array
+	if member_ids.is_empty():
+		_clear_bundle_group(bundle_id)
+		return first
+	var candidates: Array = []
+	var resolved_views: Array = []
+	for id_val in member_ids:
+		var rid := int(id_val)
+		var res: EQReservation
+		var inv_terms: Array = []
+		if rid == event_id:
+			res = first
+			inv_terms = first_inv_terms.duplicate(true)
+		elif _by_event.has(rid):
+			res = _by_event[rid]
+			inv_terms = (_bound_inv.get(rid, []) as Array).duplicate(true)
+			_by_event.erase(rid)
+			_bound_inv.erase(rid)
+			runtime.scheduler.cancel(rid)
+		else:
+			continue
+		candidates.append({"event_id": rid, "res": res, "inv_terms": inv_terms})
+	if candidates.is_empty():
+		_clear_bundle_group(bundle_id)
+		return first
+	var ordered := _order_candidates(candidates, func(x): return x["res"])
+	var ordered_event_ids: Array = []
+	for entry in ordered:
+		var rid := int(entry.get("event_id", -1))
+		ordered_event_ids.append(rid)
+		var res: EQReservation = entry["res"]
+		var inv_terms: Array = entry.get("inv_terms", [])
+		if not inv_terms.is_empty():
+			var inv := EQConditionEval.invalidation_check(inv_terms, _ctx(_view_of(res)))
+			if int(inv["result"]) == EQConditionEval.Result.YES:
+				res.status = EQReservation.Status.INVALIDATED
+				_trace_invalidated(rid, res.actor_id, StringName(inv["closed_by"]))
+				continue
+			if int(inv["result"]) == EQConditionEval.Result.FAULT:
+				var f: Dictionary = inv["fault"]
+				runtime._fault(f["code"], f["message"], f.get("context", {}), true)
+				continue
+		var race_gid: StringName = _race_of.get(res.get_instance_id(), &"")
+		if race_gid != &"" and _race_groups.has(race_gid):
+			_settle_race(race_gid, res, rid)
+		res.status = EQReservation.Status.RESOLVED
+		var raw_view := _view_of(res)
+		var transformed_view := _apply_effect_transforms(res, _apply_target_expansion(res, raw_view.duplicate(true)))
+		for r in _apply_effect(res.definition.effect_name, transformed_view):
+			chunk.add(r)
+		resolved_views.append(raw_view)
+		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
+			_cause_target_reservation(res)
+		if res.definition.kind != EQActionDefinition.Kind.REACTION_PREPARATION and res.remaining_ruminations > 0:
+			res.remaining_ruminations -= 1
+			submit(res)
+		_clear_bundle_event_link(rid)
+	# 1) bundle trace
+	runtime.trace().record({"kind": "bundle_resolved", "bundle": String(bundle_id), "members": ordered_event_ids})
+	# 2) single bundle boundary sweep
+	_sweep_bundle(resolved_views)
+	# 3) single drain after the bundle
+	last_drained.append_array(chunk.drain())
+	_clear_bundle_group(bundle_id)
+	return first
+
+
+func _sweep_bundle(views: Array) -> void:
+	if views.is_empty():
+		return
+	var tick := runtime.scheduler.current_tick
+	var fired: Array = []
+	for view in views:
+		var chunk_fired := engine.on_event_resolved(view, tick)
+		for res in chunk_fired:
+			fired.append(res)
+	if fired.is_empty():
+		_recheck_scheduled_invalidation()
+		_evaluate_pending_conditional()
+		return
+	if tick == _cascade_tick:
+		_cascade_round += 1
+	else:
+		_cascade_tick = tick
+		_cascade_round = 1
+	if _cascade_round > max_cascade_rounds:
+		runtime._fault(EQError.TRIGGER_CHAIN_LIMIT, "same-tick reaction cascade exceeded %d rounds" % max_cascade_rounds, {"tick": tick}, true)
+		return
+	for res in _order_candidates(fired, func(x): return x):
+		var consumed: bool = (res as EQReservation).status == EQReservation.Status.RESOLVED
+		if consumed:
+			_trace_invalidated(-1, (res as EQReservation).actor_id, &"reaction_count")
+		var id := _schedule(res, 0)
+		runtime.trace().record({
+			"kind": "reaction_fired",
+			"round": _cascade_round,
+			"actor": String((res as EQReservation).actor_id),
+			"event_id": id,
+		})
+	_recheck_scheduled_invalidation()
+	_evaluate_pending_conditional()
+
+
+func _clear_bundle_event_link(event_id: int) -> void:
+	var bundle_id := _bundle_of.get(event_id, &"")
+	if bundle_id == &"":
+		return
+	_bundle_of.erase(event_id)
+	if not _bundle_members.has(bundle_id):
+		return
+	var members: Array = _bundle_members[bundle_id]
+	members.erase(event_id)
+	if members.is_empty():
+		_bundle_members.erase(bundle_id)
+	else:
+		_bundle_members[bundle_id] = members
+
+
+func _clear_bundle_group(bundle_id: StringName) -> void:
+	if not _bundle_members.has(bundle_id):
+		return
+	for id in _bundle_members[bundle_id]:
+		_bundle_of.erase(int(id))
+	_bundle_members.erase(bundle_id)
 
 
 ## Advances time by one tick when no event is due: syncs the primary line,
@@ -1006,6 +1226,7 @@ func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed"
 	for event_id in _by_event.keys():
 		if (_by_event[event_id] as EQReservation).actor_id == actor_id:
 			(_by_event[event_id] as EQReservation).status = EQReservation.Status.INVALIDATED
+			_clear_bundle_event_link(event_id)
 			_by_event.erase(event_id)
 			_bound_inv.erase(event_id)
 	for event_id in _expiry_by_event.keys():
@@ -1094,6 +1315,7 @@ func _recheck_scheduled_invalidation() -> void:
 		if int(inv["result"]) == EQConditionEval.Result.YES:
 			runtime.scheduler.cancel(event_id)
 			res.status = EQReservation.Status.INVALIDATED
+			_clear_bundle_event_link(event_id)
 			_by_event.erase(event_id)
 			_bound_inv.erase(event_id)
 			_trace_invalidated(event_id, res.actor_id, StringName(inv["closed_by"]))
