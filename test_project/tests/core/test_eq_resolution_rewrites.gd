@@ -16,7 +16,9 @@ static func run(t) -> void:
 	_test_view_invariant_without_declarations(t)
 	_test_expansion_loop_budget_cutoff(t)
 	_test_expansion_multi_rule_union(t)
+	_test_expansion_no_relations_no_trace(t)
 	_test_retarget_meta_reach_constraints(t)
+	_test_retarget_stage_index_argument(t)
 	_test_state_inv_transform(t)
 	_test_transform_multiround_and_limit(t)
 	_test_provenance_inheritance_two_step_operation(t)
@@ -91,6 +93,26 @@ static func _test_expansion_multi_rule_union(t) -> void:
 	t.eq(targets.size(), 3, "union keeps both rules' expansions")
 	t.eq(String(targets[0]), "star", "origin stays first")
 	t.ok(targets.has(&"moon") and targets.has(&"scholar"), "both relation types contributed")
+
+
+## A matching rule whose target has no relations expands nothing — and must
+## trace nothing (regression: the targets_expanded record slipped outside the
+## expanded-size guard and fired per matching rule).
+static func _test_expansion_no_relations_no_trace(t) -> void:
+	var rr := _rr([&"hero"])
+	var rg := EQRelationGraph.new()
+	rg.declare_relation_type({"name": &"summon", "structure": EQRelationGraph.Structure.TREE})
+	rr.relations = rg
+	t.ok(rr.declare_expansion_rule({"relation_type": &"summon", "effect_tag": &"損害", "hop_cost": 1, "budget": 2}), "rule declared")
+	rr.runtime.register_effect(&"noop", func(_v: Dictionary) -> Array: return [])
+	var d := _def(EQActionDefinition.Kind.IMMEDIATE)
+	d.effect_name = &"noop"
+	d.tags = [&"損害"]
+	var r := EQReservation.new(&"hero", d)
+	r.target_id = &"loner"
+	rr.submit(r)
+	rr.resolve_next()
+	t.ok(not ('"kind":"targets_expanded"' in rr.runtime.trace_jsonl()), "no expansion => no targets_expanded record")
 
 
 static func _test_expansion_loop_budget_cutoff(t) -> void:
@@ -194,6 +216,78 @@ static func _test_retarget_meta_reach_constraints(t) -> void:
 		{"actor": &"direct", "event_id": 32, "meta_level": 2},
 	])
 	t.eq(direct_hit, &"direct", "direct stage accepts equal meta_level boundary")
+
+
+static func _test_retarget_stage_index_argument(t) -> void:
+	var rr1 := _rr([&"caster"])
+	var idx_direct := _run_retarget_case(t, rr1, {
+		"name": &"int_stage_direct",
+		"match_tags": [&"relink"],
+		"kind": "retarget",
+		"params": {"stage": 1},
+		"meta_level": 2,
+		"priority": 0,
+	}, [
+		{"actor": &"root", "event_id": 41, "meta_level": 3},
+		{"actor": &"direct", "event_id": 42, "meta_level": 1},
+	])
+	t.eq(idx_direct, &"direct", "int stage 1 reaches direct")
+
+	var rr2 := _rr([&"caster"])
+	var idx_root := _run_retarget_case(t, rr2, {
+		"name": &"int_stage_root",
+		"match_tags": [&"relink"],
+		"kind": "retarget",
+		"params": {"stage": 0},
+		"meta_level": 2,
+		"priority": 0,
+	}, [
+		{"actor": &"root", "event_id": 43, "meta_level": 3},
+		{"actor": &"direct", "event_id": 44, "meta_level": 1},
+	])
+	t.eq(idx_root, &"final", "int stage 0 keeps no-op when root meta is higher than transform meta")
+
+	var rr3 := _rr([&"caster"])
+	var idx_oob := _run_retarget_case(t, rr3, {
+		"name": &"int_stage_oob",
+		"match_tags": [&"relink"],
+		"kind": "retarget",
+		"params": {"stage": 5},
+		"meta_level": 99,
+		"priority": 0,
+	}, [
+		{"actor": &"root", "event_id": 45, "meta_level": 3},
+		{"actor": &"direct", "event_id": 46, "meta_level": 1},
+	])
+	t.eq(idx_oob, &"final", "int stage 5 is out-of-range no-op")
+
+	var rr4 := _rr([&"caster"])
+	var root_string := _run_retarget_case(t, rr4, {
+		"name": &"root_string",
+		"match_tags": [&"relink"],
+		"kind": "retarget",
+		"params": {"stage": "root"},
+		"meta_level": 2,
+		"priority": 0,
+	}, [
+		{"actor": &"root", "event_id": 47, "meta_level": 3},
+		{"actor": &"direct", "event_id": 48, "meta_level": 1},
+	])
+	t.eq(root_string, &"direct", "root stage string semantics unchanged")
+
+	var rr5 := _rr([&"caster"])
+	var direct_string := _run_retarget_case(t, rr5, {
+		"name": &"direct_string",
+		"match_tags": [&"relink"],
+		"kind": "retarget",
+		"params": {"stage": "direct"},
+		"meta_level": 2,
+		"priority": 0,
+	}, [
+		{"actor": &"root", "event_id": 49, "meta_level": 3},
+		{"actor": &"direct", "event_id": 50, "meta_level": 1},
+	])
+	t.eq(direct_string, &"direct", "direct stage string semantics unchanged")
 
 
 static func _test_state_inv_transform(t) -> void:

@@ -12,16 +12,20 @@ const EQActionResolutionPolicy = preload("res://addons/event_queue_manager/resou
 
 const GOLDEN_CASE = "mutual_counter_stop"
 const GOLDEN_PATH = "res://tests/golden/mutual_counter_stop.trace.jsonl"
+const GOLDEN_FOCUS_CASE = "focus_cost_counter_stop"
+const GOLDEN_FOCUS_PATH = "res://tests/golden/focus_cost_counter_stop.trace.jsonl"
 
 
 static func run(t) -> void:
 	_test_r04_named_predicate_solution_and_suppression(t)
 	_test_r06_mutual_counter_stop(t)
+	_test_r06_focus_cost_stop(t)
 	_test_r08_defensive_stack_order_hook(t)
 	_test_r09_bundle_fairness_asymmetric_reflection(t)
 	_test_r11_ready_replacement_same_tick(t)
 	_test_r12_submission_time_delay_modifier(t)
 	_golden_r06(t)
+	_golden_r06_focus(t)
 
 
 static func _rr(actors: Array) -> EQReservationRuntime:
@@ -165,8 +169,8 @@ static func _test_r04_named_predicate_solution_and_suppression(t) -> void:
 static func _test_r06_mutual_counter_stop(t) -> void:
 	var rr := _rr([&"hero", &"orc"])
 	var trace := _run_mutual_counter_stop(rr)
-	t.eq(_count_kind(trace, "event_invalidated") >= 0, true, "mutual counter run records invalidation when present")
-	t.ok(trace.find("reaction_count") >= 0 or trace.find("closed_by") >= 0, "mutual counter run includes termination metadata in trace")
+	t.eq(_count_kind(trace, "event_invalidated"), 2, "mutual counter stop closes each reaction once")
+	t.ok(trace.find('"closed_by":"reaction_count"') >= 0, "mutual counter run terminates via reaction_count")
 	t.eq(rr.pending().size(), 0, "mutual counter stops with empty pending")
 
 
@@ -210,12 +214,113 @@ static func _run_mutual_counter_stop(rr: EQReservationRuntime) -> String:
 	return rr.runtime.trace_jsonl()
 
 
-## R08: stack_index 降順で order_hook を適用し、order_hook_applied の order を検証する
+## R06: 焦点 line の消費で反撃を閉鎖し、rumination は十分大きくして無限ループを避ける
+static func _test_r06_focus_cost_stop(t) -> void:
+	var rr := _rr([&"hero", &"orc"])
+	var focus_total := 5
+	rr.lines.issue(&"focus.hero", 3, 0)
+	rr.lines.issue(&"focus.orc", 2, 0)
+
+	var result := _run_focus_cost_counter_stop(rr)
+	t.ok('"closed_by":"focus_exhausted"' in result["trace"], "focus-driven counter run closes via focus_exhausted")
+	t.eq(rr.pending().size(), 0, "focus-driven counter run leaves no pending reservation")
+	t.eq(result["counter_hits"], focus_total, "counter effect firings match sum of starting focus")
+
+
+static func _run_focus_cost_counter_stop(rr: EQReservationRuntime) -> Dictionary:
+	rr.runtime.register_effect(&"focus_seed", func(view: Dictionary) -> Array:
+		var rec := _record(&"damage")
+		rec.source = StringName(view.get("source", ""))
+		rec.target = StringName(view.get("target", ""))
+		return [rec]
+	)
+	rr.runtime.register_effect(&"focus_react", func(view: Dictionary) -> Array:
+		var source := StringName(view.get("source", ""))
+		rr.runtime.trace().record({
+			"kind": "focus_react",
+			"source": String(source),
+		})
+		rr.lines.advance(StringName("focus.%s" % source), -1)
+		var rec := _record(&"damage")
+		rec.source = source
+		rec.target = StringName(view.get("target", ""))
+		return [rec]
+	)
+
+	var base_attack := _def(EQActionDefinition.Kind.IMMEDIATE)
+	base_attack.effect_name = &"focus_seed"
+	base_attack.tags = [&"損害"]
+
+	var hero_focus := EQConditionSpec.new()
+	hero_focus.type = EQConditionSpec.Type.LINE_THRESHOLD
+	hero_focus.line_id = &"focus.hero"
+	hero_focus.threshold = 0
+	hero_focus.comparison = EQConditionSpec.Comparison.LE
+	hero_focus.condition_id = &"focus_exhausted"
+
+	var orc_focus := EQConditionSpec.new()
+	orc_focus.type = EQConditionSpec.Type.LINE_THRESHOLD
+	orc_focus.line_id = &"focus.orc"
+	orc_focus.threshold = 0
+	orc_focus.comparison = EQConditionSpec.Comparison.LE
+	orc_focus.condition_id = &"focus_exhausted"
+
+	var c_hero := EQCondition.new()
+	c_hero.require_tags = [&"損害"]
+	c_hero.match_source = &"orc"
+	var c_orc := EQCondition.new()
+	c_orc.require_tags = [&"損害"]
+	c_orc.match_source = &"hero"
+
+	var hero_reaction := _def(EQActionDefinition.Kind.REACTION_PREPARATION)
+	hero_reaction.effect_name = &"focus_react"
+	hero_reaction.tags = [&"損害"]
+	hero_reaction.duration = EQActionDefinition.DURATION_UNLIMITED
+	hero_reaction.rumination = 10
+	hero_reaction.invalidation_conditions = [hero_focus]
+	var orc_reaction := _def(EQActionDefinition.Kind.REACTION_PREPARATION)
+	orc_reaction.effect_name = &"focus_react"
+	orc_reaction.tags = [&"損害"]
+	orc_reaction.duration = EQActionDefinition.DURATION_UNLIMITED
+	orc_reaction.rumination = 10
+	orc_reaction.invalidation_conditions = [orc_focus]
+
+	rr.submit(EQReservation.new(&"hero", hero_reaction), c_hero)
+	rr.submit(EQReservation.new(&"orc", orc_reaction), c_orc)
+
+	var seed := EQReservation.new(&"hero", base_attack)
+	seed.target_id = &"orc"
+	rr.submit(seed)
+
+	var safety := 0
+	while rr.pending().size() > 0 and safety < 200:
+		var resolved := rr.resolve_next()
+		if resolved == null:
+			rr.step_tick()
+		safety += 1
+
+	var trace := rr.runtime.trace_jsonl()
+	var reaction_hits := 0
+	for line in _trace_lines(trace):
+		var e := _json(line)
+		if e.get("kind", "") == "reaction_fired":
+			reaction_hits += 1
+
+	return {
+		"trace": trace,
+		"counter_hits": reaction_hits,
+		"safety": safety,
+	}
+
+
+## R08: A-R08-1 — stack meta_level の昇順（同率は付与順）で order_hook を適用
 static func _test_r08_defensive_stack_order_hook(t) -> void:
-	var rr := _rr([&"x", &"y"])
-	for id in [&"x", &"y"]:
+	var rr := _rr([&"x", &"y", &"z"])
+	for id in [&"x", &"y", &"z"]:
 		var state := rr.runtime.registry.get_state(id)
-		state.data["stack_index"] = 10 if id == &"y" else 1
+		state.data["meta_level"] = 1
+		if id == &"y":
+			state.data["meta_level"] = 0
 
 	rr.runtime.register_effect(&"hit", func(view: Dictionary) -> Array:
 		return [_record(&"hit", StringName(view.get("target", "")), StringName(view.get("source", "")))]
@@ -225,15 +330,20 @@ static func _test_r08_defensive_stack_order_hook(t) -> void:
 
 	var x := EQReservation.new(&"x", d)
 	var y := EQReservation.new(&"y", d)
+	var z := EQReservation.new(&"z", d)
 	rr.set_order_hook(func(candidates: Array) -> Array:
-		if candidates.size() != 2:
-			return candidates
-		return [1, 0]
+		var idx := range(candidates.size())
+		idx.sort_custom(func(a, b):
+			var am := int(candidates[a].get("stats", {}).get("meta_level", 0))
+			var bm := int(candidates[b].get("stats", {}).get("meta_level", 0))
+			if am == bm:
+				return a < b
+			return am < bm
+		)
+		return idx
 	)
-	rr.submit_bundle([x, y], 0)
+	rr.submit_bundle([x, y, z], 0)
 	rr.resolve_next() # bundle_resolved
-	var first := rr.resolve_next()
-	var second := rr.resolve_next()
 
 	var trace := rr.runtime.trace_jsonl()
 	var hook := _kind_lines(trace, "order_hook_applied")
@@ -244,9 +354,7 @@ static func _test_r08_defensive_stack_order_hook(t) -> void:
 		for i in range(raw_order.size()):
 			var v: Variant = raw_order[i]
 			order.append(int(v))
-		t.eq(order, [1, 0], "order_hook_applied order matches stack_index descending")
-	t.ok(first == null or first.actor_id == &"y" or first.actor_id == &"x", "first resolved action is one of expected bundle members")
-	t.ok(second == null or second.actor_id == &"x" or second.actor_id == &"y", "second resolved action is one of expected bundle members")
+		t.eq(order, [1, 0, 2], "order_hook_applied order follows ascending meta_level with stable ties")
 
 
 ## R09: bundle 解決後、Y のみ反射 REACTION_PREPARATION が発火する非対称性
@@ -386,6 +494,25 @@ static func _golden_r06(t) -> void:
 	t.eq(jsonl, want, "mutual counter stop trace matches golden fixture")
 
 
+static func _golden_r06_focus(t) -> void:
+	var rr := _rr([&"hero", &"orc"])
+	rr.lines.issue(&"focus.hero", 3, 0)
+	rr.lines.issue(&"focus.orc", 2, 0)
+	var result := _run_focus_cost_counter_stop(rr)
+	var jsonl: String = result["trace"]
+	var update := OS.get_environment("GODOT_UPDATE_GOLDEN")
+	if update == GOLDEN_FOCUS_CASE:
+		_write_golden_case(t, jsonl, GOLDEN_FOCUS_PATH, GOLDEN_FOCUS_CASE)
+		return
+
+	var exists := FileAccess.file_exists(GOLDEN_FOCUS_PATH)
+	t.ok(exists, "golden fixture exists: %s (create via HOME=/tmp godot --headless --path test_project --script res://tests/run_all.gd with GODOT_UPDATE_GOLDEN=%s)" % [GOLDEN_FOCUS_PATH, GOLDEN_FOCUS_CASE])
+	if not exists:
+		return
+	var want := FileAccess.get_file_as_string(GOLDEN_FOCUS_PATH)
+	t.eq(jsonl, want, "focus counter stop trace matches golden fixture")
+
+
 static func _write_golden(t, jsonl: String) -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(GOLDEN_PATH.get_base_dir()))
 	var f := FileAccess.open(GOLDEN_PATH, FileAccess.WRITE)
@@ -395,6 +522,17 @@ static func _write_golden(t, jsonl: String) -> void:
 	f.store_string(jsonl)
 	f.close()
 	t.ok(true, "golden re-baselined for %s via HOME=/tmp godot --headless --path test_project --script res://tests/run_all.gd (GODOT_UPDATE_GOLDEN=%s)" % [GOLDEN_CASE, GOLDEN_CASE])
+
+
+static func _write_golden_case(t, jsonl: String, path: String, case_name: String) -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(path.get_base_dir()))
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		t.ok(false, "could not open golden for write: %s" % path)
+		return
+	f.store_string(jsonl)
+	f.close()
+	t.ok(true, "golden re-baselined for %s via HOME=/tmp godot --headless --path test_project --script res://tests/run_all.gd (GODOT_UPDATE_GOLDEN=%s)" % [case_name, case_name])
 
 
 static func _dump_actual(jsonl: String) -> void:

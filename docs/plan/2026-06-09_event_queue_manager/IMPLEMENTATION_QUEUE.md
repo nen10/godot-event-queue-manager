@@ -165,7 +165,7 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 | EQM-128 | COMPLETE | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
 | EQM-129 | COMPLETE | EQM-128 | `docs/plan/2026-06-09_event_queue_manager/EQM-129_wrapper_semantics/` | [repair, 意図監査 A1] wrapper 意味論の標準 2 種 (inv 反転 / 関係連鎖付与)。 | `runtime/eq_state_algebra.gd`, `runtime/eq_relation_graph.gd`, `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | SEM §5.7 改訂 (標準 wrapper 2 種): kind=inv_chain は包まれた状態の grant を dual へ反転、kind=relation_chain は grant 時に関係沿いに連鎖付与 (展開機構と同一の cost 停止、連鎖の再帰なし)。未知 kind = 不活性 data (互換)。`state_wrapper_applied` trace (SEM §11 additive)。透徹連鎖・反転連鎖 acceptance golden。既存 golden 不変。 |
 | EQM-130 | COMPLETE | EQM-129 | `docs/plan/2026-06-09_event_queue_manager/EQM-130_maintenance_autodrive/` | [repair, 意図監査 A2/C1/C2] 維持条件 sweep の自動駆動 + 公平合成 acceptance + 迎撃標準形。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_runtime.gd`, `tests/core/`, `tests/golden/` | 相談4「EQM が評価タイミングを固定」の実装: 既定 sweep は step_tick で自動評価、カスタム sweep 名は同名 sweep rule (§4.7) 実行直後に自動評価。predicates は named registry から自動供給。公平: 公平関係 → 展開 → 非対称反射の合成 golden。迎撃: effect handler から intervene_close を呼ぶ標準形の例示。既存 golden 不変。 |
-| EQM-131 | READY | EQM-130 | `docs/plan/2026-06-09_event_queue_manager/EQM-131_acceptance_repair/` | [repair, 意図監査 B1/B2 + EBS A-R08-1] R06 資源述語停止 / retarget 中間段 / R08 消費順整合。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | R06: 焦点 counter line decrement + `<= 0` invalidation で停止する golden 変種 (「コスト述語の閉包」の証明) + 常真 assert の実質化。retarget: `params.stage` に int (連鎖 index、reach 検査) を additive 追加。R08: 例を EBS A-R08-1 (メタレベル昇順・同率付与順) に揃える。既存 golden 不変 (mutual_counter_stop は変種追加のみ)。 |
+| EQM-131 | COMPLETE | EQM-130 | `docs/plan/2026-06-09_event_queue_manager/EQM-131_acceptance_repair/` | [repair, 意図監査 B1/B2 + EBS A-R08-1] R06 資源述語停止 / retarget 中間段 / R08 消費順整合。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | R06: 焦点 counter line decrement + `<= 0` invalidation で停止する golden 変種 (「コスト述語の閉包」の証明) + 常真 assert の実質化。retarget: `params.stage` に int (連鎖 index、reach 検査) を additive 追加。R08: 例を EBS A-R08-1 (メタレベル昇順・同率付与順) に揃える。既存 golden 不変 (mutual_counter_stop は変種追加のみ)。 |
 
 ## Dynamic follow-up area
 
@@ -183,7 +183,7 @@ Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phas
 
 Current: none — **Phase 12 (v1.2 EBS 拡張ラウンド) COMPLETE** (EQM-120..128, 2026-07-05)。coverage 31/31。**意図監査 (2026-07-05, `docs/review/EQM_V12_INTENT_AUDIT_2026-07-05.md`)**: 依頼意図に対する縮小 重大 2・中 3・acceptance 2 を検出。
 
-Repair round (user-approved 2026-07-05): EQM-129→131 を委任形式で自律実行する。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
+Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
 **需要確定 (2026-07-05)**: EBS (godot-editable-battleskill-system) から拡張依頼 R01–R12 を受領 (受領原本 `EBS_EXTENSION_REQUEST_2026-07-05.md`)。registry 拡張ラウンド Q44–Q54 起票、相談ラウンド2 で意味論 fork 8 点 DECIDED(user)、roadmap Phase 13 追加。declared follow-up の composite atomic bundle は Q49 として本 round に取り込み。
 
@@ -1434,3 +1434,28 @@ proof:
 ```
 
 Dependency sweep: EQM-130 COMPLETE → EQM-131 READY。Current pointer → EQM-131。
+
+### EQM-131 — COMPLETE (2026-07-05) — repair (意図監査 B1/B2 + EBS A-R08-1)、repair round 終端
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-131_acceptance_repair/
+  review: docs/review/autopilot/EQM-131_SELF_REVIEW_2026-07-05.md
+  pattern: P2 (codex 委譲 1 run; 検収で scope 外回帰 1 件を修正 — targets_expanded 記録の
+           インデント外し (展開ゼロでも記録される) を guard 内へ復帰 + regression test)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS ×2 (files=70 checks=1356 failures=0)
+  gate: §4 core (golden focus_cost_counter_stop = 焦点 counter line の閉包で停止、
+        closed_by: focus_exhausted — 依頼原文「コスト述語の閉包で必ず止まる」の証明;
+        既存 mutual_counter_stop は回数系変種として不変)
+  key contracts: retarget params.stage に int (provenance index、reach 検査、範囲外 = no-op) を
+    additive 追加 — 「root/中間/直接のどれにするか調整」の中間段が宣言可能に。
+    R08 例を EBS A-R08-1 (メタレベル昇順・同率付与順 = index tiebreak) に整合。
+    旧 R06 の常真 assert 2 本を実質化。
+  golden: tests/golden/focus_cost_counter_stop.trace.jsonl (new baseline)
+  major files:
+    - addons/event_queue_manager/runtime/eq_reservation_runtime.gd (stage int + 回帰修正)
+    - test_project/tests/core/test_eq_ebs_acceptance.gd, test_eq_resolution_rewrites.gd
+```
+
+Dependency sweep: EQM-131 COMPLETE → **repair round (EQM-129..131) 完了**。意図監査の重大 2・中 3・acceptance 2 はすべて消化 (B3 は EBS 文書で確定のため変更なし)。残る記録 4 件 (D1 modifier 寿命の宣言束ね / D2 phase 巻き戻しの対象範囲 / D3 bundle kind 制限 / D4 provenance の反応連鎖非継承) は EBS 側のスキル執筆で実需要が出た時点で再評価。queue pointer → none。

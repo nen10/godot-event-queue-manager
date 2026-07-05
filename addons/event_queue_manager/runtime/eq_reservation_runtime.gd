@@ -192,9 +192,14 @@ func register_transform(decl: Dictionary) -> bool:
 		return false
 
 	if kind == "retarget":
-		var stage := String(params.get("stage", ""))
-		if stage != "root" and stage != "direct":
-			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "retarget params.stage must be root|direct", {"transform": String(name), "stage": stage}, false)
+		var stage = params.get("stage", "")
+		if typeof(stage) == TYPE_STRING or typeof(stage) == TYPE_STRING_NAME:
+			var stage_name := str(stage)
+			if stage_name != "root" and stage_name != "direct":
+				runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "retarget params.stage must be root|direct", {"transform": String(name), "stage": stage_name}, false)
+				return false
+		elif typeof(stage) != TYPE_INT:
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "retarget params.stage must be root|direct|int", {"transform": String(name), "stage": str(stage)}, false)
 			return false
 	else:
 		var pair: Array = params.get("pair", [])
@@ -1026,6 +1031,8 @@ func _apply_target_expansion(res: EQReservation, view: Dictionary) -> Dictionary
 			for actor in expanded:
 				if not final_targets.has(actor):
 					final_targets.append(actor)
+			# Recorded ONLY when something actually expanded (§6.4 2a) — a
+			# matching rule over an unrelated target stays silent.
 			runtime.trace().record({
 				"kind": "targets_expanded",
 				"actor": String(res.actor_id),
@@ -1089,7 +1096,7 @@ func _apply_retarg_transform(res: EQReservation, view: Dictionary, transform: Di
 	var params := transform.get("params", {})
 	if params is not Dictionary:
 		return null
-	var stage := String(params.get("stage", "direct"))
+	var stage = params.get("stage", "direct")
 	var actor := _pick_stage_actor(res, transform, stage)
 	if actor == &"":
 		return null
@@ -1129,18 +1136,29 @@ func _normalize_state_token(value) -> String:
 	return ""
 
 
-func _pick_stage_actor(res: EQReservation, transform: Dictionary, stage: String) -> StringName:
+func _pick_stage_actor(res: EQReservation, transform: Dictionary, stage) -> StringName:
 	var params := transform.get("params", {})
 	if params is not Dictionary:
 		return &""
 	var meta_level := int(transform.get("meta_level", 0))
 	var provenance := res.provenance if res != null else []
 	if provenance.is_empty():
+		if typeof(stage) == TYPE_INT:
+			return &""
 		if stage == "direct" or stage == "root":
 			return res.actor_id
 		return &""
 	var chain := provenance as Array
 	var stage_actor := &""
+	if typeof(stage) == TYPE_INT:
+		var stage_idx := int(stage)
+		if stage_idx < 0 or stage_idx >= chain.size():
+			return &""
+		var entry: Dictionary = chain[stage_idx]
+		var entry_meta: int = int(entry.get("meta_level", 0))
+		if meta_level >= entry_meta:
+			stage_actor = StringName(entry.get("actor", ""))
+		return stage_actor
 	if stage == "direct":
 		var entry: Dictionary = chain.back()
 		var entry_meta: int = int(entry.get("meta_level", 0))
@@ -1359,8 +1377,14 @@ func _sweep_bundle(views: Array) -> void:
 	for res in _order_candidates(fired, func(x): return x):
 		var consumed: bool = (res as EQReservation).status == EQReservation.Status.RESOLVED
 		if consumed:
+			# the armed slot closed by count exhaustion (its final
+			# resolution still happens through the schedule below)
 			_trace_invalidated(-1, (res as EQReservation).actor_id, &"reaction_count")
 		var id := _schedule(res, 0)
+		if (res as EQReservation).definition != null and (res as EQReservation).definition.kind == EQActionDefinition.Kind.REACTION_PREPARATION:
+			var bound_inv := _bind_conditions(res).get("inv", [])
+			if not bound_inv.is_empty():
+				_bound_inv[id] = bound_inv
 		runtime.trace().record({
 			"kind": "reaction_fired",
 			"round": _cascade_round,
@@ -1369,8 +1393,6 @@ func _sweep_bundle(views: Array) -> void:
 		})
 	_recheck_scheduled_invalidation()
 	_evaluate_pending_conditional()
-
-
 func _clear_bundle_event_link(event_id: int) -> void:
 	var bundle_id := _bundle_of.get(event_id, &"")
 	if bundle_id == &"":
@@ -1521,20 +1543,24 @@ func _sweep(view: Dictionary) -> void:
 			_cascade_round = 1
 		if _cascade_round > max_cascade_rounds:
 			runtime._fault(EQError.TRIGGER_CHAIN_LIMIT, "same-tick reaction cascade exceeded %d rounds" % max_cascade_rounds, {"tick": tick}, true)
-		else:
-			for res in _order_candidates(fired, func(x): return x):
-				var consumed: bool = (res as EQReservation).status == EQReservation.Status.RESOLVED
-				if consumed:
-					# the armed slot closed by count exhaustion (its final
-					# resolution still happens through the schedule below)
-					_trace_invalidated(-1, (res as EQReservation).actor_id, &"reaction_count")
-				var id := _schedule(res, 0)
-				runtime.trace().record({
-					"kind": "reaction_fired",
-					"round": _cascade_round,
-					"actor": String((res as EQReservation).actor_id),
-					"event_id": id,
-				})
+			return
+		for res in _order_candidates(fired, func(x): return x):
+			var consumed: bool = (res as EQReservation).status == EQReservation.Status.RESOLVED
+			if consumed:
+				# the armed slot closed by count exhaustion (its final
+				# resolution still happens through the schedule below)
+				_trace_invalidated(-1, (res as EQReservation).actor_id, &"reaction_count")
+			var id := _schedule(res, 0)
+			if (res as EQReservation).definition != null and (res as EQReservation).definition.kind == EQActionDefinition.Kind.REACTION_PREPARATION:
+				var bound_inv := _bind_conditions(res).get("inv", [])
+				if not bound_inv.is_empty():
+					_bound_inv[id] = bound_inv
+			runtime.trace().record({
+				"kind": "reaction_fired",
+				"round": _cascade_round,
+				"actor": String((res as EQReservation).actor_id),
+				"event_id": id,
+			})
 	_recheck_scheduled_invalidation()
 	_evaluate_pending_conditional()
 
