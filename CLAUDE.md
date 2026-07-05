@@ -22,7 +22,7 @@ Godot addon: Event Queue Manager — 行動順 (event / turn / action order) 管
 任意の作業について以下のcodex系ツールに分担させてよい。
 
 - **codex-fugu**: 理解力が高い方。複雑な理解・判断が必要なタスクや実行経路の確立が必要な作業に使う。コマンドライン実行のみ可能 `codex-fugu`
-- **codex CLI (GPT 5.5)**: 設計済み・大規模な実行タスクに使う（`codex exec -s workspace-write - < prompt.md` 等、バックグラウンド実行）。
+- **codex CLI (GPT 5.5)**: 設計済み・大規模な実行タスクに使う（`codex exec -s workspace-write - < prompt.md` 等、バックグラウンド実行）。5.3ではなく5.5を指定する。
 
 委任した結果は必ず検証すること（誤分類・サンプルレート異常などの実績あり）。
 

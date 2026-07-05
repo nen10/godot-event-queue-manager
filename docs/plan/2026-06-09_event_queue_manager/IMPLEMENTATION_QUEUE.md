@@ -178,7 +178,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: none — **Phase 12 (v1.2 EBS 拡張ラウンド) COMPLETE** (EQM-120..128, 2026-07-05)。coverage 31/31。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
+Current: none — **Phase 12 (v1.2 EBS 拡張ラウンド) COMPLETE** (EQM-120..128, 2026-07-05)。coverage 31/31。**意図監査 (2026-07-05, `docs/review/EQM_V12_INTENT_AUDIT_2026-07-05.md`)**: 依頼意図に対する縮小 重大 2 (連鎖 wrapper 意味論 / 維持条件 sweep 自動駆動)・中 3・acceptance 2 を検出。repair round (EQM-129..131 案) は**ユーザー承認待ち**。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
 **需要確定 (2026-07-05)**: EBS (godot-editable-battleskill-system) から拡張依頼 R01–R12 を受領 (受領原本 `EBS_EXTENSION_REQUEST_2026-07-05.md`)。registry 拡張ラウンド Q44–Q54 起票、相談ラウンド2 で意味論 fork 8 点 DECIDED(user)、roadmap Phase 13 追加。declared follow-up の composite atomic bundle は Q49 として本 round に取り込み。
 
