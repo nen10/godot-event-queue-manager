@@ -555,10 +555,12 @@
         "expiry_effect_name",
         "invalidation_conditions",
         "kind",
+        "meta_level",
         "operation_target_tag",
         "priority",
         "rumination",
         "solve_conditions",
+        "state_name",
         "tags"
       ]
     },
@@ -731,6 +733,7 @@
         "actor_id",
         "definition",
         "event_id",
+        "provenance",
         "remaining_duration",
         "remaining_ruminations",
         "status",
@@ -774,6 +777,11 @@
           "returns": "-> EQWindow"
         },
         {
+          "name": "declare_expansion_rule",
+          "params": "rule: Dictionary",
+          "returns": "-> bool"
+        },
+        {
           "name": "invalidate_actor",
           "params": "actor_id: StringName, cause: StringName = &\"actor_removed\"",
           "returns": "-> int"
@@ -797,6 +805,11 @@
           "name": "pending_conditional",
           "params": "",
           "returns": "-> Array"
+        },
+        {
+          "name": "register_transform",
+          "params": "decl: Dictionary",
+          "returns": "-> bool"
         },
         {
           "name": "resolve_next",
@@ -846,6 +859,7 @@
         "last_drained",
         "lines",
         "max_cascade_rounds",
+        "max_transform_rounds",
         "max_window_depth",
         "relations",
         "runtime"

@@ -108,6 +108,168 @@ func _order_candidates(entries: Array, get_res: Callable) -> Array:
 	runtime.trace().record({"kind": "order_hook_applied", "count": entries.size(), "order": order_ints})
 	return ordered
 
+
+## EQM-123: register or replace a target expansion rule for an effect-tagged action.
+## Rule: {"relation_type": StringName, "effect_tag": StringName, "hop_cost": int (>0), "budget": int (>0)}
+func declare_expansion_rule(rule: Dictionary) -> bool:
+	if typeof(rule) != TYPE_DICTIONARY:
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "expansion rule must be a Dictionary", {}, false)
+		return false
+	if not _is_serializable(rule):
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "expansion rule must be serializable", {}, false)
+		return false
+	var relation_type := StringName(rule.get("relation_type", ""))
+	if relation_type == &"":
+		runtime._fault(EQError.POLICY_NAME_EMPTY, "expansion rule relation_type must not be empty", {"relation_type": ""}, false)
+		return false
+	var effect_tag := StringName(rule.get("effect_tag", ""))
+	if effect_tag == &"":
+		runtime._fault(EQError.POLICY_NAME_EMPTY, "expansion rule effect_tag must not be empty", {"effect_tag": ""}, false)
+		return false
+	var hop_cost := rule.get("hop_cost", 0)
+	if typeof(hop_cost) != TYPE_INT or hop_cost <= 0:
+		runtime._fault(EQError.CONDITION_COUNTER_START_INVALID, "expansion rule hop_cost must be a positive int", {"relation_type": String(relation_type), "effect_tag": String(effect_tag)}, false)
+		return false
+	var budget := rule.get("budget", 0)
+	if typeof(budget) != TYPE_INT or budget <= 0:
+		runtime._fault(EQError.CONDITION_COUNTER_START_INVALID, "expansion rule budget must be a positive int", {"relation_type": String(relation_type), "effect_tag": String(effect_tag)}, false)
+		return false
+	_expansion_rules[_expansion_key(relation_type, effect_tag)] = {
+		"relation_type": relation_type,
+		"effect_tag": effect_tag,
+		"hop_cost": int(hop_cost),
+		"budget": int(budget),
+	}
+	return true
+
+
+## EQM-123: register or replace a transform declaration.
+## Declaration shape:
+## {"name": StringName, "match_tags": Array[StringName], "kind": "retarget"|"state_inv",
+##  "params": Dictionary, "meta_level": int, "priority": int}
+func register_transform(decl: Dictionary) -> bool:
+	if typeof(decl) != TYPE_DICTIONARY:
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "transform declaration must be a Dictionary", {}, false)
+		return false
+	if not _is_serializable(decl):
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "transform declaration must be serializable", {}, false)
+		return false
+	var name := String(decl.get("name", ""))
+	if name == &"":
+		runtime._fault(EQError.POLICY_NAME_EMPTY, "transform name must not be empty", {}, false)
+		return false
+
+	var match_tags: Array = decl.get("match_tags", [])
+	if match_tags is not Array or match_tags.is_empty():
+		runtime._fault(EQError.CONDITION_PREDICATE_NAME_EMPTY, "transform match_tags must be a non-empty array", {"transform": String(name)}, false)
+		return false
+	for t in match_tags:
+		if typeof(t) != TYPE_STRING and typeof(t) != TYPE_STRING_NAME:
+			runtime._fault(EQError.CONDITION_PREDICATE_NAME_EMPTY, "transform match_tags must be StringName", {"transform": String(name)}, false)
+			return false
+
+	var kind := String(decl.get("kind", ""))
+	if kind != "retarget" and kind != "state_inv":
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "unknown transform kind: %s" % kind, {"transform": String(name), "kind": kind}, false)
+		return false
+
+	var params := decl.get("params", {})
+	if params is not Dictionary:
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "transform params must be a Dictionary", {"transform": String(name)}, false)
+		return false
+	var meta_level := decl.get("meta_level", 0)
+	if typeof(meta_level) != TYPE_INT:
+		runtime._fault(EQError.CONDITION_COUNTER_START_INVALID, "transform meta_level must be an int", {"transform": String(name)}, false)
+		return false
+	var priority := decl.get("priority", 0)
+	if typeof(priority) != TYPE_INT:
+		runtime._fault(EQError.CONDITION_COUNTER_START_INVALID, "transform priority must be an int", {"transform": String(name)}, false)
+		return false
+
+	if kind == "retarget":
+		var stage := String(params.get("stage", ""))
+		if stage != "root" and stage != "direct":
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "retarget params.stage must be root|direct", {"transform": String(name), "stage": stage}, false)
+			return false
+	else:
+		var pair: Array = params.get("pair", [])
+		if pair is not Array or pair.size() != 2:
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "state_inv params must be pair: [StringName, StringName]", {"transform": String(name)}, false)
+			return false
+		for p in pair:
+			if typeof(p) != TYPE_STRING and typeof(p) != TYPE_STRING_NAME:
+				runtime._fault(EQError.CONDITION_PREDICATE_NAME_EMPTY, "state_inv pair entries must be StringName", {"transform": String(name)}, false)
+				return false
+			if StringName(p) == &"":
+				runtime._fault(EQError.POLICY_NAME_EMPTY, "state_inv pair entries must not be empty", {"transform": String(name)}, false)
+				return false
+
+	var entry := {
+		"name": name,
+		"match_tags": match_tags.map(func(x): return StringName(x)),
+		"kind": kind,
+		"params": params.duplicate(true),
+		"meta_level": int(meta_level),
+		"priority": int(priority),
+	}
+	if _transforms.has(name):
+		entry["order"] = _transforms[name].get("order", 0)
+	else:
+		_transform_seq += 1
+		_transform_order.append(String(name))
+		entry["order"] = _transform_seq
+	_transforms[name] = entry
+	return true
+
+
+func _expansion_key(relation_type: StringName, effect_tag: StringName) -> String:
+	return String(relation_type) + "|" + String(effect_tag)
+
+
+func _matching_expansion_rules(tags: Array) -> Array:
+	var tag_set := {}
+	for t in tags:
+		tag_set[String(t)] = true
+	var out: Array = []
+	for r in _expansion_rules.values():
+		if tag_set.has(String(r.get("effect_tag", ""))):
+			out.append(r)
+	if out.is_empty():
+		return out
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if String(a.get("effect_tag", "")) == String(b.get("effect_tag", "")):
+			return String(a.get("relation_type", "")) < String(b.get("relation_type", ""))
+		return String(a.get("effect_tag", "")) < String(b.get("effect_tag", ""))
+	)
+	return out
+
+
+func _matching_transforms(res: EQReservation) -> Array:
+	var tags := res.definition.tags if res.definition != null else []
+	var out: Array = []
+	for name in _transform_order:
+		if not _transforms.has(name):
+			continue
+		var transform: Dictionary = _transforms[name]
+		if _transform_matches(transform, tags):
+			out.append(transform)
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if int(a.get("meta_level", 0)) != int(b.get("meta_level", 0)):
+			return int(a.get("meta_level", 0)) > int(b.get("meta_level", 0))
+		if int(a.get("priority", 0)) != int(b.get("priority", 0)):
+			return int(a.get("priority", 0)) > int(b.get("priority", 0))
+		return int(a.get("order", 0)) < int(b.get("order", 0))
+	)
+	return out
+
+
+func _transform_matches(transform: Dictionary, tags: Array) -> bool:
+	for t in transform.get("match_tags", []):
+		for tag in tags:
+			if String(tag) == String(t):
+				return true
+	return false
+
 var _by_event: Dictionary = {}          # event_id -> EQReservation (scheduled)
 var _bound_inv: Dictionary = {}         # event_id -> Array bound invalidation terms
 var _expiry_by_event: Dictionary = {}   # expiry event_id -> EQReservation
@@ -119,6 +281,14 @@ var _window_seq: int = 0
 var _race_groups: Dictionary = {}   # race_group id -> Array[EQReservation]
 var _race_of: Dictionary = {}       # reservation instance_id -> race_group id
 var _race_seq: int = 0
+## 2a expansion declarations keyed by "<relation_type>|<effect_tag>".
+var _expansion_rules: Dictionary = {}
+## 2b transform declarations keyed by name.
+var _transforms: Dictionary = {}
+var _transform_order: Array[String] = []
+var _transform_seq: int = 0
+## Safety bound for recursive transform rounds.
+var max_transform_rounds: int = 8
 
 
 func _init(p_runtime = null) -> void:
@@ -510,6 +680,244 @@ func _schedule(res: EQReservation, delay: int) -> int:
 	return id
 
 
+## Applies target expansion declarations for matching effect tags before effect transforms.
+func _apply_target_expansion(res: EQReservation, view: Dictionary) -> Dictionary:
+	if relations == null or view == null:
+		return view
+	var tags := res.definition.tags if res.definition != null else []
+	if tags.is_empty():
+		return view
+	var matching := _matching_expansion_rules(tags)
+	if matching.is_empty():
+		return view
+	var has_expanded := false
+	var base_target := StringName(view.get("target", ""))
+	if base_target == &"":
+		return view
+	# Multiple matching rules (multi-tag actions) UNION their expansions:
+	# origin first, then per-rule BFS order in the deterministic rule order.
+	var final_targets: Array[StringName] = [base_target]
+	for rule in matching:
+		var expanded := _bfs_expand_targets(base_target, StringName(rule.get("relation_type", "")), int(rule.get("hop_cost", 0)), int(rule.get("budget", 0)))
+		if expanded.size() > 1:
+			has_expanded = true
+			for actor in expanded:
+				if not final_targets.has(actor):
+					final_targets.append(actor)
+			runtime.trace().record({
+				"kind": "targets_expanded",
+				"actor": String(res.actor_id),
+				"origin": String(base_target),
+				"expanded": _string_array(expanded),
+				"rule": String(rule.get("effect_tag", "")),
+			})
+	if has_expanded:
+		view["targets"] = final_targets
+	return view
+
+
+## Applies chained transforms until a fixed point (bounded by max_transform_rounds).
+func _apply_effect_transforms(res: EQReservation, view: Dictionary) -> Dictionary:
+	var transformed := view.duplicate(true)
+	var round := 0
+	while true:
+		round += 1
+		if round > max_transform_rounds:
+			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "transform rounds exceeded max_transform_rounds (%d)" % max_transform_rounds, {"actor": String(res.actor_id), "round": round}, false)
+			break
+		var matching := _matching_transforms(res)
+		if matching.is_empty():
+			break
+		var changed := false
+		for transform in matching:
+			var before := transformed.duplicate(true)
+			match String(transform.get("kind", "")):
+				"retarget":
+					var next_target := _apply_retarg_transform(res, transformed, transform)
+					if next_target != null:
+						transformed = next_target
+						if _view_target(transformed) != before.get("target", &""):
+							changed = true
+							runtime.trace().record({
+								"kind": "effect_transformed",
+								"transform": String(transform.get("name", "")),
+								"actor": String(res.actor_id),
+								"round": round,
+								"param": "target",
+							})
+				"state_inv":
+					var next_state := _apply_state_transform(transformed, transform)
+					if next_state != null:
+						transformed = next_state
+						if String(_view_state(transformed)) != String(before.get("state", "")):
+							changed = true
+							runtime.trace().record({
+								"kind": "effect_transformed",
+								"transform": String(transform.get("name", "")),
+								"actor": String(res.actor_id),
+								"round": round,
+								"param": "state",
+							})
+		if not changed:
+			break
+	return transformed
+
+
+func _apply_retarg_transform(res: EQReservation, view: Dictionary, transform: Dictionary) -> Variant:
+	var params := transform.get("params", {})
+	if params is not Dictionary:
+		return null
+	var stage := String(params.get("stage", "direct"))
+	var actor := _pick_stage_actor(res, transform, stage)
+	if actor == &"":
+		return null
+	if view.has("targets") and view["targets"] is Array and (view["targets"] as Array).size() > 0:
+		var expanded := view["targets"] as Array
+		if expanded.size() > 0:
+			expanded[0] = actor
+		view["targets"] = expanded
+	view["target"] = actor
+	return view
+
+
+func _apply_state_transform(view: Dictionary, transform: Dictionary) -> Variant:
+	if not view.has("state"):
+		return null
+	var params := transform.get("params", {})
+	if params is not Dictionary:
+		return null
+	var pair: Array = params.get("pair", [])
+	if pair is not Array or pair.size() != 2:
+		return null
+	var state := _normalize_state_token(view.get("state", ""))
+	var a := _normalize_state_token(pair[0])
+	var b := _normalize_state_token(pair[1])
+	if state == a:
+		view["state"] = StringName(b)
+		return view
+	if state == b:
+		view["state"] = StringName(a)
+		return view
+	return null
+
+
+func _normalize_state_token(value) -> String:
+	if typeof(value) == TYPE_STRING_NAME or typeof(value) == TYPE_STRING:
+		return String(value)
+	return ""
+
+
+func _pick_stage_actor(res: EQReservation, transform: Dictionary, stage: String) -> StringName:
+	var params := transform.get("params", {})
+	if params is not Dictionary:
+		return &""
+	var meta_level := int(transform.get("meta_level", 0))
+	var provenance := res.provenance if res != null else []
+	if provenance.is_empty():
+		if stage == "direct" or stage == "root":
+			return res.actor_id
+		return &""
+	var chain := provenance as Array
+	var stage_actor := &""
+	if stage == "direct":
+		var entry: Dictionary = chain.back()
+		var entry_meta: int = int(entry.get("meta_level", 0))
+		if meta_level >= entry_meta:
+			stage_actor = StringName(entry.get("actor", ""))
+	elif stage == "root":
+		for i in range(chain.size()):
+			var entry: Dictionary = chain[i]
+			var entry_meta: int = int(entry.get("meta_level", 0))
+			if meta_level >= entry_meta:
+				stage_actor = StringName(entry.get("actor", ""))
+				break
+	return stage_actor
+
+
+func _bfs_expand_targets(origin: StringName, relation_type: StringName, hop_cost: int, budget: int) -> Array:
+	var out: Array[StringName] = [origin]
+	if relation_type == &"" or hop_cost <= 0 or budget <= 0:
+		return out
+	if relations == null:
+		return out
+	var rel_ids: Array = relations.relation_ids()
+	rel_ids.sort_custom(func(a, b): return String(a) < String(b))
+	var frontier: Array = [{"actor": origin, "cost": 0}]
+	var idx := 0
+	while idx < frontier.size():
+		var frame: Dictionary = frontier[idx]
+		idx += 1
+		var current := StringName(frame.get("actor", ""))
+		var spent := int(frame.get("cost", 0))
+		for rel_id in rel_ids:
+			var rel: Dictionary = relations.relation(StringName(rel_id))
+			if rel.is_empty():
+				continue
+			if StringName(rel.get("type", "")) != relation_type:
+				continue
+			var next: StringName = &""
+			if rel.get("from_actor", &"") == current:
+				next = StringName(rel.get("to_actor", ""))
+			elif rel.get("to_actor", &"") == current:
+				next = StringName(rel.get("from_actor", ""))
+			else:
+				continue
+			var next_cost := spent + hop_cost
+			if next_cost > budget:
+				continue
+			var should_append := true
+			for v in out:
+				if String(v) == String(next):
+					should_append = false
+					break
+			if should_append:
+				out.append(next)
+			frontier.append({"actor": next, "cost": next_cost})
+	return out
+
+
+func _view_target(view: Dictionary) -> StringName:
+	if view.has("targets") and view["targets"] is Array:
+		var targets: Array = view.get("targets", [])
+		return StringName(targets[0]) if not targets.is_empty() else StringName(view.get("target", ""))
+	return StringName(view.get("target", ""))
+
+
+func _view_state(view: Dictionary) -> StringName:
+	return StringName(view.get("state", ""))
+
+
+func _string_array(values: Array) -> Array:
+	var out: Array = []
+	for v in values:
+		if typeof(v) == TYPE_STRING_NAME:
+			out.append(String(v))
+		else:
+			out.append(String(v))
+	return out
+
+
+func _is_serializable(value) -> bool:
+	match typeof(value):
+		TYPE_NIL, TYPE_BOOL, TYPE_INT, TYPE_STRING, TYPE_STRING_NAME, TYPE_ARRAY, TYPE_DICTIONARY:
+			pass
+		TYPE_OBJECT:
+			return false
+		_:
+			return false
+	if typeof(value) == TYPE_ARRAY:
+		for v in (value as Array):
+			if not _is_serializable(v):
+				return false
+	if typeof(value) == TYPE_DICTIONARY:
+		for k in (value as Dictionary).keys():
+			if typeof(k) != TYPE_STRING and typeof(k) != TYPE_STRING_NAME:
+				return false
+			if not _is_serializable((value as Dictionary)[k]):
+				return false
+	return true
+
+
 ## Resolves the next ready reservation through the §6.1 pipeline. Returns the
 ## resolved reservation; null when the queue is empty or the next event is not
 ## a tracked reservation (the L0 path). Expiry events are consumed internally.
@@ -548,7 +956,9 @@ func resolve_next() -> EQReservation:
 		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
 			_cause_target_reservation(res)
 		# step 2/3 — declared effect into the chunk
-		for r in _apply_effect(res.definition.effect_name, _view_of(res)):
+		var raw_view := _view_of(res)
+		var transformed_view := _apply_effect_transforms(res, _apply_target_expansion(res, raw_view.duplicate(true)))
+		for r in _apply_effect(res.definition.effect_name, transformed_view):
 			chunk.add(r)
 		# rumination reschedule (count-bounded; reactions re-arm in the ENGINE
 		# at fire time instead — re-submitting here would double-arm them)
@@ -735,12 +1145,27 @@ func _ctx(view: Dictionary) -> Dictionary:
 
 
 func _view_of(res: EQReservation) -> Dictionary:
-	return {
+	var out := {
 		"kind": &"reservation",
 		"source": res.actor_id,
 		"target": res.target_id,
 		"tags": res.definition.tags if res.definition != null else [],
 	}
+	if res.definition != null:
+		out["meta_level"] = int(res.definition.meta_level)
+		if String(res.definition.state_name) != "":
+			out["state"] = res.definition.state_name
+	if not res.provenance.is_empty():
+		var trail: Array = []
+		for p in res.provenance:
+			var entry := {
+				"actor": StringName(p.get("actor", "")),
+				"event_id": int(p.get("event_id", -1)),
+				"meta_level": int(p.get("meta_level", 0)),
+			}
+			trail.append(entry)
+		out["provenance"] = trail
+	return out
 
 
 func _trace_invalidated(event_id: int, actor_id: StringName, closed_by: StringName, race_group: StringName = &"") -> void:
@@ -763,7 +1188,14 @@ func _cause_target_reservation(op_res: EQReservation) -> void:
 	def.kind = EQActionDefinition.Kind.REACTION_PREPARATION
 	def.duration = EQActionDefinition.DURATION_UNLIMITED
 	def.tags = [op_res.definition.operation_target_tag]
-	submit(EQReservation.new(op_res.target_id, def))
+	var caused := EQReservation.new(op_res.target_id, def)
+	caused.provenance = op_res.provenance.duplicate(true)
+	caused.provenance.append({
+		"actor": op_res.actor_id,
+		"event_id": op_res.event_id,
+		"meta_level": int(op_res.definition.meta_level if op_res.definition != null else 0),
+	})
+	submit(caused)
 
 
 ## Reaction preparations currently armed for an actor.

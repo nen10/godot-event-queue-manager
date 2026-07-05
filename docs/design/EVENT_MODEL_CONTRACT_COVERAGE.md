@@ -37,8 +37,8 @@
 | state-algebra (inv ペア / 共存規則 / wrapping) | §5.7 | EQM-121 | implemented | addons/event_queue_manager/runtime/eq_state_algebra.gd | test_project/tests/core/test_eq_state_algebra.gd<br>test_project/tests/golden/lifetime_composition.trace.jsonl |
 | rate-modifier-stack (suspension / 加算 + override) | §4.8 | EQM-121 | implemented | addons/event_queue_manager/runtime/eq_event_lines.gd | test_project/tests/core/test_eq_event_lines.gd |
 | relation-graph (型宣言 / 維持 sweep / 直列縫合 / 離脱連動) | §13.1 | EQM-122 | implemented | addons/event_queue_manager/runtime/eq_relation_graph.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_relation_graph.gd |
-| expansion-transform (target 展開 / パターン変換 / 多重適用) | §6.4 | EQM-123 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
-| provenance-chain (発行連鎖 / 段ごとメタレベル) | §6.5 | EQM-123 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
+| expansion-transform (target 展開 / パターン変換 / 多重適用) | §6.4 | EQM-123 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
+| provenance-chain (発行連鎖 / 段ごとメタレベル) | §6.5 | EQM-123 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
 | atomic-bundle (member 一括 → 単一 sweep) | §7.2 | EQM-124 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_atomic_bundle.gd |
 | meta-level-premature-close (単一 int / 同値 = 介入成功 / cause: intervention) | §8.2, §8.3 | EQM-125 | reserved | addons/event_queue_manager/runtime/eq_window.gd | test_project/tests/transaction/test_eq_premature_close.gd |
 | phase-recursion (sub-checkpoint / ループ巻き戻し + 入力解除) | §8.4 | EQM-126 | reserved | addons/event_queue_manager/runtime/eq_window.gd | test_project/tests/transaction/test_eq_phase_rollback.gd |

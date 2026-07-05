@@ -15,6 +15,8 @@ var actor_id: StringName = &""
 var definition: EQActionDefinition
 ## For OPERATION reservations: the actor the caused reservation lands on.
 var target_id: StringName = &""
+## Provenance chain for target-causal expansion and transforms.
+var provenance: Array = []
 ## Scheduler event id once scheduled (-1 = not yet scheduled).
 var event_id: int = -1
 var status: int = Status.PENDING
@@ -51,6 +53,7 @@ func to_dict() -> Dictionary:
 		"status": status,
 		"remaining_ruminations": remaining_ruminations,
 		"remaining_duration": remaining_duration,
+		"provenance": provenance.duplicate(true),
 	}
 
 
@@ -65,4 +68,7 @@ static func from_dict(d: Dictionary) -> EQReservation:
 	r.status = int(d.get("status", Status.PENDING))
 	r.remaining_ruminations = int(d.get("remaining_ruminations", r.remaining_ruminations))
 	r.remaining_duration = int(d.get("remaining_duration", r.remaining_duration))
+	var provenance = d.get("provenance", [])
+	if provenance is Array:
+		r.provenance = provenance.duplicate(true)
 	return r

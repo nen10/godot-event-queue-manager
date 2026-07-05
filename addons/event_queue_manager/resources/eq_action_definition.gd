@@ -33,6 +33,10 @@ const DURATION_UNLIMITED := -1
 @export var rumination: int = 0
 ## For OPERATION: the tag of the reservation caused on the target.
 @export var operation_target_tag: StringName = &""
+## Declarative level for provenance reachability and transformation matching.
+@export var meta_level: int = 0
+## Declarative state annotation attached to the event view.
+@export var state_name: StringName = &""
 ## Ordering priority of the scheduled resolution event (higher first at the
 ## same tick, §3). Q32: a fired reaction is scheduled with this value.
 @export var priority: int = 0
@@ -129,6 +133,8 @@ func to_dict() -> Dictionary:
 		"duration": duration,
 		"rumination": rumination,
 		"operation_target_tag": String(operation_target_tag),
+		"meta_level": meta_level,
+		"state_name": String(state_name),
 		"priority": priority,
 		"effect_name": String(effect_name),
 		"expiry_effect_name": String(expiry_effect_name),
@@ -148,6 +154,8 @@ static func from_dict(d: Dictionary) -> EQActionDefinition:
 	def.duration = int(d.get("duration", 0))
 	def.rumination = int(d.get("rumination", 0))
 	def.operation_target_tag = StringName(d.get("operation_target_tag", ""))
+	def.meta_level = int(d.get("meta_level", 0))
+	def.state_name = StringName(d.get("state_name", ""))
 	def.priority = int(d.get("priority", 0))
 	def.effect_name = StringName(d.get("effect_name", ""))
 	def.expiry_effect_name = StringName(d.get("expiry_effect_name", ""))
