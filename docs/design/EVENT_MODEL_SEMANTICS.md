@@ -1,6 +1,6 @@
 # Event Model Semantics (v1)
 
-status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
+status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
 
 Inputs (confirmed):
 
@@ -115,6 +115,15 @@ The pattern-(2) "shared callable + per-entity params" (§4.2) is declared throug
 - **Determinism**: rules run in fixed registration order; entity scan order is `actor_id` ascending. Snapshots store only the rule *name* + params; an unregistered name at load is a stable error.
 - Declared follow-up (not v1.x-frontloaded): acceptance-intent **effect grouping** for visibility/debug display; recorded in the synthesis, revisited at EQM-119.
 
+### 4.8 Rate modifier-stack (suspension) *(v1.2, Q45)*
+
+An event-line's rate may be modified by a **modifier stack**: the line data (§4.6) is extended additively with `modifiers: Array[{modifier_id: StringName (deterministic 採番, §4.5), kind: ADD | OVERRIDE, value: int}]`, each modifier carrying a lifetime expressed in the existing invalidation vocabulary (expiry event §6.3 / counter line §5.1 — no new lifetime primitive).
+
+- **Effective rate**, recomputed deterministically on every modifier change: if any OVERRIDE modifier is active, the effective rate is the value of the **latest-issued** OVERRIDE; otherwise `base_rate + Σ(ADD values)`. Multiplicative modifiers are **rejected for v1.2** (no current demand; adding them later requires defining integer-fraction values and a fixed rounding rule — additive extension on demand, Q23 guardrail).
+- **Suspension** ("前進規則の一時差し替え" — freeze preserving value, slow/haste) = a lifetime-bearing modifier. Freeze = `OVERRIDE 0` (value preserved; a 0-effective-rate line drops out of watched polling per §4.3). Overlap resolves automatically: when one modifier expires, the effective rate is recomputed from the survivors (e.g. freeze during slow → freeze expires → the slow rate is restored without game-side bookkeeping).
+- The v1.1 **re-rate** (§4.6) is recast additively as "rewrite of `base_rate`"; modifiers layer on top. Both paths are effects issued from resolving events — the line itself remains pure data.
+- Trace: a modifier-caused rate change is an `event_line_progressed` record carrying the `modifier_id` (§11). Snapshot: additive table (§10.1).
+
 ---
 
 ## 5. Conditions: resolution vs invalidation (Q05/Q06/Q18/Q19)
@@ -162,6 +171,17 @@ Predicate-type conditions are serialized **by name**: acceptance registers `regi
 
 `EQActionDefinition` is extended additively: `solve_conditions: Array[EQConditionSpec]`, `invalidation_conditions: Array[EQConditionSpec]`, where `EQConditionSpec` is a serializable Resource `{type: LINE_THRESHOLD | COUNTER | NAMED_PREDICATE, line_id, threshold, comparison, counter_start, predicate_name}`. The existing `duration` / `rumination` fields remain as **sugar**, normalized into conditions at validate time (backward compatible). **Acceptance criterion (frozen)**: "counterattack preparation — closes on 3 uses OR 5 turns, deadline ∞ allowed" is declarable in **one `.tres`, zero GDScript lines**, and the trace's `closed_by` shows which condition closed it.
 
+### 5.7 State algebra: inv pairs, coexistence rules, wrapping *(v1.2, Q44/Q46/Q48)*
+
+An abstract algebra over acceptance-declared state types (EBS request R01/R03; EBS skills are acceptance *instances* — none of the concrete pairs below is hardcoded).
+
+- **Involution (inv) pairs**: acceptance declares `inv` pairs of state types (欠損⇄虚飾 etc.) with a per-pair **coexistence rule**, all serializable data:
+  - **CANCEL (相殺)** — the pair is represented as **one signed counter event-line** (one axis): positive stacks = state A, negative = state B; granting either state is a signed advance and cancellation is arithmetic. The sign determines which state is active. This *is* the involution made operational: the dual is the same axis walked the other way.
+  - **EXCLUDE (排他)** — granting a state first clears its dual, then grants (deterministic order: clear → grant; both trace-recorded). No coexistence instant exists.
+  - **COEXIST (共存)** — no runtime interaction; the pair declaration serves authoring-level systematic inversion only (e.g. effect transforms, §6.4).
+- **Wrapping (デコレータ / 連鎖)**: a state instance may carry an ordered, serializable list of **wrappers**. A wrapper is a named, **parameter-wise modification** of the wrapped state's grant / clear / effect semantics — the same parameter-wise rewrite shape as §6.4 transforms (e.g. 反転連鎖 = "apply inv to the granted state"; 透徹連鎖 = "on grant, chain-grant through a relation"). Wrapper vocabulary instances are acceptance-defined data; the core freezes only the composition structure, the deterministic order (apply in wrap order; unwrap LIFO), and the trace records (`state_wrapped` / `state_unwrapped`, §11). This is a **state-side composition mechanism, distinct from target expansion** (§6.4) — decided デコレータ型, not relation-propagation.
+- **Lifetime composition** *(Q46, 適用確認)*: the two lifetime families and the exception need **no new primitive** — stack-lifetime = decremental counter line (§5.1); turn-lifetime = expiry event (§6.3); 現象 ("not cleared by turns") = simply declaring no turn condition (explicit invalidation only). Owned as golden acceptance instances by EQM-121/128.
+
 ---
 
 ## 6. Sweep point (Q09 first / Q19)
@@ -192,6 +212,18 @@ A **cascade** is therefore the repetition "sweep → fire → schedule → resol
 
 Arming a duration-limited reservation schedules an **expiry event** at `due_tick = armed_at + duration` (duration = ∞ schedules none). On resolution: if the target is still armed, it is closed with `closed_by: duration` and the optional on-expiry effect runs through §6.1; if it was already closed (e.g. by reaction count), the expiry event drops with a lightweight `closed_by: already_closed` record. Reaction-count exhaustion uses the same vocabulary (`closed_by: reaction_count`). Silent removal of an armed reaction is forbidden.
 
+### 6.4 Resolution-stage rewrites: target expansion and effect pattern transforms *(v1.2, Q48/Q52)*
+
+Step 2 of the pipeline (§6.1) is refined into three deterministic sub-steps. Both rewrite families operate on the **serializable event view** before the effect handler sees it; both are opt-in L2/L3 machinery (absent declarations = the v1.1 behaviour, unchanged).
+
+- **2a — target expansion** *(Q48)*: the runtime expands the event's declared target set through the relation graph (§13.1) according to acceptance-declared expansion rules (relation type ↔ effect tag, data). Traversal is breadth-first in **relation-id ascending** order. Recursion (relation loops) is bounded by **meta-level/cost, in the §8 vocabulary** — each hop draws on the acceptance-declared meta-cost budget; exhaustion stops expansion deterministically (decided: *not* a bare visited-set rule). The expansion result (origin target → expanded list) is recorded in the trace (`targets_expanded`).
+- **2b — effect pattern transforms** *(Q52)*: a transform is a named, data-declared, **parameter-wise rewrite of the event view**, typed by the parameter it rewrites: **target rewrite** (対戦術 — redirect to a provenance-chain stage within meta reach, §6.5/§8.2), **state-algebra rewrite** (反転系 — apply §5.7 inv to the effect's state operand), further parameter types additive on demand. Deterministic application order: **meta-level DESC → priority → sequence**. **Multi-pass application is permitted**: which transforms may apply to which (the application structure / skill-effect-graph) is developer-plannable data, and its semantic validation is the **consumer's (EBS's) responsibility** — the core guarantees only the deterministic order, a trace record per application (`effect_transformed`), and a bounded-round engineering backstop (dev fail-fast on runaway, `RUNTIME_RESILIENCE_POLICY.md`).
+- **2c — effect handler** (§6.1 step 2 proper) receives the final expanded/transformed view.
+
+### 6.5 Issuance provenance chain *(v1.2, Q52)*
+
+An event carries a serializable **provenance chain** `[{actor, event_id, meta_level}]` from operation root through intermediate operators to the direct issuer. When an operation/window-mediated resolution issues events, the chain is inherited and appended automatically; each stage records the declared meta-level of the operation event that issued it (§8.2). The chain lives **on the event, never on an event-line** — an event-line is progression input, and carrying provenance would break the three-plane separation (§2.1; the request's event-line suggestion was reviewed and declined with user approval). Consumers: target rewrite reach (§6.4 2b), trace explanation.
+
 ---
 
 ## 7. Composite events and the comparator hook (Q04/Q09/Q11/Q20)
@@ -209,7 +241,15 @@ Arming a duration-limited reservation schedules an **expiry event** at `due_tick
 
 - **No automatic bundling.** The set of events that became resolvable at the same sweep point is passed to the hook as candidates; the hook returns an **order** (permutation): `order_simultaneous(candidates: Array[Dictionary]) -> Array[int]`. Without a hook, the default is sequential resolution in issuance order.
 - The candidates view contains only serializable fields within the Q20 scope: entity stats, event tags, event-line values, nest level. The hook's output participates in the golden trace.
-- **Staging**: v1.x first delivers the ordering hook only (EQM-115). Composite as an *atomic bundle* is a later explicit acceptance API — deferred, recorded here so it is not re-invented ad hoc.
+- **Staging**: v1.x first delivers the ordering hook only (EQM-115). Composite as an *atomic bundle* is a later explicit acceptance API — deferred, recorded here so it is not re-invented ad hoc. *(v1.2: the deferral is lifted — §7.2.)*
+
+### 7.2 Composite atomic bundle *(v1.2, Q49; supersedes the §7.1 staging deferral)*
+
+The first consumer demand for member-level atomicity arrived (EBS R09 公平 / R03 波及の「同時」): "parallel" effects resolve as one composite at the same tick, **order-independent** (members do not see each other's results), with per-state reactions firing *individually afterwards* through the normal sweep. Sequential same-tick events with the §7.1 hook cannot satisfy this — a sweep runs between members. Therefore:
+
+- A **bundle** is an explicit acceptance API grouping same-tick members into one resolution unit: all member effects are applied (member order = §7.1 hook → issuance order), then **one single sweep** runs after the last member. No trigger interleaving between members.
+- The §7 core guarantees (atomicity, total order, serializability, trace coverage) apply as frozen; the bundle is their implementation, not a new ordering authority — *which* bundle is next is still decided by the §3 comparator.
+- Trace: bundle id + member sequence (§11). Save boundary: the chunk drains after the bundle completes (§10) — a bundle is atomic with respect to the save boundary.
 
 ---
 
@@ -232,6 +272,32 @@ A window is a first-class runtime object `EQWindow`: `{window_id (deterministic 
 - open/close are runtime APIs and emit `window_opened` / `window_closed` traces (fields: id / owner / nest_level / deadline / close cause).
 - **Budget**: meta-cost is paid from the owner actor's serializable state (acceptance-chosen key); the window stack enforces non-replenishment within a chain (Q02).
 
+### 8.2 Meta-level *(v1.2, Q51 — cross-cutting; EBS request 継続相談点の確定)*
+
+The **meta-level** is a declared int governing intervention strength. It is distinct from the §8 meta-cost *budget* (which bounds depth); the meta-level is a *comparison value*. Frozen rules:
+
+1. **Attachment**: declared on the skill declaration (consumer-side, e.g. the EBS 解決仕様ブロック); the issued event and the opened window **carry** the value at runtime. Undeclared = 0. **Independent of nest_level** — depth and strength are deliberately not conflated.
+2. **Domain**: a single int with its total order (a partial order / category comparison was rejected — "incomparable" cases are excluded structurally). **Tie = intervention succeeds**: an intervention passes iff `meta(intervener) >= meta(target)`.
+3. **Provenance stages** (§6.5) each carry the declared meta-level of their issuing operation event; the reach of a target rewrite (§6.4 2b) is the furthest chain stage the transformer's level difference allows.
+4. The expansion recursion bound (§6.4 2a) draws on the §8 meta-cost vocabulary — no second budget system is introduced.
+
+Consumer-side homework recorded at handover: per-skill meta-level value assignment is EBS game design, outside EQM.
+
+### 8.3 Window premature close (介入の標準効果) *(v1.2, Q50)*
+
+An intervention (e.g. 迎撃 firing on a resolved movement effect) **prematurely closes** the target window by default, subject to §8.2: the close happens iff `meta(intervention event) >= meta(window)`; otherwise the window survives (回避) and the intervention's own effect still resolves normally.
+
+- **Resolved effects stay** — they are resolved timeline events (the intervention's own firing condition depends on them; rolling them back would be self-contradictory). **Pending members are swept** via the invalidation path (each with `closed_by`), then `window_closed(cause: intervention)` is emitted carrying the intervener event id and both meta-levels (explanation-as-data).
+- This is a **different semantics from the deadline default** (§9/Q37 draft rollback) — recorded as a distinct close cause, not a variant. The pre-close hook symmetry holds: a game may run an explicit hook before the close; there is no silent default action (UX_PATH_REDUCTION).
+
+### 8.4 Operation-phase recursion, sub-checkpoints, loop resolution *(v1.2, Q53)*
+
+Deep OPERATION nesting (共鳴の 4 段階解決, 鏡面/水鏡の再帰的追加入力) is modeled as **phases = recursive windows**, plus a finer rollback anchor:
+
+- **Phase sub-checkpoints**: a window's draft supports an **ordered list of named phase checkpoints** (deterministic ids) *inside* one window — decided necessary because several phase transitions can occur within a single OPERATION window. Rollback anchors are therefore: window opens (the existing per-window draft, §8.1) *and* intra-window phase checkpoints.
+- **Loop detection**: the phase-transition history detects a same-phase revisit; the revisit closes the **minimal cycle**.
+- **Resolution (decided: rollback, not forward-transition)**: roll back to the **loop-start checkpoint** (across windows and sub-checkpoints, on the `EQTransaction` working-copy), **clear the inputs of all 鏡面** (loop-participating operation inputs) on the minimal cycle, and resume. The rollback span and the cleared inputs are trace-recorded (`phase_rolled_back`, §11). Re-input UX after clearing is game-side.
+
 ---
 
 ## 9. Windows and deadlines (Q03)
@@ -253,6 +319,10 @@ A window is a first-class runtime object `EQWindow`: `{window_id (deterministic 
 - API reservation: `is_save_allowed()` returns a stable result, and an open window stack is explicitly serialized (detail in EQM-070/071). Snapshot-for-save vs snapshot-for-rollback are distinguished; an open draft saved should rollback to the boundary.
 - **Enforcement wiring** *(v1.1, Q41)*: `is_save_allowed()` is enforced in the save path (`EQSaveAdapter.save` / `EQManager`) — a chunk-non-empty save is a **stable error**, with no force flag (a transitional save is representable as "chunk empty but window open"). Snapshot **schema_version 2** adds additive tables `event_lines` / `windows` / `armed_triggers`, with pending conditions inline on events; a v1 bundle loads via a v1→v2 migrator (missing tables = empty), and a v2 bundle in a v1 implementation is a stable error (per `SNAPSHOT_COMPAT_V1.md`). Draft serialization default = Q01 (rollback to boundary for save; draft-inclusive snapshots are the rollback side only).
 
+### 10.1 Snapshot schema v3 (reserved) *(v1.2)*
+
+The v1.2 machinery adds state that must survive save/replay. **Schema_version 3** is reserved with the same compatibility pattern as v2 (Q41): additive tables `line_modifiers` (§4.8), `relations` (§13.1), `phase_checkpoints` (§8.4), with state wrappers (§5.7) inline on state entries and provenance chains (§6.5) inline on events. A v2 bundle loads via a v2→v3 migrator (missing tables = empty); a v3 bundle in a v2 implementation is a stable error. Owned by EQM-127 (replay proof: roundtrip across modifiers / relations / provenance / checkpoints → identical pop order + identical trace).
+
 ---
 
 ## 11. Trace record kinds
@@ -265,6 +335,7 @@ The canonical trace (EQM-013) already has an **open record-kind schema** (sorted
 - **`closed_by` vocabulary** *(v1.1)*: condition ids plus the reserved causes `duration`, `reaction_count`, `already_closed` (§6.3), `actor_removed` (§13). Cascade resolutions carry their **round number** (§6.2). Sweep-rule executions record rule name + affected count (§4.7).
 - **`event_invalidated`** *(v1.1, EQM-113)* — the invalidation record kind (carries `closed_by`, and `event_id` when the drop maps to a scheduled event). **`reaction_fired`** *(v1.1, EQM-113)* — a fired reaction was scheduled (fields: `round`, `actor`, `event_id`).
 - Effect records carry a deterministic `classification` (important / sensed / offscreen) — **simulation-side data (Q12)**, implemented in EQM-080/081; presentation may not alter it.
+- **v1.2 reserved kinds/fields** *(Q44–Q53)*: `relation_bound` / `relation_dissolved` / `relation_rebound` / `relation_inverted` (§13.1); `targets_expanded` (§6.4 2a); `effect_transformed` (§6.4 2b, one record per application); `state_wrapped` / `state_unwrapped` (§5.7); `bundle_resolved` (bundle id + member sequence, §7.2); `phase_rolled_back` (rollback span + cleared inputs, §8.4). `window_closed` cause vocabulary gains `intervention` (with intervener event id + both meta-levels, §8.3). `event_line_progressed` gains an optional `modifier_id` field for modifier-caused rate changes (§4.8). Window/event records carry their `meta_level` (§8.2).
 
 Determinism rules (unchanged from EQM-013): ordering keys are int only; fixed key order; no wall-clock / node-path / object address; byte-identical for identical seed/input.
 
@@ -287,6 +358,16 @@ v1.x targets (measured like EQM-102, Godot 4.6 headless debug): concurrent actor
 - Pending reservations of a departing/dead actor are routed through the **invalidation path** (§5), not special-cased.
 - Round membership updates are **policy-owned**.
 - **Normal departure path** *(v1.1, Q39; Q05 是正)*: `invalidate_actor(actor_id, cause)` is the canonical API — it cancels the actor's pending events, disarms its reactions, cleans up per-entity progression (Q10/Q22), and records `closed_by: actor_removed`. It behaves identically in dev and shipped modes (mode-neutral: death mid-battle is normal gameplay, not an anomaly). `EQNodeBridge.on_actor_freed` calls it. Only an event for an unregistered actor that *bypassed* this path remains a contract violation (dev halts). Events *targeting* a removed actor are not core's concern — acceptance expresses those via invalidation conditions (named predicate / counter); revive/summon-style rules that address removed actors are intentionally left to acceptance design (no core pre-emption; revisit on demand).
+
+### 13.1 Relation graph *(v1.2, Q47)*
+
+Persistent directed actor-to-actor relations (月/主 → 星/従) become first-class serializable data:
+
+- **Relation instance** = `{relation_id: StringName (deterministic 採番, same class as §4.5 ids), type, from_actor, to_actor}` in a serializable table (snapshot v3, §10.1).
+- **Relation type declaration** (data): `{name, 分類 tag (追跡/求心/公平 …, acceptance vocabulary), inv 反転形 (e.g. 復讐 = 追跡の反転 — §5.7 の inv と同じ対合形), 構造制約 (TREE | GRAPH — tree violation at bind time is a stable error, dev fail-fast / shipped skip+log), 維持条件 (EQConditionSpec; spatial predicates are game-supplied NAMED_PREDICATE, Q12 の延長), 評価 sweep (declared per type; default = the primary tick's declared threshold, i.e. the game's "T開始時" — §4.7 registry 流用), 解消時規則 (NONE | SERIAL_SUTURE)}`.
+- **SERIAL_SUTURE (直列縫合)** is the only rebinding pattern in the v1.2 vocabulary (decided; additive extension on demand): when a relation in a serial chain dissolves, the adjacent relations re-bind to each other. Recorded as `relation_rebound`.
+- **Maintenance**: the declared sweep evaluates 維持条件; failure dissolves through the 解消時規則. **`invalidate_actor` integration (decided)**: an actor's departure dissolves all incident relations *through the same 解消時規則 path* (trace: `closed_by: actor_removed` + `relation_dissolved` / `relation_rebound`) — no special-cased silent removal.
+- Bind / dissolve / rebind / invert are trace-recorded (§11). Consumers: target expansion (§6.4 2a), 公平 composite acceptance (§7.2), EBS relation skills.
 
 ---
 
@@ -340,13 +421,29 @@ The deferred list above **fell through**: queue Phase 4–6 completed (and v1.0 
 - **Still reserved → owned by the v1.1 implementation round** (queue Phase 11, EQM-110..119; tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`): conditions contract (§5.4–§5.6 → EQM-111), event-line backend (§4.6–§4.7 → EQM-112), resolution pipeline + closed_by vocabulary + departure path + expiry events (§6, §13 → EQM-113), window object model + deadline (§8.1, §9 → EQM-114), ordering hook (§7.1 → EQM-115), race pattern (§5.2 → EQM-116), snapshot v2 + save enforcement (§10 → EQM-117), reducibility re-proof (EQM-118), authoring surface (§5.6 acceptance criterion → EQM-119).
 - Q27–Q43 details recorded in this revision are **frozen at the same strength** as the v1 contracts; the coverage matrix + `tools/check_contract_coverage.py` gate keeps "declared but unimplemented" from recurring silently.
 
+### 16.2 v1.2 freeze record *(EQM-120, 2026-07-05)*
+
+The EBS extension round (Q44–Q54; request R01–R12; consultation rounds 2–3 all user-decided, rationale in the 2026-07-05 synthesis) freezes the following contracts at the same strength as v1/v1.1. Coverage rows are `reserved` until each owning task flips them:
+
+- rate modifier-stack (§4.8 → EQM-121); state algebra: inv pairs / coexistence rules / wrapping (§5.7 → EQM-121)
+- relation graph (§13.1 → EQM-122)
+- target expansion + effect pattern transforms (§6.4 → EQM-123); issuance provenance chain (§6.5 → EQM-123)
+- composite atomic bundle (§7.2 → EQM-124; lifts the §7.1 staging deferral)
+- meta-level (§8.2) + window premature close (§8.3) → EQM-125
+- operation-phase recursion / sub-checkpoints / loop rollback (§8.4 → EQM-126)
+- snapshot schema v3 (§10.1 → EQM-127); v1.2 trace kinds (§11, delivered with their owning sections)
+- EBS acceptance suite: 確認系 Q54 (R04/R06/R08/R09/R11/R12) + authoring additions (§16.2 → EQM-128)
+
+Consumer-side responsibilities recorded at handover (not EQM contracts): spatial predicates via NAMED_PREDICATE (game), defense-stack substance (game), transform application-structure validation (EBS), per-skill meta-level assignment (EBS). All v1.2 machinery is L2/L3 opt-in; the L0/L1 surface is unchanged (EQM-023 gate).
+
 ---
 
 ## 17. References
 
 - Concepts: `docs/design/EVENT_MODEL_CONCEPTS.md`
-- Decisions registry: `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` (Q01–Q26; 実装ラウンド Q27–Q43)
-- Rationale: `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-06-14.md`, `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`
+- Decisions registry: `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` (Q01–Q26; 実装ラウンド Q27–Q43; 拡張ラウンド Q44–Q54)
+- Rationale: `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-06-14.md`, `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`, `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`
+- EBS extension request (received copy): `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`
 - Contract coverage: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`
 - Ordering/trace proof: `docs/devflow/policy/DETERMINISM_TRACE_TEST_POLICY.md`
 - Resilience modes: `docs/devflow/policy/RUNTIME_RESILIENCE_POLICY.md`

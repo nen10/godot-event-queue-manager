@@ -34,7 +34,19 @@
 | snapshot-v2 + save-enforcement (is_save_allowed 配線 / migrator) | §10 | EQM-117 | implemented | addons/event_queue_manager/runtime/eq_save_adapter.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/transaction/test_eq_snapshot_v2.gd |
 | reducibility-product-proof (EQM-053 の product model 再証明) | §16.1 | EQM-118 | implemented | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/policy/test_eq_reducibility_product.gd<br>test_project/tests/golden/reducibility_ctb_pipeline.trace.jsonl |
 | authoring-acceptance (反撃準備 .tres 受け入れ基準) | §5.6 | EQM-119 | implemented | dogfood/action_resolution/counterattack_preparation.tres<br>dogfood/action_resolution/battle.gd | test_project/tests/resource/test_eq_authoring_acceptance.gd<br>test_project/tests/golden/authoring_counterattack.trace.jsonl |
+| state-algebra (inv ペア / 共存規則 / wrapping) | §5.7 | EQM-121 | reserved | addons/event_queue_manager/runtime/eq_state_algebra.gd | test_project/tests/core/test_eq_state_algebra.gd |
+| rate-modifier-stack (suspension / 加算 + override) | §4.8 | EQM-121 | reserved | addons/event_queue_manager/runtime/eq_event_lines.gd | test_project/tests/core/test_eq_event_lines.gd |
+| relation-graph (型宣言 / 維持 sweep / 直列縫合 / 離脱連動) | §13.1 | EQM-122 | reserved | addons/event_queue_manager/runtime/eq_relation_graph.gd | test_project/tests/core/test_eq_relation_graph.gd |
+| expansion-transform (target 展開 / パターン変換 / 多重適用) | §6.4 | EQM-123 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
+| provenance-chain (発行連鎖 / 段ごとメタレベル) | §6.5 | EQM-123 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_resolution_rewrites.gd |
+| atomic-bundle (member 一括 → 単一 sweep) | §7.2 | EQM-124 | reserved | addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/core/test_eq_atomic_bundle.gd |
+| meta-level-premature-close (単一 int / 同値 = 介入成功 / cause: intervention) | §8.2, §8.3 | EQM-125 | reserved | addons/event_queue_manager/runtime/eq_window.gd | test_project/tests/transaction/test_eq_premature_close.gd |
+| phase-recursion (sub-checkpoint / ループ巻き戻し + 入力解除) | §8.4 | EQM-126 | reserved | addons/event_queue_manager/runtime/eq_window.gd | test_project/tests/transaction/test_eq_phase_rollback.gd |
+| snapshot-v3 (modifier / relation / provenance / checkpoint tables) | §10.1 | EQM-127 | reserved | addons/event_queue_manager/runtime/eq_snapshot.gd | test_project/tests/transaction/test_eq_snapshot_v3.gd |
+| ebs-acceptance-suite (Q54 確認系 golden 束 + authoring 追加) | §16.2 | EQM-128 | reserved | dogfood/ | test_project/tests/golden/ |
 
 ## Deferred (coverage 対象外, 記録のみ)
 
-- composite atomic bundle (§7.1 staging 後段) / grouped・micro-event-line (Q24) / replay 製品化 (Q15) / effect grouping (Q35 follow-up — **EQM-119 で再評価し defer 確定**: `EQEffectRecord.tags` + classification で grouping 表現が既に可能、実需要の信号が出るまで専用 field は追加しない)。
+- composite atomic bundle (§7.1 staging 後段) — **v1.2 で deferral 解除** (Q49、EBS 公平/波及の同時性が実需要): reserved 行 atomic-bundle (EQM-124) へ移行。
+- grouped・micro-event-line (Q24) / replay 製品化 (Q15) / effect grouping (Q35 follow-up — **EQM-119 で再評価し defer 確定**: `EQEffectRecord.tags` + classification で grouping 表現が既に可能、実需要の信号が出るまで専用 field は追加しない)。
+- v1.2 で新たに defer: rate modifier の乗算 (整数分数 + 丸め規則の定義が前提)、結び直し語彙の追加パターン、変換のパラメータ型追加 — いずれも需要確定時に additive (Q23 ガードレール)。

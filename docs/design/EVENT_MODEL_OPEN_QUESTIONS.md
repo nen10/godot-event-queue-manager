@@ -739,6 +739,36 @@ user意見: 承認。今後需要に応じて拡張は検討する。
 
 経緯: consumer プロジェクト **EBS** (godot-editable-battleskill-system) から状態・関係システムと解決パイプライン拡張の依頼 (R01–R12) を受領した。受領原本: `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md` (EBS 側原典 `docs/design/EQM_EXTENSION_REQUEST.md` draft v2、相談ラウンド1 反映済み)。依頼を本 registry の Q44–Q54 に起票する。起票と同日に**相談ラウンド2** を実施し、8 個の意味論 fork が DECIDED(user) となった (下表)。残る RECOMMENDED 項目は設計ラウンド (SEM v1.2 起草 task) の入力。roadmap 対応: `ROADMAP.md` §7 Phase 13。applicative case: `ORDERING_MODEL_COVERAGE.md` row 10。
 
+### Finalization (EQM-120, 2026-07-05)
+
+**相談ラウンド3** (同日) で残る fork 8 点も確定し、全 11 項目が settled した。fork 計 16 点のうち推奨からの逸脱 5 点 (展開停止 = メタ/コスト、変換多重適用 + EBS 側 validation、変換のパラメータ別型、フェーズ内 sub-checkpoint、ループ = 巻き戻し方式) は synthesis に明示。確定記述は `EVENT_MODEL_SEMANTICS.md` **v1.2** の *(v1.2)* 節、根拠は `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`。実装対応は `EVENT_MODEL_CONTRACT_COVERAGE.md` の reserved 行 (EQM-121..128) が追跡する。
+
+| Q | 決定の記録先 (SEM v1.2) | 実装 owner |
+|---|---|---|
+| Q44 inv ペア + 共存規則 / Q46 寿命合成 | §5.7 | EQM-121 (acceptance 例は EQM-121/128) |
+| Q45 rate modifier-stack | §4.8 | EQM-121 |
+| Q47 関係グラフ | §13.1 | EQM-122 |
+| Q48 展開 (波及) / 連鎖 = wrapping | §6.4 2a / §5.7 | EQM-123 / wrapping は EQM-121 |
+| Q49 composite atomic bundle | §7.2 | EQM-124 |
+| Q50 premature close / Q51 メタレベル | §8.3 / §8.2 | EQM-125 |
+| Q52 変換フック + 発行連鎖 provenance | §6.4 2b / §6.5 | EQM-123 |
+| Q53 フェーズ再帰 + sub-checkpoint + 巻き戻し | §8.4 | EQM-126 |
+| (横断) snapshot v3 | §10.1 | EQM-127 |
+| Q54 確認系 acceptance 束 | §16.2 | EQM-128 |
+
+### 相談ラウンド3 の決定 (2026-07-05)
+
+| # | fork | 決定 |
+|---|---|---|
+| 9 | 連鎖 (状態のラッピング) の機構 | **デコレータ型** — 状態が状態を包み、包まれた側の付与・解除・効果の意味論を修飾する状態合成構造 (関係伝播型/トリガ型ではない) |
+| 10 | 結び直し規則の宣言語彙 | 直列縫合のみ (enum {NONE, SERIAL_SUTURE}、additive 拡張余地) |
+| 11 | 発行連鎖の載せ場所 | event 側 provenance で確定 (event-line 拡張示唆は三面分離を理由に不採用 — 承認済み) |
+| 12 | pipeline 詳細 | 段 (pop 直後・effect 前、展開→変換)・BFS 関係 id 昇順・bundle 前倒しを承認。**修正**: 展開の再帰停止 = メタレベル/コスト準拠 (§8 語彙)。変換は多重適用許可 — 適用構造は開発者が計画できる data、意味 validation は EBS 側。変換は event パラメータごとの型 (対戦術 = 対象先変換 / 反転系 = 状態代数変換) |
+| 13 | 相殺の記録形 | 符号付き counter line 1 本 (inv ペア = 1 軸の両方向) |
+| 14 | modifier 合成語彙 | 加算 + override のみ (乗算は整数分数 + 丸め規則の定義が前提のため需要待ち) |
+| 15 | actor 離脱と関係グラフ | 解消時規則を通して自動解消 (`closed_by: actor_removed` + relation trace) |
+| 16 | フェーズ checkpoint 粒度 | **フェーズ内 sub-checkpoint も必要** (1 つの OPERATION window 内の多段フェーズ遷移を想定) |
+
 ### 相談ラウンド2 の決定 (2026-07-05)
 
 | # | fork | 決定 |
@@ -771,17 +801,17 @@ user意見: 承認。今後需要に応じて拡張は検討する。
 
 | id | status | 領域 |
 |---|---|---|
-| Q44 | DECIDED(user) | 状態代数: inv 双対ペアの宣言と共存規則 |
-| Q45 | DECIDED(user) | event-line rate の modifier-stack (suspension) |
-| Q46 | RECOMMENDED | 寿命の合成 (既存 invalidation 語彙の適用確認) |
-| Q47 | RECOMMENDED | 関係グラフの first-class data model (評価タイミングのみ DECIDED) |
-| Q48 | RECOMMENDED | 効果対象の展開規則 (連鎖・波及) の評価段と停止規律 |
-| Q49 | RECOMMENDED | composite atomic bundle の前倒し (公平・波及の同時性) |
+| Q44 | DECIDED(user) | 状態代数: inv 双対ペアの宣言と共存規則 (相殺 = 符号付き 1 本) |
+| Q45 | DECIDED(user) | event-line rate の modifier-stack (加算 + override) |
+| Q46 | SETTLED(SEM §5.7) | 寿命の合成 — 新規 primitive 不要、acceptance 例 = EQM-121/128 |
+| Q47 | DECIDED(user) | 関係グラフの first-class data model (評価 sweep / 直列縫合 / 離脱連動) |
+| Q48 | DECIDED(user) | 波及 = 展開 (§6.4 2a、メタ/コスト停止) / 連鎖 = デコレータ型 wrapping (§5.7) |
+| Q49 | DECIDED(user) | composite atomic bundle の前倒し (公平・波及の同時性) |
 | Q50 | DECIDED(user) | window premature close (介入の標準効果) |
 | Q51 | DECIDED(user) | メタレベルの形式化 (横断) |
-| Q52 | RECOMMENDED | 効果パターン変換フックと発行連鎖メタデータ (target 規則のみ DECIDED) |
-| Q53 | DECIDED(user) | 入れ子操作フェーズのループ検出・解消 |
-| Q54 | RECOMMENDED | 確認系 acceptance 束 (R04/R06/R08/R09/R11/R12) |
+| Q52 | DECIDED(user) | 効果パターン変換フック (多重適用可) と発行連鎖 provenance (event 側) |
+| Q53 | DECIDED(user) | 入れ子操作フェーズのループ検出・解消 (+ フェーズ内 sub-checkpoint) |
+| Q54 | SETTLED(acceptance) | 確認系 acceptance 束 (R04/R06/R08/R09/R11/R12) — EQM-128 所有 |
 
 ## Q44 — 状態代数: inv 双対ペアの宣言と共存規則 [DECIDED(user)]
 
@@ -795,6 +825,8 @@ user意見: 承認。今後需要に応じて拡張は検討する。
 
 user意見 (相談ラウンド2, 2026-07-05): ペア宣言 + 規則選択制で確定。
 
+user意見 (相談ラウンド3, 2026-07-05): 相殺の記録形 = **符号付き counter line 1 本**で確定 (inv ペア = 1 軸の両方向、相殺は算術で自動成立)。→ SEM §5.7。
+
 ## Q45 — event-line rate の modifier-stack (suspension) [DECIDED(user)]
 
 問い: 前進規則の一時差し替え (凍結の保存・停止、鈍化/機敏) を、重複適用・途中解除・snapshot 復元と整合する形でどう表現するか。現行の re-rate (SEM §4.6) は「現在 rate の上書き」のみで復帰値を持たない。
@@ -807,6 +839,8 @@ user意見 (相談ラウンド2, 2026-07-05): ペア宣言 + 規則選択制で�
 
 user意見 (相談ラウンド2, 2026-07-05): modifier-stack モデルで確定。
 
+user意見 (相談ラウンド3, 2026-07-05): 合成語彙 = **加算 + override のみ**で確定 (乗算は整数分数 + 丸め規則の定義が前提のため需要待ちの additive 拡張)。実効 = override 有効なら付与順最新の override 値、なければ base + Σadd。→ SEM §4.8。
+
 ## Q46 — 寿命の合成の適用確認 [RECOMMENDED]
 
 問い: スタック系 (欠損, 反撃反芻) とターン系 (鑑別, 運命改変) の 2 種の寿命、および「ターン経過で解除されない」現象を、既存の invalidation OR + counter event-line で書けるかの適用確認 (依頼種別 [確認])。
@@ -815,7 +849,7 @@ user意見 (相談ラウンド2, 2026-07-05): modifier-stack モデルで確定�
 
 推奨: 既存語彙で表現可能の見込み — スタック系 = decremental counter line、ターン系 = ターン閾値の expiry event (§6.3)、現象 = ターン条件を宣言しない (解除は明示 invalidation のみ)。EBS スキル群から 3 種各 1 つを golden 化する。
 
-user意見: (acceptance 例の確定待ち)
+user意見: 相談ラウンド2・3 で異議なし → SETTLED (新規 primitive 不要、SEM §5.7 に確定記述)。acceptance 例 (3 種各 1 golden) は EQM-121/128 が所有。
 
 ## Q47 — 関係グラフの first-class data model [RECOMMENDED]
 
@@ -831,6 +865,8 @@ user意見: (acceptance 例の確定待ち)
 
 user意見 (相談ラウンド2, 2026-07-05): 評価タイミングのみ確定。schema 詳細は設計タスクで詰める。
 
+user意見 (相談ラウンド3, 2026-07-05): 結び直し語彙 = **直列縫合のみ** (enum {NONE, SERIAL_SUTURE}、additive 拡張余地)。actor 離脱 = **解消時規則を通して自動解消** (単純削除・ゲーム側委譲は不採用)。→ SEM §13.1。
+
 ## Q48 — 効果対象の展開規則 (連鎖・波及) [RECOMMENDED]
 
 問い: 関係グラフを入力とする「効果対象の動的拡大」(鑑波の損害波及、泡撃の波及的付与、解明/転回の状態ラッピング連鎖) を解決 pipeline (§6.1) のどの段で評価するか。展開が再帰する場合 (関係ループ時) の停止規律。
@@ -839,7 +875,7 @@ user意見 (相談ラウンド2, 2026-07-05): 評価タイミングのみ確定�
 
 推奨: 展開は **pop 直後・effect 段の前** に runtime が関係グラフから決定的に計算し、展開済み target 集合を event view で effect handler へ渡す。展開順序 = 関係 id 昇順の幅優先。再帰は visited set (同一 actor は一度のみ) で停止。展開結果 (元 target → 展開列) は trace に記録。「同時」が原子性を要求するケースは Q49 の atomic bundle に載せる。
 
-user意見: (未記入)
+user意見 (相談ラウンド3, 2026-07-05): 段 (pop 直後・effect 前) と BFS 関係 id 昇順は承認。**修正**: 再帰の停止規律は visited set でなく**メタレベル/コストに従う** (§8 の meta-cost 語彙で bound)。また R03 の「連鎖」は展開と別機構の**デコレータ型** (状態が状態を包む状態合成) — §5.7 wrapping へ分離。→ SEM §6.4 2a / §5.7。
 
 ## Q49 — composite atomic bundle の前倒し [RECOMMENDED]
 
@@ -849,7 +885,7 @@ user意見: (未記入)
 
 推奨: 前倒しする。bundle = member effect を全て適用してから単一 sweep を実施する解決単位。member 順序は既存 hook (§7.1) → 発行順。trace は bundle id + member 列。§7 の core 保証 (atomicity / total order / serializability / trace 被覆) に沿う。
 
-user意見: (未記入)
+user意見 (相談ラウンド3, 2026-07-05): 前倒しを承認 (pipeline 一括承認の一部、異議なし)。→ SEM §7.2 (§7.1 staging の deferral 解除)。
 
 ## Q50 — window premature close (介入の標準効果) [DECIDED(user)]
 
@@ -887,7 +923,7 @@ user意見 (相談ラウンド2, 2026-07-05): 上記 3 点で確定。
 
 擦り合わせたい点: 変換フックの多重適用 (変換の変換) を許すか、1 event 1 パスに制限するか (推奨: 1 パス。再帰は race/優先度で表現)。
 
-user意見: (target 規則のみ確定、フック詳細は未記入)
+user意見 (相談ラウンド3, 2026-07-05): 載せ場所 = **event 側 provenance で確定** (event-line 拡張は三面分離を理由に不採用 — 承認)。多重適用は**許可** (1 パス制限は不採用) — 適用構造は開発者がスキル効果グラフで選択的に計画できる data とし、意味論的 **validation は EBS 側の機能に寄せる**。EQM は決定的順序 + 適用ごとの trace + 有界 round の安全弁のみ。変換は event の**パラメータごとの型** — 対戦術 = 効果の対象先の変換、反転系 = 状態代数 (inv) における変換 — として整理し、他パラメータの変換型も同じ枠で追加可能。→ SEM §6.4 2b / §6.5。
 
 ## Q53 — 入れ子操作フェーズのループ検出・解消 [DECIDED(user)]
 
@@ -900,6 +936,8 @@ user意見: (target 規則のみ確定、フック詳細は未記入)
 擦り合わせたい点 (設計タスクへ): フェーズ checkpoint の粒度 (window open ごとで足りるか)、解除後の再入力 UX (ゲーム側責務)。
 
 user意見 (相談ラウンド2, 2026-07-05): 巻き戻し + 入力解除方式で確定 (前進遷移方式は不採用)。
+
+user意見 (相談ラウンド3, 2026-07-05): checkpoint 粒度は window draft (§8.1) だけでは足りず、**フェーズ内 sub-checkpoint も必要** (1 つの OPERATION window 内で多段フェーズ遷移が起こる設計 — 共鳴の 4 段階等 — を想定)。→ SEM §8.4。
 
 ## Q54 — 確認系 acceptance 束 (R04/R06/R08/R09/R11/R12) [RECOMMENDED]
 
@@ -914,6 +952,6 @@ user意見 (相談ラウンド2, 2026-07-05): 巻き戻し + 入力解除方式�
 - **R11 蘇生・追加行動**: `ready_reservation_for` による政策外ターン付与 + 「invalidate → issue が同一 sweep 内で原子的に見える」ことの確認。
 - **R12 発行時修飾** (枯渇反動/束縛/荷重): EQM 変更不要 (発行前にゲーム側で修飾) の確認記録のみ。
 
-user意見: (未記入)
+user意見: 設計 fork なし (確認系) → SETTLED。acceptance 束は EQM-128 が所有 (SEM §16.2)。R09 は Q49 の bundle に依存。
 
 user意見: 承認。

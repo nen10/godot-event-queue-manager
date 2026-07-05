@@ -148,6 +148,22 @@ Source: `docs/review/EVENT_MODEL_DESIGN_GAP_AUDIT_2026-07-02.md` (v1.0 凍結契
 | EQM-118 | COMPLETE | EQM-117 | `docs/plan/2026-06-09_event_queue_manager/EQM-118_reducibility_reproof/` | Reducibility 再証明 (coverage: reducibility-product-proof)。EQM-053 の縮小 (test 内手書き sim) を解消。 | `tests/policy/`, `tests/golden/` | SEM §16.1: CTB / energy / wait-turn 構成を **product の** conditions + event-line model (EQM-111/112 実装) で組み、dedicated policy の golden trace と比較 (order 配列でなく trace); tie-break/speed/delay matrix + 非約数 speed; 差分は model gap として記録。coverage row flip。 |
 | EQM-119 | COMPLETE | EQM-118 | `docs/plan/2026-06-09_event_queue_manager/EQM-119_authoring_surface/` | L2 authoring surface + dogfood/manual 更新 (coverage: authoring-acceptance)。 | `resources/eq_action_definition.gd`, `dogfood/`, `demos/action_resolution/`, `docs/manual/reservations.md`, `docs/manual/action_resolution.md`, `tests/resource/`, `tests/golden/` | SEM §5.6 凍結基準: 「反撃準備 — 3 回 or 5 ターン or どちらか / deadline ∞」を .tres 1 個・GDScript 0 行で宣言し、`closed_by` がどちらで閉じたか golden で可視; dogfood slice を named-effect natural path へ更新; manual 更新 (三面モデル + 条件宣言); Q35 effect grouping follow-up の要否をここで再評価。coverage row 最終 flip。 |
 
+## Phase 12 — v1.2 EBS 拡張ラウンド (Q44–Q54)
+
+Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R12) + `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md` 拡張ラウンド Q44–Q54 (相談ラウンド2・3 で DECIDED、2026-07-05) + roadmap Phase 13。各 task acceptance は凍結契約 ID (SEM v1.2 § / coverage row) を引用し、完了時に coverage row を `implemented` へ flip する (gate: `tools/check_contract_coverage.py`)。拡張は全て L2/L3 opt-in — L0/L1 非漏出は EQM-023 gate で維持。
+
+| id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
+|---|---|---|---|---|---|---|
+| EQM-120 | COMPLETE | — | `docs/plan/2026-06-09_event_queue_manager/EQM-120_semantics_round3/` | Semantics round 3: Q44–Q54 確定記述 (SEM v1.2) + registry finalization + synthesis + coverage reserved 行 + queue Phase 12 起票 + EBS 原本同期。 | `docs/design/EVENT_MODEL_SEMANTICS.md`, `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`, `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`, `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md` | SEM v1.2 が Q44–Q54 を *(v1.2)* 節として additive 記録 (§4.8/§5.7/§6.4–6.5/§7.2/§8.2–8.4/§10.1/§11/§13.1/§16.2)。registry 全 Q DECIDED/SETTLED + 相談ラウンド2・3 表 + pointer 表。coverage reserved 10 行 (owning = EQM-121..128)。`./tools/test.sh` PASS。 |
+| EQM-121 | READY | EQM-120 | `docs/plan/2026-06-09_event_queue_manager/EQM-121_state_algebra/` | 状態代数 backend (coverage: state-algebra, rate-modifier-stack)。 | `runtime/eq_state_algebra.gd`, `runtime/eq_event_lines.gd`, `resources/`, `tests/core/` | SEM §5.7/§4.8: inv ペア宣言 + 共存規則 (相殺 = 符号付き 1 本 / 排他 = 解除→付与 / 共存); wrapper 合成構造 (wrap 順適用・LIFO unwrap・trace); rate modifier-stack (加算 + override、実効再計算、寿命 = 既存 invalidation 語彙); 寿命 3 種 acceptance (スタック系/ターン系/現象 golden)。coverage rows flip。 |
+| EQM-122 | BACKLOG | EQM-121 | `docs/plan/2026-06-09_event_queue_manager/EQM-122_relation_graph/` | 関係グラフ backend (coverage: relation-graph)。 | `runtime/eq_relation_graph.gd`, `runtime/eq_runtime.gd`, `tests/core/` | SEM §13.1: 関係 instance table (決定的採番) + 関係型宣言 (分類 / inv 反転形 / TREE 制約 validation / 維持条件 / 宣言 sweep / 解消時規則); 直列縫合; invalidate_actor 連動; relation trace kinds; 月/星 acceptance 例。coverage row flip。 |
+| EQM-123 | BACKLOG | EQM-122 | `docs/plan/2026-06-09_event_queue_manager/EQM-123_resolution_rewrites/` | pipeline 拡張: 展開 + 変換 + provenance (coverage: expansion-transform, provenance-chain)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `tests/core/` | SEM §6.4/§6.5: 2a target 展開 (BFS 関係 id 昇順、メタ/コスト停止規律 — §8 語彙); 2b パターン変換 (パラメータ別型: target 差し替え / 状態代数 inv、メタ降順→priority→sequence、多重適用 + 有界 round 安全弁、適用ごと trace); provenance 連鎖の自動継承・追記 (event 側)。鑑波の損害波及 golden。coverage rows flip。 |
+| EQM-124 | BACKLOG | EQM-123 | `docs/plan/2026-06-09_event_queue_manager/EQM-124_atomic_bundle/` | composite atomic bundle (coverage: atomic-bundle)。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | SEM §7.2: bundle API (member 全 effect 適用 → 単一 sweep、member 順 = §7.1 hook → 発行順、`bundle_resolved` trace); 公平の並列 golden (composite 解決 + 事後の個別反射誘発 — 相談3 意味論)。coverage row flip。 |
+| EQM-125 | BACKLOG | EQM-124 | `docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/` | メタレベル + window premature close (coverage: meta-level-premature-close)。 | `runtime/eq_window.gd`, `runtime/eq_reservation_runtime.gd`, `resources/eq_action_definition.gd`, `tests/transaction/` | SEM §8.2/§8.3: meta_level 宣言 (default 0) を event/window が運ぶ; 介入 close 判定 (intervener >= window、同値 = 介入成功); 解決済み維持・pending 一掃・`window_closed(cause: intervention)` + 両メタ値 trace; 迎撃 (5 歩移動の 2 歩目) golden。coverage row flip。 |
+| EQM-126 | BACKLOG | EQM-125 | `docs/plan/2026-06-09_event_queue_manager/EQM-126_phase_recursion/` | 操作フェーズ再帰 + ループ解消 (coverage: phase-recursion)。 | `runtime/eq_window.gd`, `runtime/eq_transaction.gd`, `tests/transaction/` | SEM §8.4: フェーズ内 sub-checkpoint (順序付き・決定的 id); 遷移履歴によるループ検出 (同一フェーズ再訪 = 最小 cycle); ループ開始点へ巻き戻し + cycle 上の鏡面入力解除 + `phase_rolled_back` trace; 水鏡の再帰入力 golden。coverage row flip。 |
+| EQM-127 | BACKLOG | EQM-126 | `docs/plan/2026-06-09_event_queue_manager/EQM-127_snapshot_v3/` | snapshot v3 + replay 証明拡張 (coverage: snapshot-v3)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/transaction/` | SEM §10.1: schema_version 3 (line_modifiers / relations / phase_checkpoints additive、wrapper・provenance inline); v2→v3 migrator (欠落 = 空); v3-in-v2 = 安定 error; roundtrip 証明 (modifier/relation/provenance/checkpoint を跨ぐ → 同一 pop 順 + 同一 trace)。coverage row flip。 |
+| EQM-128 | BACKLOG | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
+
 ## Dynamic follow-up area
 
 Add `follow-up-ready` tasks here during execution when a current task is complete but reveals nonblocking follow-up work.
@@ -164,7 +180,10 @@ Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phas
 
 Current: none — **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
-**需要確定 (2026-07-05)**: EBS (godot-editable-battleskill-system) から拡張依頼 R01–R12 を受領 (受領原本 `EBS_EXTENSION_REQUEST_2026-07-05.md`)。registry 拡張ラウンド Q44–Q54 起票、相談ラウンド2 で意味論 fork 8 点 DECIDED(user)、roadmap Phase 13 追加。declared follow-up の composite atomic bundle は Q49 として本 round に取り込み。次 step: 残 RECOMMENDED (Q46–Q49/Q52/Q54) の確定を先頭に置く queue Phase 12 の設計 (`IMPLEMENTATION_QUEUE_DESIGN_POLICY.md`) — **queue task は未起票** (起票承認待ち)。
+**需要確定 (2026-07-05)**: EBS (godot-editable-battleskill-system) から拡張依頼 R01–R12 を受領 (受領原本 `EBS_EXTENSION_REQUEST_2026-07-05.md`)。registry 拡張ラウンド Q44–Q54 起票、相談ラウンド2 で意味論 fork 8 点 DECIDED(user)、roadmap Phase 13 追加。declared follow-up の composite atomic bundle は Q49 として本 round に取り込み。
+
+**設計ラウンド完了 (2026-07-05, EQM-120)**: 相談ラウンド3 で残 fork 8 点も確定 (計 16 fork、逸脱 5 点は synthesis 記載)。SEM v1.2 確定記述 + registry finalization + coverage reserved 10 行 + Phase 12 (EQM-120..128) 起票済み。EQM-121 READY。
+CHECKPOINT: **実装 run は承認待ち** (§8.3)。ユーザー承認後、Phase 12 (EQM-121→128) を依存順に自律実行する (停止は設計 fork / env 欠如 / 外部 upload のみ)。
 
 ## Proof log
 
@@ -1122,3 +1141,28 @@ proof:
 ```
 
 Dependency sweep: EQM-119 COMPLETE → **Phase 11 milestone reached** (EQM-110..119 COMPLETE)。queue に READY/BACKLOG task なし。Current pointer → none。2026-07-02 の監査 (`EVENT_MODEL_DESIGN_GAP_AUDIT`) が確定した「凍結契約の宣言のみ」問題は、本 round で全 21 契約 implemented + coverage gate による再発防止まで含めて解消。
+
+### EQM-120 — COMPLETE (2026-07-05) — opens Phase 12 (v1.2 EBS 拡張ラウンド)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-120_semantics_round3/
+  review: docs/review/autopilot/EQM-120_SELF_REVIEW_2026-07-05.md
+  pattern: P0 (orchestrator-direct, decision-depth docs; 相談ラウンド2・3 は対話でユーザー決定)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (docs/queue のみ; contract-coverage: implemented=21 reserved=10 violations=0)
+  gate: docs-only contract consistency (SEM v1.2 additive、Q01–Q43 決定不変; 逸脱 5 点は synthesis に明示)
+  inputs:
+    - EBS_EXTENSION_REQUEST_2026-07-05.md (受領原本、R01–R12)
+    - 相談ラウンド2 (fork 8: メタレベル 3 点 / inv 規則 / modifier-stack / 関係 sweep / premature close 範囲 / ループ方式)
+    - 相談ラウンド3 (fork 8: 連鎖 = デコレータ型 / 直列縫合のみ / provenance = event 側 / pipeline 修正 2 点 +
+      変換パラメータ型 / 相殺 = 符号付き 1 本 / 加算 + override / 離脱連動 / sub-checkpoint)
+  major files:
+    - docs/design/EVENT_MODEL_SEMANTICS.md (v1.2: §4.8/§5.7/§6.4–6.5/§7.2/§8.2–8.4/§10.1/§11/§13.1/§16.2)
+    - docs/design/EVENT_MODEL_OPEN_QUESTIONS.md (拡張ラウンド finalization + 相談ラウンド3 表)
+    - docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md (reserved 10 行 + Deferred 更新)
+    - docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md (new)
+    - (EBS repo) docs/design/EQM_EXTENSION_REQUEST.md 相談記録同期
+```
+
+Dependency sweep: EQM-120 COMPLETE → EQM-121 READY (EQM-122..128 BACKLOG、線形鎖)。Current pointer → CHECKPOINT (実装 run 承認待ち、§8.3)。
