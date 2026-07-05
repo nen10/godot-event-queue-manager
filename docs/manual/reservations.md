@@ -123,3 +123,12 @@ Every closure is explained in the canonical trace via `closed_by`:
 condition ids you declared, or the reserved causes `duration`,
 `reaction_count`, `already_closed`, `actor_removed`, `race_lost`.
 Nothing closes silently.
+
+## v1.2: state algebra, relations, interventions (EQM-121..127)
+
+Declarations added by the EBS extension round (SEM v1.2). All are L2/L3 opt-in — with no declarations the runtime behaves exactly as before.
+
+- **Inv pairs**: `EQStateAlgebra.declare_inv_pair(a, b, Rule.CANCEL | EXCLUDE | COEXIST)`; CANCEL keeps one signed axis per pair, so cancellation is arithmetic. Rate suspensions are modifiers (`add_rate_modifier(line, "override", 0)` = freeze); removing one restores the remaining effective rate automatically. Attach via `rr.state_algebra` for schema-v3 saves.
+- **Relations & rewrites**: declare relation types (`TREE`/`GRAPH`, `SERIAL_SUTURE` on dissolve), `bind` instances, then `declare_expansion_rule` (tag-gated target expansion along relations, cost-bounded) and `register_transform` (`retarget` to a provenance stage / `state_inv`). Transforms may apply repeatedly; validating the application structure is the consumer's job — the core guarantees deterministic order, per-application trace, and a bounded-rounds backstop.
+- **Meta-level & interventions**: `EQActionDefinition.meta_level` (int, default 0) is carried by events and windows. `intervene_close(window_id, {"meta_level": n})` closes prematurely when `n >= window meta` (tie succeeds): resolved effects stay, pending members close with `closed_by: intervention`. `submit_bundle` resolves same-tick members atomically (single sweep after all members). `open_phase`/`close_phase` add sub-checkpoints inside a window; revisiting a phase name detects the minimal loop and rolls back to its start, tracing `cleared_inputs`.
+- **Saving**: everything above rides the schema-v3 bundle (`relations`/`state_algebra` tables when attached); loading verifies registered names first and applies nothing on a stable error.

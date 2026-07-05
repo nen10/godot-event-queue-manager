@@ -104,3 +104,59 @@ effect_name = &"counterattack"   # 宣言 linkage — register_effect が結線
 すべての閉路は canonical trace の `closed_by` で説明されます: 宣言した条件 id、
 または予約語 `duration` / `reaction_count` / `already_closed` / `actor_removed` /
 `race_lost`。silent に閉じるものはありません。
+
+## v1.2: 状態代数・関係グラフ・介入 (EQM-121〜127)
+
+EBS 拡張ラウンド (SEM v1.2) で入った宣言群。すべて L2/L3 の opt-in — 宣言しなければ従来挙動のまま。
+
+### 状態の対 (inv ペア) と一時変更
+
+```gdscript
+var algebra := EQStateAlgebra.new(rr.lines)
+algebra.declare_inv_pair(&"欠損", &"虚飾", EQStateAlgebra.Rule.CANCEL)  # 相殺 = 符号付き 1 軸
+algebra.grant_state(&"hero", &"欠損", 3)
+algebra.grant_state(&"hero", &"虚飾", 1)   # 軸は +2 (欠損 2 に相殺)
+rr.state_algebra = algebra                 # save (schema v3) に載せる接続
+```
+
+規則は pair ごとに `CANCEL` (相殺) / `EXCLUDE` (排他: 付与時に対を解除) / `COEXIST` (共存)。
+rate の一時変更は modifier で宣言する — 凍結は `override 0`、鈍化/機敏は `add ±n`。重複しても解除時に自動で残りの実効 rate へ戻る:
+
+```gdscript
+var freeze := rr.lines.add_rate_modifier(&"ct.hero", "override", 0)
+rr.lines.remove_rate_modifier(&"ct.hero", freeze)  # 凍結解除 → 元の実効 rate
+```
+
+### 関係グラフと波及・変換
+
+```gdscript
+var rg := EQRelationGraph.new()
+rg.declare_relation_type({"name": &"召喚", "structure": EQRelationGraph.Structure.TREE,
+	"on_dissolve": EQRelationGraph.Dissolve.SERIAL_SUTURE})  # 解消時は直列縫合
+rg.bind(&"召喚", &"月", &"星")
+rr.relations = rg
+rr.declare_expansion_rule({"relation_type": &"召喚", "effect_tag": &"損害", "hop_cost": 1, "budget": 2})
+# → tag <損害> の効果対象が関係に沿って月へも拡大 (targets_expanded が trace に出る)
+rr.register_transform({"name": &"弱化反射", "match_tags": [&"弱化"], "kind": "retarget",
+	"params": {"stage": "direct"}, "meta_level": 1, "priority": 0})
+# → 効果の向き先を発行連鎖の段へ差し替え (対戦術)。反転系は kind: "state_inv"
+```
+
+変換は多重適用できる。どの変換がどの効果に適用され得るかの検証 (スキル効果グラフ) は利用側 (EBS 等) の責務で、EQM は決定的順序と trace と有界 round のみ保証する。
+
+### メタレベルと介入・同時解決・操作フェーズ
+
+```gdscript
+var w := rr.open_window(&"mover", &"move", EQWindow.DEADLINE_UNLIMITED, 0, &"", 1)  # meta_level 1
+rr.intervene_close(w.window_id, {"meta_level": 1})  # 同値 = 介入成功。解決済み効果は残り
+                                                    # pending だけ closed_by: intervention で閉じる
+rr.submit_bundle([a, b])       # 同 tick 原子解決 (member 間で反応は発火しない)
+rr.open_phase(&"入力", [&"mirror.a"])  # 操作フェーズ checkpoint。同名再訪 = ループ検出 →
+                                        # 開始点へ巻き戻し + cleared_inputs が trace に出る
+```
+
+メタレベルはスキル宣言の int 1 個 (`EQActionDefinition.meta_level`、未宣言 = 0)。スキルごとの値付けは利用側のゲームデザイン判断。
+
+### save
+
+上記の状態はすべて schema v3 の save bundle に載る (`relations` / `state_algebra` は接続時のみ)。load は登録名の検証が先に走り、未登録の predicate/effect/sweep 名があると何も適用せず安定 error になる。

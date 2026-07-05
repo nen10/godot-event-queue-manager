@@ -1,0 +1,11 @@
+{"actor":"hero","cause":"timer","event_id":1,"i":0,"kind":"resolved","priority":0,"seq":0,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"terminal"}}
+{"actor":"hero","event_id":2,"i":1,"kind":"reaction_fired","round":1}
+{"actor":"orc","event_id":3,"i":2,"kind":"reaction_fired","round":1}
+{"actor":"hero","cause":"timer","event_id":2,"i":3,"kind":"resolved","priority":0,"seq":1,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"sequence"}}
+{"actor":"hero","closed_by":"reaction_count","i":4,"kind":"event_invalidated"}
+{"actor":"hero","event_id":4,"i":5,"kind":"reaction_fired","round":2}
+{"actor":"orc","closed_by":"reaction_count","i":6,"kind":"event_invalidated"}
+{"actor":"orc","event_id":5,"i":7,"kind":"reaction_fired","round":2}
+{"actor":"orc","cause":"timer","event_id":3,"i":8,"kind":"resolved","priority":0,"seq":2,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"sequence"}}
+{"actor":"hero","cause":"timer","event_id":4,"i":9,"kind":"resolved","priority":0,"seq":3,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"sequence"}}
+{"actor":"orc","cause":"timer","event_id":5,"i":10,"kind":"resolved","priority":0,"seq":4,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"terminal"}}

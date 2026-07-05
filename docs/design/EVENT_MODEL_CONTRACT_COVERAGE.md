@@ -43,7 +43,7 @@
 | meta-level-premature-close (単一 int / 同値 = 介入成功 / cause: intervention) | §8.2, §8.3 | EQM-125 | implemented | addons/event_queue_manager/runtime/eq_window.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/transaction/test_eq_premature_close.gd<br>test_project/tests/golden/interception_close.trace.jsonl |
 | phase-recursion (sub-checkpoint / ループ巻き戻し + 入力解除) | §8.4 | EQM-126 | implemented | addons/event_queue_manager/runtime/eq_window.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/transaction/test_eq_phase_rollback.gd<br>test_project/tests/golden/mirror_loop_rollback.trace.jsonl |
 | snapshot-v3 (modifier / relation / provenance / checkpoint tables) | §10.1 | EQM-127 | implemented | addons/event_queue_manager/runtime/eq_save_adapter.gd<br>addons/event_queue_manager/runtime/eq_reservation_runtime.gd | test_project/tests/transaction/test_eq_snapshot_v3.gd |
-| ebs-acceptance-suite (Q54 確認系 golden 束 + authoring 追加) | §16.2 | EQM-128 | reserved | dogfood/ | test_project/tests/golden/ |
+| ebs-acceptance-suite (Q54 確認系 golden 束 + authoring 追加) | §16.2 | EQM-128 | implemented | test_project/tests/core/test_eq_ebs_acceptance.gd<br>docs/ja/manual/reservations.md | test_project/tests/core/test_eq_ebs_acceptance.gd<br>test_project/tests/golden/mutual_counter_stop.trace.jsonl |
 
 ## Deferred (coverage 対象外, 記録のみ)
 

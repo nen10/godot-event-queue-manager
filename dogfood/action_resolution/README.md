@@ -14,3 +14,5 @@ verified headless by `test_project/tests/debug_scene/test_dogfood_action_resolut
 against `tests/golden/dogfood_action_resolution.trace.jsonl`.
 
 API ergonomics findings from building this slice: `docs/review/DOGFOOD_FRICTION_2026-06-18.md`.
+
+v1.2 (EQM-121..127): 状態代数 (inv ペア/modifier)・関係グラフ・展開/変換・atomic bundle・メタレベル介入・操作フェーズが宣言 opt-in で使える。導入は `docs/ja/manual/reservations.md` の「v1.2」節を参照。

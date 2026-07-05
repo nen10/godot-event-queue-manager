@@ -162,7 +162,7 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 | EQM-125 | COMPLETE | EQM-124 | `docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/` | メタレベル + window premature close (coverage: meta-level-premature-close)。 | `runtime/eq_window.gd`, `runtime/eq_reservation_runtime.gd`, `resources/eq_action_definition.gd`, `tests/transaction/` | SEM §8.2/§8.3: meta_level 宣言 (default 0) を event/window が運ぶ; 介入 close 判定 (intervener >= window、同値 = 介入成功); 解決済み維持・pending 一掃・`window_closed(cause: intervention)` + 両メタ値 trace; 迎撃 (5 歩移動の 2 歩目) golden。coverage row flip。 |
 | EQM-126 | COMPLETE | EQM-125 | `docs/plan/2026-06-09_event_queue_manager/EQM-126_phase_recursion/` | 操作フェーズ再帰 + ループ解消 (coverage: phase-recursion)。 | `runtime/eq_window.gd`, `runtime/eq_transaction.gd`, `tests/transaction/` | SEM §8.4: フェーズ内 sub-checkpoint (順序付き・決定的 id); 遷移履歴によるループ検出 (同一フェーズ再訪 = 最小 cycle); ループ開始点へ巻き戻し + cycle 上の鏡面入力解除 + `phase_rolled_back` trace; 水鏡の再帰入力 golden。coverage row flip。 |
 | EQM-127 | COMPLETE | EQM-126 | `docs/plan/2026-06-09_event_queue_manager/EQM-127_snapshot_v3/` | snapshot v3 + replay 証明拡張 (coverage: snapshot-v3)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/transaction/` | SEM §10.1: schema_version 3 (line_modifiers / relations / phase_checkpoints additive、wrapper・provenance inline); v2→v3 migrator (欠落 = 空); v3-in-v2 = 安定 error; roundtrip 証明 (modifier/relation/provenance/checkpoint を跨ぐ → 同一 pop 順 + 同一 trace)。coverage row flip。 |
-| EQM-128 | READY | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
+| EQM-128 | COMPLETE | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
 
 ## Dynamic follow-up area
 
@@ -178,7 +178,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: none — **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
+Current: none — **Phase 12 (v1.2 EBS 拡張ラウンド) COMPLETE** (EQM-120..128, 2026-07-05)。coverage 31/31。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
 **需要確定 (2026-07-05)**: EBS (godot-editable-battleskill-system) から拡張依頼 R01–R12 を受領 (受領原本 `EBS_EXTENSION_REQUEST_2026-07-05.md`)。registry 拡張ラウンド Q44–Q54 起票、相談ラウンド2 で意味論 fork 8 点 DECIDED(user)、roadmap Phase 13 追加。declared follow-up の composite atomic bundle は Q49 として本 round に取り込み。
 
@@ -1354,3 +1354,31 @@ proof:
 ```
 
 Dependency sweep: EQM-127 COMPLETE → EQM-128 READY (最終 task)。Current pointer → EQM-128。
+
+### EQM-128 — COMPLETE (2026-07-05) — closes Phase 12 (v1.2 EBS 拡張ラウンド)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/
+  review: docs/review/autopilot/EQM-128_SELF_REVIEW_2026-07-05.md
+  pattern: P2 (codex GPT-5.5 委譲; 初回 run は context 枯渇 → API 署名を contract へ貼り込み +
+           runtime 読取り禁止で再委任し成功。manual は orchestrator 直筆 P0)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS ×2 (files=68 checks=1304 failures=0;
+      contract-coverage rows=31 implemented=31 reserved=0 violations=0)
+  gate: §4 core (確認系 6 項目すべて「既存宣言のみ・runtime 変更ゼロ」で証明 — Q54/Q46 の仮説成立):
+    R04 空間述語つき反応準備 standard form + 寸断 = invalidation (NAMED_PREDICATE)
+    R06 相互反撃の停止 golden mutual_counter_stop (closed_by: reaction_count で必ず停止)
+    R08 スタック順 = set_order_hook 適用例 (order_hook_applied)
+    R09 公平の視界非対称 = bundle + 片側 arm (bundle 後の個別誘発が片側のみ)
+    R11 ready_reservation_for + invalidate→issue の原子性 (trace 間に他 resolved なし)
+    R12 発行時修飾 = EQM 変更不要の証明 (発行前 delay 修飾)
+  manual: docs/ja/manual/reservations.md + docs/manual/reservations.md に v1.2 章 (ja 正文)、
+    dogfood README に参照追記
+  golden: tests/golden/mutual_counter_stop.trace.jsonl (new baseline)
+  major files:
+    - test_project/tests/core/test_eq_ebs_acceptance.gd (new — runtime 変更ゼロ)
+    - docs/ja/manual/reservations.md, docs/manual/reservations.md
+```
+
+Dependency sweep: EQM-128 COMPLETE → **Phase 12 milestone reached** (EQM-120..128 COMPLETE)。queue に READY/BACKLOG task なし。Current pointer → none。**contract coverage 31/31 implemented** — SEM v1.2 (EBS 拡張ラウンド Q44–Q54) の凍結契約はすべて実装・test 済み。EBS 側の残 (メタレベル値付け / 変換 validation) は EBS repo の宿題として引き渡し原本に記録済み。
