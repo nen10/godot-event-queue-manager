@@ -1054,6 +1054,11 @@
       "enums": [],
       "methods": [
         {
+          "name": "add_rate_modifier",
+          "params": "line_id: StringName, kind: String, value: int",
+          "returns": "-> StringName"
+        },
+        {
           "name": "advance",
           "params": "id: StringName, amount: int",
           "returns": "-> bool"
@@ -1067,6 +1072,11 @@
           "name": "derive_watched",
           "params": "bound_term_sets: Array",
           "returns": "-> Dictionary"
+        },
+        {
+          "name": "effective_rate_of",
+          "params": "id: StringName",
+          "returns": "-> int"
         },
         {
           "name": "from_dict",
@@ -1114,6 +1124,11 @@
           "returns": "-> bool"
         },
         {
+          "name": "remove_rate_modifier",
+          "params": "line_id: StringName, modifier_id: StringName",
+          "returns": "-> bool"
+        },
+        {
           "name": "restore_values",
           "params": "d: Dictionary",
           "returns": "-> void"
@@ -1152,6 +1167,77 @@
       "signals": [],
       "vars": [
         "faults"
+      ]
+    },
+    "EQStateAlgebra": {
+      "consts": [
+        "EQError",
+        "EQEventLines"
+      ],
+      "enums": [
+        "Rule"
+      ],
+      "methods": [
+        {
+          "name": "active_state",
+          "params": "actor: StringName, state: StringName",
+          "returns": "-> StringName"
+        },
+        {
+          "name": "clear_state",
+          "params": "actor: StringName, state: StringName",
+          "returns": "-> void"
+        },
+        {
+          "name": "declare_inv_pair",
+          "params": "state_a: StringName, state_b: StringName, rule: int",
+          "returns": "-> bool"
+        },
+        {
+          "name": "from_dict",
+          "params": "d: Dictionary, lines: EQEventLines, trace = null",
+          "returns": "-> RefCounted"
+        },
+        {
+          "name": "grant_state",
+          "params": "actor: StringName, state: StringName, amount: int = 1",
+          "returns": "-> void"
+        },
+        {
+          "name": "restore",
+          "params": "d: Dictionary",
+          "returns": "-> void"
+        },
+        {
+          "name": "stacks_of",
+          "params": "actor: StringName, state: StringName",
+          "returns": "-> int"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "unwrap_state",
+          "params": "actor: StringName, state: StringName",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "wrap_state",
+          "params": "actor: StringName, state: StringName, wrapper: Dictionary",
+          "returns": "-> void"
+        },
+        {
+          "name": "wrappers_of",
+          "params": "actor: StringName, state: StringName",
+          "returns": "-> Array"
+        }
+      ],
+      "signals": [],
+      "vars": [
+        "faults",
+        "lines"
       ]
     }
   },

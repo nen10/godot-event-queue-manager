@@ -155,8 +155,8 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
 | EQM-120 | COMPLETE | — | `docs/plan/2026-06-09_event_queue_manager/EQM-120_semantics_round3/` | Semantics round 3: Q44–Q54 確定記述 (SEM v1.2) + registry finalization + synthesis + coverage reserved 行 + queue Phase 12 起票 + EBS 原本同期。 | `docs/design/EVENT_MODEL_SEMANTICS.md`, `docs/design/EVENT_MODEL_OPEN_QUESTIONS.md`, `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`, `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md` | SEM v1.2 が Q44–Q54 を *(v1.2)* 節として additive 記録 (§4.8/§5.7/§6.4–6.5/§7.2/§8.2–8.4/§10.1/§11/§13.1/§16.2)。registry 全 Q DECIDED/SETTLED + 相談ラウンド2・3 表 + pointer 表。coverage reserved 10 行 (owning = EQM-121..128)。`./tools/test.sh` PASS。 |
-| EQM-121 | READY | EQM-120 | `docs/plan/2026-06-09_event_queue_manager/EQM-121_state_algebra/` | 状態代数 backend (coverage: state-algebra, rate-modifier-stack)。 | `runtime/eq_state_algebra.gd`, `runtime/eq_event_lines.gd`, `resources/`, `tests/core/` | SEM §5.7/§4.8: inv ペア宣言 + 共存規則 (相殺 = 符号付き 1 本 / 排他 = 解除→付与 / 共存); wrapper 合成構造 (wrap 順適用・LIFO unwrap・trace); rate modifier-stack (加算 + override、実効再計算、寿命 = 既存 invalidation 語彙); 寿命 3 種 acceptance (スタック系/ターン系/現象 golden)。coverage rows flip。 |
-| EQM-122 | BACKLOG | EQM-121 | `docs/plan/2026-06-09_event_queue_manager/EQM-122_relation_graph/` | 関係グラフ backend (coverage: relation-graph)。 | `runtime/eq_relation_graph.gd`, `runtime/eq_runtime.gd`, `tests/core/` | SEM §13.1: 関係 instance table (決定的採番) + 関係型宣言 (分類 / inv 反転形 / TREE 制約 validation / 維持条件 / 宣言 sweep / 解消時規則); 直列縫合; invalidate_actor 連動; relation trace kinds; 月/星 acceptance 例。coverage row flip。 |
+| EQM-121 | COMPLETE | EQM-120 | `docs/plan/2026-06-09_event_queue_manager/EQM-121_state_algebra/` | 状態代数 backend (coverage: state-algebra, rate-modifier-stack)。 | `runtime/eq_state_algebra.gd`, `runtime/eq_event_lines.gd`, `resources/`, `tests/core/` | SEM §5.7/§4.8: inv ペア宣言 + 共存規則 (相殺 = 符号付き 1 本 / 排他 = 解除→付与 / 共存); wrapper 合成構造 (wrap 順適用・LIFO unwrap・trace); rate modifier-stack (加算 + override、実効再計算、寿命 = 既存 invalidation 語彙); 寿命 3 種 acceptance (スタック系/ターン系/現象 golden)。coverage rows flip。 |
+| EQM-122 | READY | EQM-121 | `docs/plan/2026-06-09_event_queue_manager/EQM-122_relation_graph/` | 関係グラフ backend (coverage: relation-graph)。 | `runtime/eq_relation_graph.gd`, `runtime/eq_runtime.gd`, `tests/core/` | SEM §13.1: 関係 instance table (決定的採番) + 関係型宣言 (分類 / inv 反転形 / TREE 制約 validation / 維持条件 / 宣言 sweep / 解消時規則); 直列縫合; invalidate_actor 連動; relation trace kinds; 月/星 acceptance 例。coverage row flip。 |
 | EQM-123 | BACKLOG | EQM-122 | `docs/plan/2026-06-09_event_queue_manager/EQM-123_resolution_rewrites/` | pipeline 拡張: 展開 + 変換 + provenance (coverage: expansion-transform, provenance-chain)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `tests/core/` | SEM §6.4/§6.5: 2a target 展開 (BFS 関係 id 昇順、メタ/コスト停止規律 — §8 語彙); 2b パターン変換 (パラメータ別型: target 差し替え / 状態代数 inv、メタ降順→priority→sequence、多重適用 + 有界 round 安全弁、適用ごと trace); provenance 連鎖の自動継承・追記 (event 側)。鑑波の損害波及 golden。coverage rows flip。 |
 | EQM-124 | BACKLOG | EQM-123 | `docs/plan/2026-06-09_event_queue_manager/EQM-124_atomic_bundle/` | composite atomic bundle (coverage: atomic-bundle)。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | SEM §7.2: bundle API (member 全 effect 適用 → 単一 sweep、member 順 = §7.1 hook → 発行順、`bundle_resolved` trace); 公平の並列 golden (composite 解決 + 事後の個別反射誘発 — 相談3 意味論)。coverage row flip。 |
 | EQM-125 | BACKLOG | EQM-124 | `docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/` | メタレベル + window premature close (coverage: meta-level-premature-close)。 | `runtime/eq_window.gd`, `runtime/eq_reservation_runtime.gd`, `resources/eq_action_definition.gd`, `tests/transaction/` | SEM §8.2/§8.3: meta_level 宣言 (default 0) を event/window が運ぶ; 介入 close 判定 (intervener >= window、同値 = 介入成功); 解決済み維持・pending 一掃・`window_closed(cause: intervention)` + 両メタ値 trace; 迎撃 (5 歩移動の 2 歩目) golden。coverage row flip。 |
@@ -183,7 +183,8 @@ Current: none — **Phase 11 (v1.1 event-model implementation round) COMPLETE** 
 **需要確定 (2026-07-05)**: EBS (godot-editable-battleskill-system) から拡張依頼 R01–R12 を受領 (受領原本 `EBS_EXTENSION_REQUEST_2026-07-05.md`)。registry 拡張ラウンド Q44–Q54 起票、相談ラウンド2 で意味論 fork 8 点 DECIDED(user)、roadmap Phase 13 追加。declared follow-up の composite atomic bundle は Q49 として本 round に取り込み。
 
 **設計ラウンド完了 (2026-07-05, EQM-120)**: 相談ラウンド3 で残 fork 8 点も確定 (計 16 fork、逸脱 5 点は synthesis 記載)。SEM v1.2 確定記述 + registry finalization + coverage reserved 10 行 + Phase 12 (EQM-120..128) 起票済み。EQM-121 READY。
-CHECKPOINT: **実装 run は承認待ち** (§8.3)。ユーザー承認後、Phase 12 (EQM-121→128) を依存順に自律実行する (停止は設計 fork / env 欠如 / 外部 upload のみ)。
+
+Run-to-end round 3 (user-approved 2026-07-05): Phase 12 (EQM-121→128) を依存順に自律実行する。**作業委任形式** (QUEUE_EXECUTION_PATTERNS P2: codex への external 委譲、billed run はこの承認で当該ラン免除、委任結果の検証は orchestrator gate — §1.1/§8.3)。ユーザーは英語設計文書を確認しない (SEM v1.2 が正; 要点の日本語提示は報告側で行う)。停止は設計 fork / env 欠如 / 外部 upload / repair 上限のみ (§8.4)。
 
 ## Proof log
 
@@ -1166,3 +1167,28 @@ proof:
 ```
 
 Dependency sweep: EQM-120 COMPLETE → EQM-121 READY (EQM-122..128 BACKLOG、線形鎖)。Current pointer → CHECKPOINT (実装 run 承認待ち、§8.3)。
+
+### EQM-121 — COMPLETE (2026-07-05)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-121_state_algebra/
+  review: docs/review/autopilot/EQM-121_SELF_REVIEW_2026-07-05.md
+  pattern: P2 (codex GPT-5.5 委譲 2 run; 初回 run は context 枯渇で仕切り直し; orchestrator 検収で 2 修正)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS ×2 (files=61 checks=1049 failures=0; api-surface ok;
+      contract-coverage rows=31 implemented=23 reserved=8 violations=0)
+    - ./tools/test.sh --update-golden reducibility_ctb_pipeline (非決定性修正の再 baseline、順序のみの差を機械検証)
+  gate: §4 core (golden + property; 新規 golden lifetime_composition = 寿命 3 種 closed_by + CANCEL 相殺)
+  repair-now: StringName sort が intern 順で replay 決定性を破る既存 bug (EQM-112 起源) を発見・修正
+    (line_ids / run_sweep_rules を内容順 sort 化)。詳細と差分検証は self-review。
+  golden: tests/golden/lifetime_composition.trace.jsonl (new baseline),
+          tests/golden/reducibility_ctb_pipeline.trace.jsonl (再 baseline、poll 記録の並び正規化のみ),
+          tests/golden/api_surface.json (EQStateAlgebra L3 追加)
+  major files:
+    - addons/event_queue_manager/runtime/eq_state_algebra.gd (new, L3)
+    - addons/event_queue_manager/runtime/eq_event_lines.gd (modifier-stack + 決定性 sort 修正)
+    - test_project/tests/core/{test_eq_state_algebra.gd (new), test_eq_event_lines.gd}
+```
+
+Dependency sweep: EQM-121 COMPLETE → EQM-122 READY (EQM-123..128 BACKLOG)。Current pointer → EQM-122。

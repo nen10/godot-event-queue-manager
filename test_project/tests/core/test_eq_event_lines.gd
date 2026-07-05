@@ -17,11 +17,16 @@ static func run(t) -> void:
 	_test_primary_id_matches_l2_sugar(t)
 	_test_advance_and_faults(t)
 	_test_sparse_poll(t)
+	_test_rate_modifier_effective_rate(t)
+	_test_modifier_freeze_recover(t)
+	_test_rate_modifier_faults(t)
 	_test_scan_order_deterministic(t)
 	_test_counter_issuance(t)
 	_test_sync_primary(t)
 	_test_trace_records(t)
+	_test_modifier_trace_records(t)
 	_test_dict_roundtrip(t)
+	_test_dict_roundtrip_with_modifiers(t)
 	_test_sweep_rules(t)
 	_test_condition_integration(t)
 
@@ -69,6 +74,76 @@ static func _test_sparse_poll(t) -> void:
 	el.re_rate(&"watched_moving", 3)
 	el.poll_tick(watched)
 	t.eq(el.value_of(&"watched_moving"), 8, "re-rate absorbs a rate change as data (no due_tick rewrite)")
+
+
+static func _test_rate_modifier_effective_rate(t) -> void:
+	var el := EQEventLines.new()
+	el.issue(&"ct", 0, 10)
+	el.add_rate_modifier(&"ct", "add", 2)
+	el.add_rate_modifier(&"ct", "add", -3)
+	t.eq(el.effective_rate_of(&"ct"), 9, "adds stack additively on base rate")
+
+	var first_override := el.add_rate_modifier(&"ct", "override", 20)
+	t.eq(el.effective_rate_of(&"ct"), 20, "override replaces add effects")
+	var second_override := el.add_rate_modifier(&"ct", "override", 3)
+	t.eq(el.effective_rate_of(&"ct"), 3, "latest override wins when multiple overrides stacked")
+	el.remove_rate_modifier(&"ct", first_override)
+	t.eq(el.effective_rate_of(&"ct"), 3, "removing non-last override keeps the later override")
+	el.remove_rate_modifier(&"ct", second_override)
+	t.eq(el.effective_rate_of(&"ct"), 9, "removing all overrides restores base+adds")
+
+
+static func _test_modifier_freeze_recover(t) -> void:
+	var el := EQEventLines.new()
+	el.issue(&"ct", 0, 5)
+	el.add_rate_modifier(&"ct", "add", -1)
+	var freeze := el.add_rate_modifier(&"ct", "override", 0)
+	var watched := {&"ct": true}
+	el.poll_tick(watched)
+	t.eq(el.value_of(&"ct"), 0, "override 0 prevents poll advancement")
+	el.remove_rate_modifier(&"ct", freeze)
+	el.poll_tick(watched)
+	t.eq(el.value_of(&"ct"), 4, "removing override restores remaining add-modifier effective rate")
+
+
+static func _test_rate_modifier_faults(t) -> void:
+	var el := EQEventLines.new()
+	t.eq(el.add_rate_modifier(&"missing", "add", 1), &"", "unknown line add returns empty id")
+	t.eq(el.faults.size(), 1, "unknown line fault is recorded")
+	el.issue(&"ct", 0, 1)
+	t.ok(not el.remove_rate_modifier(&"missing", &"eqm.mod.1"), "unknown line remove returns false")
+	t.ok(not el.remove_rate_modifier(&"ct", &"eqm.mod.999"), "unknown modifier remove returns false")
+	t.eq(el.faults.size(), 3, "unknown line and modifier are both recorded as faults")
+	t.eq(el.add_rate_modifier(&"ct", "bad_kind", 1), &"", "invalid kind returns empty id")
+	t.eq(el.faults.size(), 4, "invalid kind is recorded as a fault")
+
+
+static func _test_modifier_trace_records(t) -> void:
+	var tr := EQTrace.new()
+	var el := EQEventLines.new(tr)
+	el.issue(&"ct", 1, 2)
+	var add := el.add_rate_modifier(&"ct", "add", 2)
+	var override := el.add_rate_modifier(&"ct", "override", 0)
+	el.remove_rate_modifier(&"ct", override)
+	var jsonl := tr.to_jsonl()
+	t.ok('"cause":"modifier_added"' in jsonl, "modifier add is traced")
+	t.ok('"cause":"modifier_removed"' in jsonl, "modifier remove is traced")
+	t.ok('"modifier_id":"%s"' % add in jsonl, "traced modifier add includes modifier_id")
+	t.ok('"modifier_id":"%s"' % override in jsonl, "traced modifier remove includes modifier_id")
+	t.ok('"effective_from":2' in jsonl and '"effective_to":4' in jsonl, "add record keeps effective_from/to")
+	t.ok('"effective_from":0' in jsonl and '"effective_to":4' in jsonl, "remove record keeps effective_from/to")
+
+
+static func _test_dict_roundtrip_with_modifiers(t) -> void:
+	var el := EQEventLines.new()
+	el.issue(&"ct", 7, 2)
+	el.add_rate_modifier(&"ct", "add", 3)
+	el.add_rate_modifier(&"ct", "override", 6)
+	var d := el.to_dict()
+	var back := EQEventLines.from_dict(d)
+	t.eq(back.effective_rate_of(&"ct"), 6, "restored lines keep effective_rate")
+	t.ok(d.has("modifier_seq"), "modifier seq is serialized")
+	t.eq(back.add_rate_modifier(&"ct", "add", 1), &"eqm.mod.3", "modifier_seq continues after restore")
 
 
 static func _test_scan_order_deterministic(t) -> void:

@@ -12,7 +12,8 @@ extends RefCounted
 ## pipeline (EQM-113) is the single sync point).
 ##
 ## Every change records an `event_line_progressed` trace line with a `cause`
-## (issued / advanced / poll / re_rated / sweep_rule) — SEM §11. Faults
+## (issued / advanced / poll / re_rated / sweep_rule / modifier_added /
+## modifier_removed) — SEM §11. Faults
 ## (unknown line) are recorded in `faults`, never thrown; acting on them is the
 ## resilience mode's job (EQM-113).
 ##
@@ -28,15 +29,16 @@ const PRIMARY_LINE_ID := &"eqm.line.primary"
 
 var faults: Array[Dictionary] = []
 
-var _lines: Dictionary = {}          # id -> {"value": int, "rate": int}
+var _lines: Dictionary = {}          # id -> {"value": int, "rate": int, "modifiers": Array[Dictionary]}
 var _counter_seq: int = 0
+var _modifier_seq: int = 0
 var _sweep_rules: Array[Dictionary] = []  # [{"name": StringName, "callable": Callable}] in registration order
 var _trace = null                    # EQTrace or null (observation only)
 
 
 func _init(trace = null) -> void:
 	_trace = trace
-	_lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0}
+	_lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0, "modifiers": []}
 
 
 func set_trace(trace) -> void:
@@ -50,7 +52,7 @@ func set_trace(trace) -> void:
 func issue(id: StringName, value: int = 0, rate: int = 0) -> bool:
 	if id == &"" or _lines.has(id):
 		return false
-	_lines[id] = {"value": value, "rate": rate}
+	_lines[id] = {"value": value, "rate": rate, "modifiers": []}
 	_record({"kind": "event_line_progressed", "cause": "issued", "line": String(id), "to": value, "rate": rate})
 	return true
 
@@ -77,9 +79,32 @@ func rate_of(id: StringName) -> int:
 	return int(_lines[id]["rate"]) if _lines.has(id) else 0
 
 
+## Returns the effective rate for an id: latest override if present, else base + add stack sum.
+func effective_rate_of(id: StringName) -> int:
+	if not _lines.has(id):
+		return 0
+	var line: Dictionary = _lines[id]
+	var override_value: int = int(0)
+	var has_override: bool = false
+	var add_value: int = 0
+	var modifiers: Array = line.get("modifiers", [])
+	for i in range(modifiers.size()):
+		var m: Dictionary = modifiers[i]
+		var kind := String(m["kind"])
+		if kind == "override":
+			override_value = int(m["value"])
+			has_override = true
+		elif kind == "add":
+			add_value += int(m["value"])
+	var base_rate := int(line["rate"])
+	return override_value if has_override else base_rate + add_value
+
+
 func line_ids() -> Array:
 	var ids := _lines.keys()
-	ids.sort()
+	# StringName's own sort is intern/address order (nondeterministic across
+	# processes — verified on 4.7); order by CONTENT for replay determinism.
+	ids.sort_custom(func(a, b): return String(a) < String(b))
 	return ids
 
 
@@ -106,6 +131,48 @@ func re_rate(id: StringName, new_rate: int) -> bool:
 	return true
 
 
+## Adds a rate modifier and returns the new modifier id (`eqm.mod.<seq>`).
+## Returns empty StringName on failure.
+func add_rate_modifier(line_id: StringName, kind: String, value: int) -> StringName:
+	if not _lines.has(line_id):
+		_fault(line_id, "add_rate_modifier on unknown line")
+		return &""
+	if kind != "add" and kind != "override":
+		_fault(line_id, "add_rate_modifier with unsupported kind")
+		return &""
+	var effective_from := effective_rate_of(line_id)
+	_modifier_seq += 1
+	var modifier_id := StringName("eqm.mod.%d" % _modifier_seq)
+	var modifier := {"id": modifier_id, "kind": kind, "value": int(value)}
+	_lines[line_id]["modifiers"].append(modifier)
+	var effective_to := effective_rate_of(line_id)
+	_record({"kind": "event_line_progressed", "cause": "modifier_added", "line": String(line_id), "modifier_id": String(modifier_id), "effective_from": effective_from, "effective_to": effective_to})
+	return modifier_id
+
+
+## Removes a rate modifier by id. Unknown line / missing modifier are faults.
+func remove_rate_modifier(line_id: StringName, modifier_id: StringName) -> bool:
+	if not _lines.has(line_id):
+		_fault(line_id, "remove_rate_modifier on unknown line")
+		return false
+	var modifiers: Array = _lines[line_id].get("modifiers", [])
+	var removed_idx := -1
+	for i in range(modifiers.size()):
+		var modifier: Dictionary = modifiers[i]
+		if modifier["id"] == modifier_id:
+			removed_idx = i
+			break
+	if removed_idx == -1:
+		_fault(line_id, "remove_rate_modifier on unknown modifier", EQError.CONDITION_LINE_UNKNOWN)
+		return false
+	var effective_from := effective_rate_of(line_id)
+	modifiers.remove_at(removed_idx)
+	_lines[line_id]["modifiers"] = modifiers
+	var effective_to := effective_rate_of(line_id)
+	_record({"kind": "event_line_progressed", "cause": "modifier_removed", "line": String(line_id), "modifier_id": String(modifier_id), "effective_from": effective_from, "effective_to": effective_to})
+	return true
+
+
 ## One tick of sparse polling (path (a)): only lines that are watched AND
 ## non-frozen (rate != 0) advance, in line-id ascending order (determinism).
 ## `watched` is a set-shaped Dictionary (id -> true), e.g. from derive_watched().
@@ -113,7 +180,7 @@ func poll_tick(watched: Dictionary) -> void:
 	for id in line_ids():
 		if not watched.has(id):
 			continue
-		var rate := int(_lines[id]["rate"])
+		var rate := effective_rate_of(id)
 		if rate == 0:
 			continue
 		var from := int(_lines[id]["value"])
@@ -178,7 +245,8 @@ func sweep_rule_names() -> Array:
 ## order, actor_id ascending within a rule (SEM §4.7 determinism).
 func run_sweep_rules(registry) -> void:
 	var actor_ids: Array = registry.actor_ids()
-	actor_ids.sort()
+	# Content order, not StringName intern order (same determinism fix as line_ids).
+	actor_ids.sort_custom(func(a, b): return String(a) < String(b))
 	for entry in _sweep_rules:
 		var rule: Callable = entry["callable"]
 		for actor_id in actor_ids:
@@ -191,10 +259,19 @@ func run_sweep_rules(registry) -> void:
 func to_dict() -> Dictionary:
 	var lines := []
 	for id in line_ids():
-		lines.append({"id": String(id), "value": int(_lines[id]["value"]), "rate": int(_lines[id]["rate"])})
+		var line := {"id": String(id), "value": int(_lines[id]["value"]), "rate": int(_lines[id]["rate"])}
+		var modifiers: Array = _lines[id].get("modifiers", [])
+		if modifiers.size() > 0:
+			var serialized_modifiers := []
+			for i in range(modifiers.size()):
+				var m: Dictionary = modifiers[i]
+				serialized_modifiers.append({"id": String(m["id"]), "kind": String(m["kind"]), "value": int(m["value"])})
+			line["modifiers"] = serialized_modifiers
+		lines.append(line)
 	return {
 		"lines": lines,
 		"counter_seq": _counter_seq,
+		"modifier_seq": _modifier_seq,
 		"sweep_rules": sweep_rule_names().map(func(n): return String(n)),
 	}
 
@@ -212,10 +289,21 @@ static func from_dict(d: Dictionary, trace = null) -> EQEventLines:
 ## instance before loading; only the data is replaced).
 func restore_values(d: Dictionary) -> void:
 	_lines.clear()
-	_lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0}
-	for line in d.get("lines", []):
-		_lines[StringName(line["id"])] = {"value": int(line["value"]), "rate": int(line["rate"])}
+	_lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0, "modifiers": []}
+	for i in range(d.get("lines", []).size()):
+		var line_payload: Dictionary = d.get("lines", [])[i]
+		var modifiers: Array = []
+		var serialized_modifiers: Array = line_payload.get("modifiers", [])
+		for j in range(serialized_modifiers.size()):
+			var modifier_payload: Dictionary = serialized_modifiers[j]
+			modifiers.append({
+				"id": StringName(modifier_payload["id"]),
+				"kind": String(modifier_payload["kind"]),
+				"value": int(modifier_payload["value"]),
+			})
+		_lines[StringName(line_payload["id"])] = {"value": int(line_payload["value"]), "rate": int(line_payload["rate"]), "modifiers": modifiers}
 	_counter_seq = int(d.get("counter_seq", 0))
+	_modifier_seq = int(d.get("modifier_seq", 0))
 
 
 func _record(fields: Dictionary) -> void:

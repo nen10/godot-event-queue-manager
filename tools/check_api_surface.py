@@ -54,6 +54,8 @@ LAYER_MAP = {
     "EQConditionSpec": "L2", "EQConditionEval": "L2", "EQWindow": "L2",
     # L3 event-line internals (EQM-112+) — must never appear in L0/L1 signatures
     "EQEventLines": "L3",
+    # L3 state algebra (EQM-121): inv pairs / coexistence rules / wrapping (SEM v1.2 §5.7)
+    "EQStateAlgebra": "L3",
 }
 
 LAYERS = ["core", "L0", "L1", "L2", "L3", "presentation", "ui"]
