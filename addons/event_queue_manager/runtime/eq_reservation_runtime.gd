@@ -278,6 +278,8 @@ var _cascade_tick: int = -1
 var _cascade_round: int = 0
 var _windows: Array = []   # LIFO; [0] is the implicit root (nest 0, never traced/closed)
 var _window_seq: int = 0
+## event_id -> explicit window_id (scheduled at submit-time, if top is explicit).
+var _window_of_event: Dictionary = {}
 var _race_groups: Dictionary = {}   # race_group id -> Array[EQReservation]
 var _race_of: Dictionary = {}       # reservation instance_id -> race_group id
 var _race_seq: int = 0
@@ -321,7 +323,7 @@ func current_window() -> EQWindow:
 ## by acceptance as a monotonic function of nest level) is paid from the
 ## owner's `data[budget_key]` and is NOT refunded on close (non-replenishing
 ## within a chain). Returns the window, or null (depth/budget rejection).
-func open_window(owner: StringName, kind: StringName, deadline: int = EQWindow.DEADLINE_UNLIMITED, cost: int = 0, budget_key: StringName = &"") -> EQWindow:
+func open_window(owner: StringName, kind: StringName, deadline: int = EQWindow.DEADLINE_UNLIMITED, cost: int = 0, budget_key: StringName = &"", meta_level: int = 0) -> EQWindow:
 	if window_depth() + 1 > max_window_depth:
 		runtime._fault(EQError.WINDOW_DEPTH_LIMIT, "window depth would exceed max_window_depth (%d)" % max_window_depth, {"owner": String(owner)}, true)
 		return null
@@ -343,17 +345,78 @@ func open_window(owner: StringName, kind: StringName, deadline: int = EQWindow.D
 	w.kind = kind
 	w.deadline = deadline
 	w.budget_paid = cost
+	w.meta_level = meta_level
 	w.draft = EQTransaction.new(runtime.scheduler)
 	_windows.append(w)
-	runtime.trace().record({
+	var opened := {
 		"kind": "window_opened",
 		"window_id": w.window_id,
 		"owner": String(owner),
 		"window_kind": String(kind),
 		"nest_level": w.nest_level,
 		"deadline": deadline,
-	})
+	}
+	if meta_level != 0:
+		opened["meta_level"] = meta_level
+	runtime.trace().record(opened)
 	return w
+
+
+## Attempts an intervention close on a target explicit window. Insufficient meta
+## levels only avoid the close (non-fault); equal-or-greater levels close the
+## target and all explicitly nested windows above it.
+func intervene_close(window_id: int, intervener: Dictionary) -> bool:
+	if _windows.size() <= 1:
+		runtime._fault(EQError.WINDOW_CLOSE_INVALID, "intervene_close has no explicit windows to close", {"window_id": window_id}, true)
+		return false
+	var target_idx := -1
+	var target_meta := 0
+	for i in range(1, _windows.size()):
+		var w: EQWindow = _windows[i]
+		if not w.closed and w.window_id == window_id:
+			target_idx = i
+			target_meta = w.meta_level
+			break
+	if target_idx < 0:
+		runtime._fault(EQError.WINDOW_CLOSE_INVALID, "intervene_close target window does not exist or is already closed", {"window_id": window_id}, true)
+		return false
+	var intervener_meta := int(intervener.get("meta_level", 0))
+	if intervener_meta < target_meta:
+		var avoided := {
+			"kind": "intervention_avoided",
+			"window_id": window_id,
+			"window_meta": target_meta,
+			"intervener_meta": intervener_meta,
+		}
+		if intervener.has("event_id"):
+			avoided["intervener_event_id"] = int(intervener.get("event_id", -1))
+		runtime.trace().record(avoided)
+		return false
+	var intervener_event_id := int(intervener.get("event_id", -1))
+	while _windows.size() > target_idx:
+		var top: EQWindow = _windows.back()
+		if top.closed:
+			_windows.pop_back()
+			continue
+		if top.pre_close.is_valid():
+			top.pre_close.call(top)
+		_cancel_window_pending_members(top.window_id)
+		if top.draft != null:
+			top.draft.rollback()
+		top.closed = true
+		_windows.pop_back()
+		var closed := {
+			"kind": "window_closed",
+			"window_id": top.window_id,
+			"nest_level": top.nest_level,
+			"cause": "intervention",
+			"window_meta": top.meta_level,
+			"intervener_meta": intervener_meta,
+		}
+		if intervener_event_id > -1:
+			closed["intervener_event_id"] = intervener_event_id
+		runtime.trace().record(closed)
+	return true
 
 
 ## Closes the TOP explicit window. commit=true promotes its draft to the live
@@ -676,6 +739,7 @@ func _rollback_bundle_plan(planned: Array) -> void:
 		var event_id := int(p.get("event_id", -1))
 		if event_id > 0 and runtime.scheduler.cancel(event_id):
 			_by_event.erase(event_id)
+			_window_of_event.erase(event_id)
 			_bound_inv.erase(event_id)
 			_clear_bundle_event_link(event_id)
 
@@ -723,6 +787,7 @@ func _settle_race(gid: StringName, winner: EQReservation, winner_event_id: int) 
 			runtime.scheduler.cancel(res.event_id)
 			_clear_bundle_event_link(res.event_id)
 			_by_event.erase(res.event_id)
+			_window_of_event.erase(res.event_id)
 			_bound_inv.erase(res.event_id)
 		res.status = EQReservation.Status.INVALIDATED
 		_trace_invalidated(res.event_id, res.actor_id, &"race_lost", gid)
@@ -766,6 +831,10 @@ func _schedule(res: EQReservation, delay: int) -> int:
 		res.event_id = id
 		res.status = EQReservation.Status.PENDING
 		_by_event[id] = res
+		if window_depth() > 0:
+			var current := current_window()
+			if current != null and not current.closed:
+				_window_of_event[id] = current.window_id
 	return id
 
 
@@ -1024,12 +1093,14 @@ func resolve_next() -> EQReservation:
 		var res = _by_event.get(e.event_id, null)
 		if res == null:
 			return null
-		_by_event.erase(e.event_id)
 		var bundle_id := _bundle_of.get(e.event_id, &"")
 		var inv_terms_bundle := _bound_inv.get(e.event_id, [])
+		_by_event.erase(e.event_id)
 		_bound_inv.erase(e.event_id)
+		_window_of_event.erase(e.event_id)
 		if bundle_id != &"":
 			return _resolve_bundle(e.event_id, res, inv_terms_bundle, bundle_id)
+		_clear_bundle_event_link(e.event_id)
 		# step 1b — lazy invalidation at reference time (level semantics)
 		var inv_terms = inv_terms_bundle
 		if not inv_terms.is_empty():
@@ -1067,7 +1138,7 @@ func resolve_next() -> EQReservation:
 
 
 func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array, bundle_id: StringName) -> EQReservation:
-	var member_ids := _bundle_members.get(bundle_id, []) as Array
+	var member_ids := (_bundle_members.get(bundle_id, []) as Array).duplicate(true)
 	if member_ids.is_empty():
 		_clear_bundle_group(bundle_id)
 		return first
@@ -1084,7 +1155,9 @@ func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array
 			res = _by_event[rid]
 			inv_terms = (_bound_inv.get(rid, []) as Array).duplicate(true)
 			_by_event.erase(rid)
+			_window_of_event.erase(rid)
 			_bound_inv.erase(rid)
+			_clear_bundle_event_link(rid)
 			runtime.scheduler.cancel(rid)
 		else:
 			continue
@@ -1185,6 +1258,22 @@ func _clear_bundle_event_link(event_id: int) -> void:
 		_bundle_members[bundle_id] = members
 
 
+func _cancel_window_pending_members(window_id: int) -> void:
+	var event_ids := _window_of_event.keys()
+	for event_id in event_ids:
+		if int(_window_of_event[event_id]) != window_id:
+			continue
+		var res: EQReservation = _by_event.get(event_id, null)
+		runtime.scheduler.cancel(event_id)
+		_window_of_event.erase(event_id)
+		_by_event.erase(event_id)
+		_bound_inv.erase(event_id)
+		_clear_bundle_event_link(event_id)
+		if res != null:
+			res.status = EQReservation.Status.INVALIDATED
+			_trace_invalidated(int(event_id), res.actor_id, &"intervention")
+
+
 func _clear_bundle_group(bundle_id: StringName) -> void:
 	if not _bundle_members.has(bundle_id):
 		return
@@ -1228,6 +1317,7 @@ func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed"
 			(_by_event[event_id] as EQReservation).status = EQReservation.Status.INVALIDATED
 			_clear_bundle_event_link(event_id)
 			_by_event.erase(event_id)
+			_window_of_event.erase(event_id)
 			_bound_inv.erase(event_id)
 	for event_id in _expiry_by_event.keys():
 		if (_expiry_by_event[event_id] as EQReservation).actor_id == actor_id:
@@ -1316,6 +1406,7 @@ func _recheck_scheduled_invalidation() -> void:
 			runtime.scheduler.cancel(event_id)
 			res.status = EQReservation.Status.INVALIDATED
 			_clear_bundle_event_link(event_id)
+			_window_of_event.erase(event_id)
 			_by_event.erase(event_id)
 			_bound_inv.erase(event_id)
 			_trace_invalidated(event_id, res.actor_id, StringName(inv["closed_by"]))

@@ -161,13 +161,13 @@ static func _test_non_bundle_resolve_path_unchanged(t) -> void:
 
 static func _golden(t) -> void:
 	var jsonl := _build_fairness_bundle_trace()
-	var update := OS.get_environment("EQ_UPDATE_GOLDEN")
+	var update := OS.get_environment("GODOT_UPDATE_GOLDEN")
 	if update == GOLDEN_CASE:
 		_write_golden(t, jsonl)
 		return
 
 	var exists := FileAccess.file_exists(GOLDEN_PATH)
-	t.ok(exists, "golden fixture exists: %s (create via EQ_UPDATE_GOLDEN=fairness_bundle)" % GOLDEN_PATH)
+	t.ok(exists, "golden fixture exists: %s (create via ./tools/test.sh --update-golden fairness_bundle)" % GOLDEN_PATH)
 	if not exists:
 		return
 	var want := FileAccess.get_file_as_string(GOLDEN_PATH)
@@ -215,7 +215,7 @@ static func _write_golden(t, jsonl: String) -> void:
 		return
 	f.store_string(jsonl)
 	f.close()
-	t.ok(true, "golden re-baselined for %s via EQ_UPDATE_GOLDEN=%s" % [GOLDEN_CASE, GOLDEN_CASE])
+	t.ok(true, "golden re-baselined for %s via ./tools/test.sh --update-golden %s" % [GOLDEN_CASE, GOLDEN_CASE])
 
 
 static func _dump_actual(jsonl: String) -> void:

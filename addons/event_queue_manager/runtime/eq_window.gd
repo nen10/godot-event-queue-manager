@@ -25,6 +25,8 @@ var kind: StringName = &""
 var deadline: int = DEADLINE_UNLIMITED
 ## Meta-cost paid at open (Q02; not refunded within a chain).
 var budget_paid: int = 0
+## Intervention/meta ordering tag for this explicit window.
+var meta_level: int = 0
 ## The window's draft (EQTransaction); null on the implicit root.
 var draft = null
 ## Optional pre-close hook called when the deadline hits, BEFORE the default
@@ -46,4 +48,5 @@ func to_dict() -> Dictionary:
 		"kind": String(kind),
 		"deadline": deadline,
 		"budget_paid": budget_paid,
+		"meta_level": meta_level,
 	}

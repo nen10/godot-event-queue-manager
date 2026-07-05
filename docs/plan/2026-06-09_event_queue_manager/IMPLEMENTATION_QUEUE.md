@@ -159,8 +159,8 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 | EQM-122 | COMPLETE | EQM-121 | `docs/plan/2026-06-09_event_queue_manager/EQM-122_relation_graph/` | 関係グラフ backend (coverage: relation-graph)。 | `runtime/eq_relation_graph.gd`, `runtime/eq_runtime.gd`, `tests/core/` | SEM §13.1: 関係 instance table (決定的採番) + 関係型宣言 (分類 / inv 反転形 / TREE 制約 validation / 維持条件 / 宣言 sweep / 解消時規則); 直列縫合; invalidate_actor 連動; relation trace kinds; 月/星 acceptance 例。coverage row flip。 |
 | EQM-123 | COMPLETE | EQM-122 | `docs/plan/2026-06-09_event_queue_manager/EQM-123_resolution_rewrites/` | pipeline 拡張: 展開 + 変換 + provenance (coverage: expansion-transform, provenance-chain)。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_trace.gd`, `tests/core/` | SEM §6.4/§6.5: 2a target 展開 (BFS 関係 id 昇順、メタ/コスト停止規律 — §8 語彙); 2b パターン変換 (パラメータ別型: target 差し替え / 状態代数 inv、メタ降順→priority→sequence、多重適用 + 有界 round 安全弁、適用ごと trace); provenance 連鎖の自動継承・追記 (event 側)。鑑波の損害波及 golden。coverage rows flip。 |
 | EQM-124 | COMPLETE | EQM-123 | `docs/plan/2026-06-09_event_queue_manager/EQM-124_atomic_bundle/` | composite atomic bundle (coverage: atomic-bundle)。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | SEM §7.2: bundle API (member 全 effect 適用 → 単一 sweep、member 順 = §7.1 hook → 発行順、`bundle_resolved` trace); 公平の並列 golden (composite 解決 + 事後の個別反射誘発 — 相談3 意味論)。coverage row flip。 |
-| EQM-125 | READY | EQM-124 | `docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/` | メタレベル + window premature close (coverage: meta-level-premature-close)。 | `runtime/eq_window.gd`, `runtime/eq_reservation_runtime.gd`, `resources/eq_action_definition.gd`, `tests/transaction/` | SEM §8.2/§8.3: meta_level 宣言 (default 0) を event/window が運ぶ; 介入 close 判定 (intervener >= window、同値 = 介入成功); 解決済み維持・pending 一掃・`window_closed(cause: intervention)` + 両メタ値 trace; 迎撃 (5 歩移動の 2 歩目) golden。coverage row flip。 |
-| EQM-126 | BACKLOG | EQM-125 | `docs/plan/2026-06-09_event_queue_manager/EQM-126_phase_recursion/` | 操作フェーズ再帰 + ループ解消 (coverage: phase-recursion)。 | `runtime/eq_window.gd`, `runtime/eq_transaction.gd`, `tests/transaction/` | SEM §8.4: フェーズ内 sub-checkpoint (順序付き・決定的 id); 遷移履歴によるループ検出 (同一フェーズ再訪 = 最小 cycle); ループ開始点へ巻き戻し + cycle 上の鏡面入力解除 + `phase_rolled_back` trace; 水鏡の再帰入力 golden。coverage row flip。 |
+| EQM-125 | COMPLETE | EQM-124 | `docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/` | メタレベル + window premature close (coverage: meta-level-premature-close)。 | `runtime/eq_window.gd`, `runtime/eq_reservation_runtime.gd`, `resources/eq_action_definition.gd`, `tests/transaction/` | SEM §8.2/§8.3: meta_level 宣言 (default 0) を event/window が運ぶ; 介入 close 判定 (intervener >= window、同値 = 介入成功); 解決済み維持・pending 一掃・`window_closed(cause: intervention)` + 両メタ値 trace; 迎撃 (5 歩移動の 2 歩目) golden。coverage row flip。 |
+| EQM-126 | READY | EQM-125 | `docs/plan/2026-06-09_event_queue_manager/EQM-126_phase_recursion/` | 操作フェーズ再帰 + ループ解消 (coverage: phase-recursion)。 | `runtime/eq_window.gd`, `runtime/eq_transaction.gd`, `tests/transaction/` | SEM §8.4: フェーズ内 sub-checkpoint (順序付き・決定的 id); 遷移履歴によるループ検出 (同一フェーズ再訪 = 最小 cycle); ループ開始点へ巻き戻し + cycle 上の鏡面入力解除 + `phase_rolled_back` trace; 水鏡の再帰入力 golden。coverage row flip。 |
 | EQM-127 | BACKLOG | EQM-126 | `docs/plan/2026-06-09_event_queue_manager/EQM-127_snapshot_v3/` | snapshot v3 + replay 証明拡張 (coverage: snapshot-v3)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/transaction/` | SEM §10.1: schema_version 3 (line_modifiers / relations / phase_checkpoints additive、wrapper・provenance inline); v2→v3 migrator (欠落 = 空); v3-in-v2 = 安定 error; roundtrip 証明 (modifier/relation/provenance/checkpoint を跨ぐ → 同一 pop 順 + 同一 trace)。coverage row flip。 |
 | EQM-128 | BACKLOG | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
 
@@ -1269,3 +1269,34 @@ proof:
 ```
 
 Dependency sweep: EQM-124 COMPLETE → EQM-125 READY (EQM-126..128 BACKLOG)。Current pointer → EQM-125。
+
+### EQM-125 — COMPLETE (2026-07-05)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/
+  review: docs/review/autopilot/EQM-125_SELF_REVIEW_2026-07-05.md
+  pattern: P2 (codex GPT-5.5 委譲 1 run; orchestrator 検収で golden シナリオを凍結 acceptance 形へ強化 +
+           golden env var の repo 標準統一)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS ×2 (files=65 checks=1207 failures=0;
+      contract-coverage rows=31 implemented=28 reserved=3 violations=0)
+    - ./tools/test.sh --update-golden interception_close (シナリオ強化後の再 baseline)
+  gate: §4 core/runtime (golden interception_close = 迎撃: 5 歩中 2 歩解決済み維持 +
+        pending 3 歩 closed_by: intervention + window_closed 両メタ値; 同値メタ = 介入成功;
+        回避 = intervention_avoided + window 維持)
+  key contracts: EQWindow.meta_level (宣言 int、window_opened へ非 0 のみ掲載 = 既存 golden 保護)、
+    window 帰属帳簿 (open 中に schedule された pending が member)、nest 上位も同時 close、
+    解決済み効果は無操作 (巻き戻し機構を追加していない)
+  repair (orchestrator): 委任 contract 側の誤指定だった golden env var (EQ_UPDATE_GOLDEN) を
+    repo 標準 GODOT_UPDATE_GOLDEN へ 3 file 統一 (test.sh --update-golden が機能する形に)
+  golden: tests/golden/interception_close.trace.jsonl (new baseline),
+          tests/golden/api_surface.json (intervene_close / meta_level、明示 --update + doc note)
+  SEM: §11 に intervention_avoided kind を additive 追記 (同 commit、re-freeze 整合)
+  major files:
+    - addons/event_queue_manager/runtime/eq_window.gd (meta_level)
+    - addons/event_queue_manager/runtime/eq_reservation_runtime.gd (intervene_close + 帰属帳簿)
+    - test_project/tests/transaction/test_eq_premature_close.gd (new)
+```
+
+Dependency sweep: EQM-125 COMPLETE → EQM-126 READY (EQM-127..128 BACKLOG)。Current pointer → EQM-126。

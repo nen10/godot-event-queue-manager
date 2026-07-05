@@ -169,7 +169,7 @@ static func _test_lifetime_composition_golden(t) -> void:
 	t.ok('"closed_by":"manual_invalidate"' in jsonl, "no-turn condition lifetime closes only by explicit invalidation")
 	t.ok('"line":"eqm.axis.hero.depletion__embellish"' in jsonl and '"to":2' in jsonl, "CANCEL grant arithmetic reaches axis 2 and is traced")
 
-	var update := OS.get_environment("EQ_UPDATE_GOLDEN")
+	var update := OS.get_environment("GODOT_UPDATE_GOLDEN")
 	if update == GOLDEN_CASE:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(GOLDEN_PATH.get_base_dir()))
 		var f := FileAccess.open(GOLDEN_PATH, FileAccess.WRITE)
@@ -178,7 +178,7 @@ static func _test_lifetime_composition_golden(t) -> void:
 			return
 		f.store_string(jsonl)
 		f.close()
-		t.ok(true, "golden re-baselined for %s via EQ_UPDATE_GOLDEN=%s" % [GOLDEN_CASE, GOLDEN_CASE])
+		t.ok(true, "golden re-baselined for %s via ./tools/test.sh --update-golden %s" % [GOLDEN_CASE, GOLDEN_CASE])
 		return
 
 	var exists := FileAccess.file_exists(GOLDEN_PATH)

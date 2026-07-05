@@ -1,0 +1,7 @@
+{"deadline":-1,"i":0,"kind":"window_opened","meta_level":1,"nest_level":1,"owner":"mover","window_id":1,"window_kind":"move"}
+{"actor":"mover","cause":"timer","event_id":1,"i":1,"kind":"resolved","priority":0,"seq":0,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"sequence"}}
+{"actor":"mover","cause":"timer","event_id":2,"i":2,"kind":"resolved","priority":0,"seq":1,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"mover","closed_by":"intervention","event_id":3,"i":3,"kind":"event_invalidated"}
+{"actor":"mover","closed_by":"intervention","event_id":4,"i":4,"kind":"event_invalidated"}
+{"actor":"mover","closed_by":"intervention","event_id":5,"i":5,"kind":"event_invalidated"}
+{"cause":"intervention","i":6,"intervener_event_id":100,"intervener_meta":1,"kind":"window_closed","nest_level":1,"window_id":1,"window_meta":1}
