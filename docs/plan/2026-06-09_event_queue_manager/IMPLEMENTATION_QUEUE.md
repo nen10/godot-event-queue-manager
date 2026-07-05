@@ -161,8 +161,8 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 | EQM-124 | COMPLETE | EQM-123 | `docs/plan/2026-06-09_event_queue_manager/EQM-124_atomic_bundle/` | composite atomic bundle (coverage: atomic-bundle)。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | SEM §7.2: bundle API (member 全 effect 適用 → 単一 sweep、member 順 = §7.1 hook → 発行順、`bundle_resolved` trace); 公平の並列 golden (composite 解決 + 事後の個別反射誘発 — 相談3 意味論)。coverage row flip。 |
 | EQM-125 | COMPLETE | EQM-124 | `docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/` | メタレベル + window premature close (coverage: meta-level-premature-close)。 | `runtime/eq_window.gd`, `runtime/eq_reservation_runtime.gd`, `resources/eq_action_definition.gd`, `tests/transaction/` | SEM §8.2/§8.3: meta_level 宣言 (default 0) を event/window が運ぶ; 介入 close 判定 (intervener >= window、同値 = 介入成功); 解決済み維持・pending 一掃・`window_closed(cause: intervention)` + 両メタ値 trace; 迎撃 (5 歩移動の 2 歩目) golden。coverage row flip。 |
 | EQM-126 | COMPLETE | EQM-125 | `docs/plan/2026-06-09_event_queue_manager/EQM-126_phase_recursion/` | 操作フェーズ再帰 + ループ解消 (coverage: phase-recursion)。 | `runtime/eq_window.gd`, `runtime/eq_transaction.gd`, `tests/transaction/` | SEM §8.4: フェーズ内 sub-checkpoint (順序付き・決定的 id); 遷移履歴によるループ検出 (同一フェーズ再訪 = 最小 cycle); ループ開始点へ巻き戻し + cycle 上の鏡面入力解除 + `phase_rolled_back` trace; 水鏡の再帰入力 golden。coverage row flip。 |
-| EQM-127 | READY | EQM-126 | `docs/plan/2026-06-09_event_queue_manager/EQM-127_snapshot_v3/` | snapshot v3 + replay 証明拡張 (coverage: snapshot-v3)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/transaction/` | SEM §10.1: schema_version 3 (line_modifiers / relations / phase_checkpoints additive、wrapper・provenance inline); v2→v3 migrator (欠落 = 空); v3-in-v2 = 安定 error; roundtrip 証明 (modifier/relation/provenance/checkpoint を跨ぐ → 同一 pop 順 + 同一 trace)。coverage row flip。 |
-| EQM-128 | BACKLOG | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
+| EQM-127 | COMPLETE | EQM-126 | `docs/plan/2026-06-09_event_queue_manager/EQM-127_snapshot_v3/` | snapshot v3 + replay 証明拡張 (coverage: snapshot-v3)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/transaction/` | SEM §10.1: schema_version 3 (line_modifiers / relations / phase_checkpoints additive、wrapper・provenance inline); v2→v3 migrator (欠落 = 空); v3-in-v2 = 安定 error; roundtrip 証明 (modifier/relation/provenance/checkpoint を跨ぐ → 同一 pop 順 + 同一 trace)。coverage row flip。 |
+| EQM-128 | READY | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
 
 ## Dynamic follow-up area
 
@@ -1328,3 +1328,29 @@ proof:
 ```
 
 Dependency sweep: EQM-126 COMPLETE → EQM-127 READY (EQM-128 BACKLOG)。Current pointer → EQM-127。
+
+### EQM-127 — COMPLETE (2026-07-05)
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-127_snapshot_v3/
+  review: docs/review/autopilot/EQM-127_SELF_REVIEW_2026-07-05.md
+  pattern: P2 (codex GPT-5.5 委譲 1 run; 検収で既存 v2 test の version 固定 assert 2 件を昇格対応 —
+           うち 1 件は「新 schema 拒否」の検体が 3 のままでは偽陽性化するため 4 へ)
+  tests:
+    - ./tools/test.sh -> RESULT: PASS ×2 (files=67 checks=1270 failures=0;
+      contract-coverage rows=31 implemented=30 reserved=1 violations=0)
+  gate: §4 transaction (v3 roundtrip = relations + state_algebra + modifier + provenance を跨ぎ
+        同一状態; v2/v1 互換 load; v4 安定拒否; verify-before-mutate = 未接続 instance /
+        未登録 predicate で何も適用しない; load 経路の state_wrapped 無発火 = restore() 使用証明)
+  key contracts: schema_version 3 (additive tables relations / state_algebra; line modifiers は
+    event_lines 内包・provenance は reservation dict 内包・phase checkpoints は boundary save で
+    常に空 — table 不要を doc comment に明記)、EQReservationRuntime.state_algebra optional 接続
+  docs: SNAPSHOT_COMPAT_V1.md v3 節 additive
+  major files:
+    - addons/event_queue_manager/runtime/eq_save_adapter.gd (v3)
+    - addons/event_queue_manager/runtime/eq_reservation_runtime.gd (state_algebra + verify/apply)
+    - test_project/tests/transaction/test_eq_snapshot_v3.gd (new)
+```
+
+Dependency sweep: EQM-127 COMPLETE → EQM-128 READY (最終 task)。Current pointer → EQM-128。

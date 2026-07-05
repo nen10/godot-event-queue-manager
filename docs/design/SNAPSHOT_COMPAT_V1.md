@@ -14,6 +14,17 @@
 > race groups are not persisted — members are, but the winner's bulk
 > loser-sweep does not survive a save (EQM-117 POLICY).
 
+> **v1.2 (EQM-127, 2026-07-05): bundle `SCHEMA_VERSION` is now 3.** Additive
+> `relations` and `state_algebra` tables are added for L3 extension support
+> (relation graph / state stack algebra, SEM §13.1 / §5.7). No migration is
+> needed in this seam: missing tables are treated as empty. A v3 bundle is
+> rejected by a v1/v2 reader because of `schema_version`, while a future
+> `>4` reader is rejected by the same fail-safe boundary in this release.
+> Verification of v3 tables is verify-before-mutate:
+> `relations` / `state_algebra` are accepted only when the runtime has
+> corresponding optional attachment, relation maintenance predicates are
+> registered, and then restores are in-place (`restore`, not `from_dict`).
+
 The serialized scheduler snapshot (`EQSnapshot`, `SCHEMA_VERSION = 1`) and the
 save bundle (`EQSaveAdapter`, `schema_version`) are the on-disk contracts a
 consumer's save files depend on. This declares the v1.0 compatibility stance so a

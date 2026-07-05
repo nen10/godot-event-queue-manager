@@ -80,7 +80,7 @@ static func _test_save_gate(t) -> void:
 static func _test_bundle_shape(t) -> void:
 	var rr := _pipeline_setup()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
-	t.eq(int(bundle["schema_version"]), 2, "bundle is schema v2")
+	t.eq(int(bundle["schema_version"]), 3, "bundle saves at the current schema (v3 since EQM-127; v2 behaviour is covered by the load-compat tests below)")
 	for key in ["event_lines", "windows", "armed_triggers", "pending_conditional", "scheduled_reservations"]:
 		t.ok(bundle.has(key), "bundle carries the %s table" % key)
 	t.eq((bundle["armed_triggers"] as Array).size(), 1, "armed reaction serialized")
@@ -97,7 +97,7 @@ static func _test_v1_migrator_and_unknown(t) -> void:
 	fresh.runtime.emit_engine_diagnostics = false
 	t.ok(EQSaveAdapter.load(fresh.runtime, v1, {}, fresh), "a v1 bundle loads (missing tables = empty, the migrator)")
 	t.eq(int(fresh.runtime.registry.get_state(&"hero").data["hp"]), 3, "v1 actor data restored")
-	t.ok(not EQSaveAdapter.load(fresh.runtime, {"schema_version": 3}), "a newer schema is rejected cleanly (fail-safe)")
+	t.ok(not EQSaveAdapter.load(fresh.runtime, {"schema_version": 4}), "a newer schema is rejected cleanly (fail-safe)")
 
 
 static func _test_verify_before_mutate(t) -> void:

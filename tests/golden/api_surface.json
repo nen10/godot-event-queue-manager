@@ -359,6 +359,7 @@
     },
     "EQSaveAdapter": {
       "consts": [
+        "EQSnapshot",
         "SCHEMA_VERSION"
       ],
       "enums": [],
@@ -888,7 +889,8 @@
         "max_transform_rounds",
         "max_window_depth",
         "relations",
-        "runtime"
+        "runtime",
+        "state_algebra"
       ]
     },
     "EQTagMatcher": {

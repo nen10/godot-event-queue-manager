@@ -1,5 +1,6 @@
 class_name EQSaveAdapter
 extends RefCounted
+const EQSnapshot := preload("eq_snapshot.gd")
 ## Save/load for an EQRuntime that stores actor_ids + serializable state, never
 ## live Nodes (the Adapter rule), and rebinds actors to live nodes on load.
 ##
@@ -9,11 +10,16 @@ extends RefCounted
 ## is rebound to a live node via the `rebind` map (actor_id -> node). The node
 ## bridge (EQNodeBridge) is the usual source of that map.
 
-## v2 (EQM-117, SEM §10): additive pipeline tables (event_lines / windows /
-## armed_triggers / pending_conditional / scheduled_reservations) next to the
-## v1 keys. A v1 bundle loads via the migrator (missing tables = empty); an
-## unknown/newer version is rejected (SNAPSHOT_COMPAT_V1.md fail-safe).
-const SCHEMA_VERSION := 2
+## v3 (EQM-121/122/123/127, SEM §10.1): additive pipeline tables
+## (event_lines / relations / state_algebra / windows / armed_triggers /
+## pending_conditional / scheduled_reservations) next to the v1 keys. A v2
+## bundle loads via the migrator (missing tables = empty); an unknown/newer
+## version is rejected (SNAPSHOT_COMPAT_V1.md fail-safe).
+#
+# `event_lines` carries line modifiers and modifiers-only fields; line-level
+# provenance is serialized inside the reservation dicts. The phase-checkpoint
+# table that EQM-122 reserves remains boundary-gated to empty in this contract.
+const SCHEMA_VERSION := 3
 
 
 ## A plain, node-free save bundle. With a pipeline (EQReservationRuntime), the
@@ -35,6 +41,7 @@ static func save(runtime, pipeline = null) -> Dictionary:
 		bundle.merge(pipeline.save_state())
 	else:
 		bundle.merge({
+			"relations": {}, "state_algebra": {},
 			"event_lines": {}, "windows": [], "armed_triggers": [],
 			"pending_conditional": [], "scheduled_reservations": [],
 		})
@@ -53,7 +60,8 @@ static func load(into_runtime, data: Dictionary, rebind: Dictionary = {}, pipeli
 		return false
 	if pipeline != null and not pipeline.verify_state(data):
 		return false
-	into_runtime.scheduler.restore(data.get("scheduler", {}))
+	if into_runtime.scheduler.restore(data.get("scheduler", {})) != EQSnapshot.Load.OK:
+		return false
 	for actor_dict in data.get("actors", []):
 		var actor_id := StringName(actor_dict.get("actor_id", ""))
 		var state = into_runtime.register_actor(actor_id)

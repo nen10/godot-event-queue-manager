@@ -44,6 +44,10 @@ var engine: EQTriggerEngine
 ## actor departure dissolves its incident relations through the declared
 ## on_dissolve rules (EQM-122); the §6.4 expansion consumes it (EQM-123).
 var relations = null
+## Optional state algebra (EQStateAlgebra, L3 — SEM §5.7). Runtime holds this as
+## an optional reference only; save/load uses in-place restore to avoid wrapper
+## replay and keeps state transitions stable.
+var state_algebra = null
 
 ## Records drained from the chunk by the last resolve_next() call (§6.1 step 5).
 var last_drained: Array = []
@@ -651,6 +655,8 @@ func save_state() -> Dictionary:
 		})
 	return {
 		"event_lines": lines.to_dict(),
+		"relations": relations.to_dict() if relations != null else {},
+		"state_algebra": state_algebra.to_dict() if state_algebra != null else {},
 		"windows": [],  # boundary-gated saves always have depth 0 (POLICY)
 		"armed_triggers": armed,
 		"pending_conditional": conditional,
@@ -662,7 +668,30 @@ func save_state() -> Dictionary:
 ## already be registered on THIS instance. Returns true when safe to apply.
 func verify_state(data: Dictionary) -> bool:
 	var lines_d: Dictionary = data.get("event_lines", {})
+	var relations_d: Dictionary = data.get("relations", {})
+	var state_algebra_d: Dictionary = data.get("state_algebra", {})
 	var registered := lines.sweep_rule_names()
+	if not (relations_d is Dictionary):
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "relations table must be a Dictionary", {}, true)
+		return false
+	if not (state_algebra_d is Dictionary):
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "state_algebra table must be a Dictionary", {}, true)
+		return false
+	if not relations_d.is_empty() and relations == null:
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "relations were saved, but this runtime has no relation graph", {}, true)
+		return false
+	if not state_algebra_d.is_empty() and state_algebra == null:
+		runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "state_algebra was saved, but this runtime has no state algebra", {}, true)
+		return false
+	for decl in relations_d.get("relation_types", []):
+		if decl is not Dictionary:
+			continue
+		var maintenance := (decl as Dictionary).get("maintenance", null)
+		if maintenance is Dictionary and int(maintenance.get("type", -1)) == EQConditionSpec.Type.NAMED_PREDICATE:
+			var predicate_name := StringName(maintenance.get("predicate_name", ""))
+			if predicate_name == &"" or not runtime.has_predicate(predicate_name):
+				runtime._fault(EQError.CONDITION_PREDICATE_UNREGISTERED, "maintenance predicate '%s' in the save is not registered" % predicate_name, {"predicate": String(predicate_name)}, true)
+				return false
 	for name in lines_d.get("sweep_rules", []):
 		if not registered.has(StringName(name)):
 			runtime._fault(EQError.CONDITION_PREDICATE_UNREGISTERED, "sweep rule '%s' in the save is not registered" % name, {"name": String(name)}, true)
@@ -698,6 +727,10 @@ func verify_state(data: Dictionary) -> bool:
 ## Applies the verified tables (call verify_state first; the adapter does).
 func apply_state(data: Dictionary) -> void:
 	lines.restore_values(data.get("event_lines", {}))
+	if relations != null:
+		relations.restore(data.get("relations", {}))
+	if state_algebra != null:
+		state_algebra.restore(data.get("state_algebra", {}))
 	for a in data.get("armed_triggers", []):
 		var res := EQReservation.from_dict(a.get("reservation", {}))
 		var cond = null
