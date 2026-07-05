@@ -733,4 +733,187 @@ user意見: 承認。今後需要に応じて拡張は検討する。
 
 推奨 (要ユーザー確認の下書き): v1.x 目標 = 同時 actor ≤ 200 / watched event-line ≤ 300 / armed trigger ≤ 200 / `advance()` 1 call の追加コスト ≤ 0.5ms (Godot 4.6 headless debug, EQM-102 と同条件)。RTS/STG 規模は対象外を維持 (Q24 deferred)。予測 (EQM-033) は同予算内で depth N ≤ 20。
 
+---
+
+# 拡張ラウンド擦り合わせ (Q44–Q54, 2026-07-05, EBS 実需要)
+
+経緯: consumer プロジェクト **EBS** (godot-editable-battleskill-system) から状態・関係システムと解決パイプライン拡張の依頼 (R01–R12) を受領した。受領原本: `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md` (EBS 側原典 `docs/design/EQM_EXTENSION_REQUEST.md` draft v2、相談ラウンド1 反映済み)。依頼を本 registry の Q44–Q54 に起票する。起票と同日に**相談ラウンド2** を実施し、8 個の意味論 fork が DECIDED(user) となった (下表)。残る RECOMMENDED 項目は設計ラウンド (SEM v1.2 起草 task) の入力。roadmap 対応: `ROADMAP.md` §7 Phase 13。applicative case: `ORDERING_MODEL_COVERAGE.md` row 10。
+
+### 相談ラウンド2 の決定 (2026-07-05)
+
+| # | fork | 決定 |
+|---|---|---|
+| 1 | メタレベルの付与先 | スキル宣言の int (EBS 解決仕様ブロック)。発行 event / 開いた window が実行時に運ぶ。未宣言 = 0。nest 深度と独立 |
+| 2 | メタレベルの値域・同値 | 単一 int の全順序 (部分順序は不採用)。同値 = 介入成功 (window は中終了する) |
+| 3 | 発行連鎖とメタレベル | 連鎖の各段がその段の操作 event の宣言メタレベルを保持。対戦術/反射の target 調整幅 = レベル差が許す最遠段 |
+| 4 | inv 双対の共存意味論 | ペア宣言 + 規則選択制 (相殺 / 排他 / 共存 を pair ごとに data で宣言) |
+| 5 | suspension の重複・復帰 | modifier-stack モデル (base rate + 寿命付き modifier 集合、実効 rate は変更毎に決定的再計算) |
+| 6 | 関係維持条件の評価タイミング | 関係型ごとに宣言した sweep で評価 (既定 = primary tick の宣言閾値 = ゲームの「T開始時」) |
+| 7 | window 中終了の効果範囲 | 解決済み効果は維持、pending のみ打ち切り (`window_closed(cause: intervention)`) |
+| 8 | 操作フェーズのループ解消 | ループ開始点へ巻き戻し (EQTransaction working-copy) + 最小 cycle 上の鏡面入力を解除して再開 |
+
+### R→Q 対応
+
+| 依頼 | Q |
+|---|---|
+| R01 状態代数 | Q44 (双対) / Q45 (suspension) / Q46 (寿命合成) |
+| R02 関係グラフ | Q47 |
+| R03 連鎖・波及 | Q48 (+ Q49 同時性) |
+| R04 オーラ・地点効果 | Q54 |
+| R05 介入と window 中終了 | Q50 (+ Q51 メタレベル) |
+| R06 反撃反撃ループ | Q54 |
+| R07 効果書き換え・発行連鎖 | Q52 (+ Q51) |
+| R08 防御誘発スタック順 | Q54 |
+| R09 公平の並列 | Q49 / Q54 |
+| R10 入れ子操作フェーズ | Q53 |
+| R11 蘇生・追加行動 | Q54 |
+| R12 発行時修飾 | Q54 |
+
+| id | status | 領域 |
+|---|---|---|
+| Q44 | DECIDED(user) | 状態代数: inv 双対ペアの宣言と共存規則 |
+| Q45 | DECIDED(user) | event-line rate の modifier-stack (suspension) |
+| Q46 | RECOMMENDED | 寿命の合成 (既存 invalidation 語彙の適用確認) |
+| Q47 | RECOMMENDED | 関係グラフの first-class data model (評価タイミングのみ DECIDED) |
+| Q48 | RECOMMENDED | 効果対象の展開規則 (連鎖・波及) の評価段と停止規律 |
+| Q49 | RECOMMENDED | composite atomic bundle の前倒し (公平・波及の同時性) |
+| Q50 | DECIDED(user) | window premature close (介入の標準効果) |
+| Q51 | DECIDED(user) | メタレベルの形式化 (横断) |
+| Q52 | RECOMMENDED | 効果パターン変換フックと発行連鎖メタデータ (target 規則のみ DECIDED) |
+| Q53 | DECIDED(user) | 入れ子操作フェーズのループ検出・解消 |
+| Q54 | RECOMMENDED | 確認系 acceptance 束 (R04/R06/R08/R09/R11/R12) |
+
+## Q44 — 状態代数: inv 双対ペアの宣言と共存規則 [DECIDED(user)]
+
+問い: 状態型の対合 `inv` (欠損⇄虚飾・狭窄⇄透徹・束縛⇄奔放・鈍化⇄機敏) を EQM はどう表現するか。特に inv ペアが同一対象に共存した瞬間の意味論。
+
+なぜ重要 (EBS 実需要): 付与・解除・効果の意味論が `inv` を通して系統的に反転する状態群が EBS スキルの基礎語彙。共存時の挙動が未定義だと golden trace が書けず、個別ゲーム固有の stack 機構として誤実装される危険がある (依頼 R01 注意書き)。
+
+推奨: **ペア宣言 + 規則選択制**。EQM は inv ペアの宣言 (状態型レベル) と、共存時規則 **相殺** (counter 差し引き) / **排他** (付与時に dual を解除してから付与) / **共存** (実行時相互作用なし、authoring 系統性のみ) の 3 択を pair ごとの serializable data として持つ。stacking acceptance-defined の既決 (SEM §4.5) と整合し、EBS は各ペアで規則を選んで acceptance instance にする。相殺/排他の適用と結果は trace に記録する。
+
+擦り合わせたい点 (設計タスクへ): 相殺の記録形 (counter line 2 本の差し引きか、符号付き 1 本か)。
+
+user意見 (相談ラウンド2, 2026-07-05): ペア宣言 + 規則選択制で確定。
+
+## Q45 — event-line rate の modifier-stack (suspension) [DECIDED(user)]
+
+問い: 前進規則の一時差し替え (凍結の保存・停止、鈍化/機敏) を、重複適用・途中解除・snapshot 復元と整合する形でどう表現するか。現行の re-rate (SEM §4.6) は「現在 rate の上書き」のみで復帰値を持たない。
+
+なぜ重要: 鈍化中に凍結 → 凍結が先に切れたら「鈍化の rate」へ戻る、のような重複が実需要に含まれる。復帰値をゲーム側管理にすると重複ケースの決定性保証が消費者任せになる。
+
+推奨: **modifier-stack モデル**。event-line が base rate + 有効 modifier 集合 (寿命付き、serializable data) を持ち、実効 rate は変更のたびに決定的に再計算する。suspension = 寿命付き modifier (凍結 = override-to-0 種)。modifier の寿命は既存 invalidation 語彙 (expiry event §6.3 / counter) で束ねる。既存 re-rate は「base rate の書き換え」として残す。snapshot v2 へ modifier table を additive 追加。
+
+擦り合わせたい点 (設計タスクへ): modifier 合成の語彙 (加算 / 乗算 / override) と同種重複時の決定的適用順 (付与順 = event 発行順を推奨)。
+
+user意見 (相談ラウンド2, 2026-07-05): modifier-stack モデルで確定。
+
+## Q46 — 寿命の合成の適用確認 [RECOMMENDED]
+
+問い: スタック系 (欠損, 反撃反芻) とターン系 (鑑別, 運命改変) の 2 種の寿命、および「ターン経過で解除されない」現象を、既存の invalidation OR + counter event-line で書けるかの適用確認 (依頼種別 [確認])。
+
+なぜ重要: R01 の第 3 要素。書けるなら新規 primitive 不要で、成果は acceptance 例のみ。
+
+推奨: 既存語彙で表現可能の見込み — スタック系 = decremental counter line、ターン系 = ターン閾値の expiry event (§6.3)、現象 = ターン条件を宣言しない (解除は明示 invalidation のみ)。EBS スキル群から 3 種各 1 つを golden 化する。
+
+user意見: (acceptance 例の確定待ち)
+
+## Q47 — 関係グラフの first-class data model [RECOMMENDED]
+
+問い: 月 (主) / 星 (従) の有向関係を EQM が直列化可能データとして管理する際の schema — 関係型宣言 (分類: 追跡/求心/公平 + 反転)、構造制約 (ツリー / ループ許容)、維持条件、解消時の結び直し規則 — をどう固定するか。
+
+なぜ重要: R02。actor 間の永続的有向関係は現状消費者任せで、Q48 の波及展開・R09 の公平の入力になる。付与・解消・結び直し・反転の trace 記録が決定性の説明可能性を担う。
+
+決定済み (相談ラウンド2, 2026-07-05): 維持条件 (視界系 NAMED_PREDICATE、ゲーム側供給 — 相談4既決) の評価タイミングは**関係型ごとに宣言した sweep** (既定 = primary tick の宣言閾値、ゲームの「T開始時」相当)。sweep rule registry (§4.7) の機構を流用する。
+
+推奨: 関係 = `{id (決定的採番, §4.5 と同格), type, from_actor, to_actor}` の serializable table。関係型宣言 = `{name, 分類, 反転形, 構造制約 (tree / loop 許容), 維持条件 (EQConditionSpec), 解消時規則}`。結び直し「直列関係の間ならば隣り合う関係を結び直す」は解消時規則の宣言パターンとして持つ。trace record kind を追加 (relation_bound / relation_dissolved / relation_rebound / relation_inverted 相当)。snapshot v2 へ additive table。
+
+擦り合わせたい点 (設計タスクへ): 結び直し規則の宣言語彙 (直列縫合以外の必要パターン)、関係グラフの actor lifecycle (§13 invalidate_actor) との連動。
+
+user意見 (相談ラウンド2, 2026-07-05): 評価タイミングのみ確定。schema 詳細は設計タスクで詰める。
+
+## Q48 — 効果対象の展開規則 (連鎖・波及) [RECOMMENDED]
+
+問い: 関係グラフを入力とする「効果対象の動的拡大」(鑑波の損害波及、泡撃の波及的付与、解明/転回の状態ラッピング連鎖) を解決 pipeline (§6.1) のどの段で評価するか。展開が再帰する場合 (関係ループ時) の停止規律。
+
+なぜ重要: R03。評価段が曖昧だと「星へ損害 → 月にも同時」の同時性と trigger 発火順が実装ごとに変わる。
+
+推奨: 展開は **pop 直後・effect 段の前** に runtime が関係グラフから決定的に計算し、展開済み target 集合を event view で effect handler へ渡す。展開順序 = 関係 id 昇順の幅優先。再帰は visited set (同一 actor は一度のみ) で停止。展開結果 (元 target → 展開列) は trace に記録。「同時」が原子性を要求するケースは Q49 の atomic bundle に載せる。
+
+user意見: (未記入)
+
+## Q49 — composite atomic bundle の前倒し [RECOMMENDED]
+
+問い: SEM §7.1 staging で後段送りにした「composite = 原子的 bundle」実装を本 round に前倒しするか。
+
+なぜ重要: R09 公平の確定回答 (依頼 相談3) は「同一 tick の composite として解決し、互いの結果を入力にしない。composite 解決後の個別 state トリガは通常 sweep で発火」— これは member 間で sweep を挟まない**原子的 bundle** そのもの。R03 の「同時に損害」も同型。ordering hook (EQM-115) だけでは member 間に sweep が入り、この意味論を満たせない。
+
+推奨: 前倒しする。bundle = member effect を全て適用してから単一 sweep を実施する解決単位。member 順序は既存 hook (§7.1) → 発行順。trace は bundle id + member 列。§7 の core 保証 (atomicity / total order / serializability / trace 被覆) に沿う。
+
+user意見: (未記入)
+
+## Q50 — window premature close (介入の標準効果) [DECIDED(user)]
+
+問い: 迎撃等の介入が対象 window を中終了させる意味論。解決済み効果と未解決 pending の扱い、deadline close (§9/Q37) との関係。
+
+なぜ重要: R05。移動 window の 2 歩目で迎撃が発動した場合の「残り 3 歩」の扱いが未定義だと、介入系スキル全般の golden が書けない。
+
+推奨: **解決済み効果は維持、pending のみ打ち切り**。window の未解決 member/pending events を invalidation で一掃 (`closed_by` 記録) し、`window_closed(cause: intervention)` を emit する。deadline の既定 (draft rollback, Q37) とは**別意味論**として区別する — 介入の発動条件が「効果が起きた事実」に依存する (依頼 相談1: 解決され効果が起きた時) ため、起きた効果は巻き戻さない。終了回避 = Q51 のメタレベル比較 (介入側 ≥ window 側で close 成立)。
+
+user意見 (相談ラウンド2, 2026-07-05): 解決済み維持・pending 打ち切りで確定。
+
+## Q51 — メタレベルの形式化 (横断) [DECIDED(user)]
+
+問い: R05 (window 中終了の回避可否) と R07 (操作連鎖上の target 調整幅) に共通するメタレベルの付与先・値域・比較規則・発行連鎖との関係。依頼文書が明示した継続相談点。
+
+なぜ重要: R05/R07 両方の前提となる新しい横断概念。未形式化のまま個別実装すると二重定義になる。
+
+決定 (相談ラウンド2, 2026-07-05):
+
+1. **付与先 = スキル宣言の int** (EBS 解決仕様ブロック)。発行された event / 開いた window が実行時に値を運ぶ。未宣言 = 0。window nest 深度とは独立 (「深い = 強い」の混同を避ける)。
+2. **値域 = 単一 int の全順序** (部分順序は不採用 — 「順序がつかない」ケース自体を消す)。**同値 = 介入成功** (介入側 meta ≥ 対象側 meta で介入が通る)。
+3. **発行連鎖の各段が、その段を発行した操作 event の宣言メタレベルを保持する**。対戦術・反射の target 調整幅 = 自分とのレベル差が許す最遠段まで選択可 (具体則は Q52)。
+
+user意見 (相談ラウンド2, 2026-07-05): 上記 3 点で確定。
+
+## Q52 — 効果パターン変換フックと発行連鎖メタデータ [RECOMMENDED]
+
+問い: 対戦術 (対象イベントの効果のパターン変換 — 弱化反射 = 付与先差し替え、損害反転 = 損害→回復) の介入点を pipeline のどこに置くか。変換の決定的適用順序。発行連鎖メタデータ (操作 root … 中間操作者 … 直接発行者) を event / event-line のどちらに載せるか。
+
+なぜ重要: R07。解決サイクル (§6.1) に effect 変換の介入点がなく、発行連鎖の記録もない。
+
+決定済み (Q51-3): 連鎖各段がメタレベルを保持し、変換後 target の選択幅 = レベル差で届く最遠段。
+
+推奨: (1) 変換フックは **pop 後・effect 段の前** (Q48 の展開と同段; 適用順 = 展開 → 変換。変換どうしはメタレベル降順 → priority → sequence)。変換パターン (target 差し替え / 効果写像) は data 宣言 + named registry (§5.5 と同一機構)。適用は trace に記録。(2) 発行連鎖は **event 側の provenance メタデータ**に載せる — event-line は進行入力であり、出所記録を持たせると三面分離 (§2.1) を破るため、依頼中のユーザー示唆「event-line のメタデータ拡張」は不採用を推奨。連鎖 = `[{actor, event_id, meta_level}]` の列で、操作 event が発行する event へ自動継承・追記する。
+
+擦り合わせたい点: 変換フックの多重適用 (変換の変換) を許すか、1 event 1 パスに制限するか (推奨: 1 パス。再帰は race/優先度で表現)。
+
+user意見: (target 規則のみ確定、フック詳細は未記入)
+
+## Q53 — 入れ子操作フェーズのループ検出・解消 [DECIDED(user)]
+
+問い: OPERATION 系の深い入れ子 (共鳴の 4 段階操作解決、鏡面/水鏡の再帰的追加入力フェーズ) で操作フェーズ遷移がループしたときの検出と解消。
+
+なぜ重要: R10。window nesting (§8) に再帰フェーズのループ検出・巻き戻し意味論がない。
+
+推奨: 操作フェーズ = window の再帰として定義。フェーズ遷移履歴上の同一フェーズ再訪でループを検出し、**ループ開始点へ巻き戻す** — EQTransaction working-copy をフェーズ単位 checkpoint として使い、最小 cycle 上の全鏡面の入力を解除した状態で再開する。巻き戻し範囲と解除対象は trace に記録。
+
+擦り合わせたい点 (設計タスクへ): フェーズ checkpoint の粒度 (window open ごとで足りるか)、解除後の再入力 UX (ゲーム側責務)。
+
+user意見 (相談ラウンド2, 2026-07-05): 巻き戻し + 入力解除方式で確定 (前進遷移方式は不採用)。
+
+## Q54 — 確認系 acceptance 束 (R04/R06/R08/R09/R11/R12) [RECOMMENDED]
+
+問い: 依頼の [確認] 項目群 — 既存機能で表現可能かの適用確認。成果 = applicative case / golden trace であり、新規設計は伴わない見込み。
+
+内訳と見込み:
+
+- **R04 オーラ・地点効果**: 「空間述語つき反応準備」の標準形 (ゲーム側 NAMED_PREDICATE + EQM 反応準備の合成) を applicative case 化。寸断 (トリガ抑制) が invalidation 条件で書けるかの確認を含む。
+- **R06 相互反撃ループ**: 資源述語 (焦点コスト/HP) の閉包で必ず停止する golden。reentrancy は Q21/Q32 既決。
+- **R08 防御誘発スタック順**: comparator hook (§7.1) の適用例のみ (スタック実体は完全にゲーム側 — 依頼 相談5 確定)。
+- **R09 公平**: composite (Q49) + 事後の個別反射誘発の golden (依頼 相談3 確定)。視界条件の非対称を含む。
+- **R11 蘇生・追加行動**: `ready_reservation_for` による政策外ターン付与 + 「invalidate → issue が同一 sweep 内で原子的に見える」ことの確認。
+- **R12 発行時修飾** (枯渇反動/束縛/荷重): EQM 変更不要 (発行前にゲーム側で修飾) の確認記録のみ。
+
+user意見: (未記入)
+
 user意見: 承認。

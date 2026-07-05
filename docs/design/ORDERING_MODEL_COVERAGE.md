@@ -23,8 +23,11 @@ Legend for "event-line representation": **(1)** first-class event-line (own iden
 | 9 | 行動解決ターン制 (core test case) | AP-recovery line per entity, (1)/(2); reaction-count line | solve `AP_recovered >= prep_time`; invalidate via reaction-count decremental line / triggers | comparator hook; sequence fallback | reaction windows; reentrancy spec | **mapped** (most important) |
 | — | grouped / micro-event-line (Q24) | — | — | — | — | **deferred** (RTS auxiliary; model can absorb later) |
 | — | sync barrier (Q25) | — | — | — | — | **support** (not a core named concept) |
+| 10 | EBS full-scale sim (editable-battleskill, 拡張依頼 2026-07-05) | 状態 = counter/expiry で表現可; rate は modifier-stack へ拡張 (Q45) | 既存 solve/invalidation + premature close (Q50) / 変換フック (Q52) | comparator hook + メタレベル (Q51) | premature close + 操作フェーズ再帰 (Q53) | **extension-round** (Q44–Q54; roadmap Phase 13) |
 
 **Result: all 9 systems map; no unmappable case → no new Phase-2-freeze-gating queue candidate.** Two items are *deferred proofs/scope*, not gaps: (a) Wait-Turn's next-threshold advance must produce a trace identical to per-tick polling — owned by the existing EQM-053 reducibility task; (b) 4X with *independent desyncable* resolution orders is out of v1 scope (Q13). Neither is unmappable under the v1 contract.
+
+Row 10 *(additive, 2026-07-05)* is the first post-v1.1 consumer demand: partially mapped onto existing contracts, with the gaps registered as the extension round Q44–Q54 (not a v1 gap — a v1.2 scope).
 
 ---
 
@@ -106,6 +109,14 @@ The roadmap's primary stress case. "Reservation preparation (resolution time = 3
 - **reactions**: a counterattack is a **trigger-type** condition armed on an incoming `<損害>` reservation (Phase 6); duration expiry and reaction-count exhaustion are **OR invalidation conditions** (§5), the reaction-count via a **decremental counter line** (`count <= 0`); deadline = ∞ when only the count closes it (Q06).
 - **rumination**: bounded re-schedule with a count decrement and a max-chain cycle guard (EQM-062).
 - **verified**: every piece maps to an existing v1 contract — this is the system the model was designed around (synthesis §1: event-line + conditions are v1 core *because* of this case). Most important row; mapped.
+
+### 10. EBS full-scale sim (editable-battleskill-system — first external consumer demand) *(additive, 2026-07-05)*
+
+EBS のスキル要素モデルが要求する状態・関係・介入の各系。受領原本: `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`。依頼 R01–R12 と registry Q44–Q54 の対応は registry 拡張ラウンド節の R→Q 表を参照。
+
+- **既存契約に写像できる部分**: 寿命 2 種 + 現象 (Q46 = counter line / expiry event / 条件不宣言)、相互反撃ループ (Q21/Q32 + 資源述語)、防御スタック順 (§7.1 hook)、蘇生・追加ターン (`ready_reservation_for` + invalidate→issue)、発行時修飾 (EQM 変更不要)、空間述語 (NAMED_PREDICATE、Q12 の延長)。
+- **新規拡張が要る部分**: inv 双対ペア (Q44)、rate modifier-stack (Q45)、関係グラフ (Q47)、効果対象の展開 (Q48)、atomic bundle 前倒し (Q49)、window premature close (Q50)、メタレベル (Q51)、変換フック + 発行連鎖 (Q52)、操作フェーズのループ解消 (Q53)。
+- **verdict**: extension-round — v1 契約の gap ではなく v1.2 scope。設計確定後に SEM v1.2 節と golden trace 群 (EBS スキルを acceptance instance とする) で mapped へ昇格する。
 
 ---
 

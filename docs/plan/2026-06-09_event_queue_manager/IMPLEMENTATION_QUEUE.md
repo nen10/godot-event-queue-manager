@@ -164,6 +164,8 @@ Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phas
 
 Current: none — **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
+**需要確定 (2026-07-05)**: EBS (godot-editable-battleskill-system) から拡張依頼 R01–R12 を受領 (受領原本 `EBS_EXTENSION_REQUEST_2026-07-05.md`)。registry 拡張ラウンド Q44–Q54 起票、相談ラウンド2 で意味論 fork 8 点 DECIDED(user)、roadmap Phase 13 追加。declared follow-up の composite atomic bundle は Q49 として本 round に取り込み。次 step: 残 RECOMMENDED (Q46–Q49/Q52/Q54) の確定を先頭に置く queue Phase 12 の設計 (`IMPLEMENTATION_QUEUE_DESIGN_POLICY.md`) — **queue task は未起票** (起票承認待ち)。
+
 ## Proof log
 
 ### EQM-001 — COMPLETE (2026-06-14)

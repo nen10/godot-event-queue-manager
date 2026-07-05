@@ -111,6 +111,7 @@ Each milestone declares the highest layer that stays simple to use. EQM-023 (API
 - Implicit random tie-breaking.
 - Editor UI that silently relies on bundled sample presets.
 - Treating visual effect playback as the source of truth for simulation order.
+- メタレベルの部分順序 (カテゴリ比較) — 単一 int の全順序を採用し「比較不能」ケース自体を排除する (Q51, 2026-07-05)。
 
 ### Deferred
 
@@ -391,6 +392,22 @@ Produces:
 
 Why last: Optimization and release packaging should follow stable semantics.
 
+### Phase 13 — EBS 拡張ラウンド: 状態・関係サブシステムと解決パイプライン拡張 *(additive, 2026-07-05)*
+
+Purpose: v1.1 完了後に受領した初の外部実需要 — consumer プロジェクト EBS (godot-editable-battleskill-system) の拡張依頼 R01–R12 — に応える。受領原本: `EBS_EXTENSION_REQUEST_2026-07-05.md` (同 plan dir)。設計質問は `EVENT_MODEL_OPEN_QUESTIONS.md` 拡張ラウンド Q44–Q54 に起票済みで、相談ラウンド2 (2026-07-05) により意味論の主要 fork 8 点は DECIDED(user)。
+
+Produces:
+
+- 設計ラウンド task: 残る RECOMMENDED (Q46–Q49, Q52, Q54) の確定 → SEM **v1.2** additive 節 + contract coverage 行の追加 (Phase 11 の EQM-110 と同型)。
+- A系 (状態・関係サブシステム): inv 双対ペア宣言 + 共存規則 (Q44)、event-line rate modifier-stack (Q45)、寿命合成の acceptance 例 (Q46)、関係グラフ first-class 化 (Q47)、効果対象の展開規則 (Q48)。
+- B系 (解決パイプライン拡張): composite atomic bundle 前倒し (Q49)、window premature close + メタレベル判定 (Q50/Q51)、効果パターン変換フック + 発行連鎖メタデータ (Q52)、操作フェーズ再帰とループ解消 (Q53)。
+- 確認系 applicative case / golden trace 群 (Q54): オーラ・地点効果 / 相互反撃停止 / 防御スタック順 / 公平並列 / 蘇生・追加ターン / 発行時修飾不要の確認。EBS スキル群を acceptance instance として添える (個別ゲーム固有機構としてではなく抽象構造 + インスタンス例の形で)。
+- snapshot v2 への additive table (modifier / relation) と trace record kind の追加。
+
+Why now: v1.1 の凍結契約が全て実装済みで、queue が空 (需要待ち) の状態に最初の確定需要が届いたため。責務の線引き (EQM = 状態・関係・順序・トリガ意味論 / ゲーム側 = 空間述語と効果実行 / EBS = スキル記述と型検査) は依頼文書で合意済み。
+
+Layer note: 本 phase は全て L2/L3 拡張であり、L0/L1 surface への非漏出 (§3.1) を維持する。メタレベル・関係グラフ・変換フックはいずれも opt-in。
+
 ## 8. Milestones
 
 | Milestone | Main value | Included phases |
@@ -404,6 +421,7 @@ Why last: Optimization and release packaging should follow stable semantics.
 | v0.7 Godot Tooling | Editor timeline/debug/config workflows. | Phase 9-10 |
 | v0.9 Demo & Docs | Multiple genre demos and manual coverage. | Phase 11 |
 | v1.0 Release Candidate | Performance, packaging, release proof. | Phase 12 |
+| v1.2 EBS Extension | 状態・関係サブシステム、メタレベル介入、変換フック (queue Phase 12 として実行予定)。 | Phase 13 |
 
 ## 9. Success criteria
 
