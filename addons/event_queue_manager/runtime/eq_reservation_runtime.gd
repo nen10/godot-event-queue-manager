@@ -5,10 +5,12 @@ extends RefCounted
 ##
 ##   1. pop    — runtime.advance() (lazy invalidation: level-evaluated
 ##               invalidation terms drop the event with `closed_by`)
-##   2. effect — the declared named effect handler (empty = effect-less;
-##               set-but-unregistered = stable error, never a silent skip)
-##   3. chunk  — returned EQEffectRecords append to the effect chunk
-##   4. sweep  — triggers fire and are SCHEDULED (never resolved in place,
+##   2. effect — the declared named effect handler (legacy Array or versioned
+##               EQEffectCommitResult; empty = effect-less; set-but-
+##               unregistered = stable error, never a silent skip)
+##   3. chunk  — successful returned EQEffectRecords append to the effect chunk
+##   4. sweep  — successful ordered event views are swept at one outer batch
+##               boundary; triggers are SCHEDULED (never resolved in place,
 ##               §6.2), numeric invalidation is re-checked, pending
 ##               condition-gated reservations are pushed at the detection
 ##               tick (Q27 key assignment)
@@ -31,6 +33,7 @@ const EQCondition := preload("../resources/eq_condition.gd")
 const EQConditionEval := preload("eq_condition_eval.gd")
 const EQEventLines := preload("eq_event_lines.gd")
 const EQEffectChunk := preload("eq_effect_chunk.gd")
+const EQEffectCommitResult := preload("eq_effect_commit_result.gd")
 const EQTriggerEngine := preload("eq_trigger_engine.gd")
 const EQSnapshot := preload("eq_snapshot.gd")
 const EQWindow := preload("eq_window.gd")
@@ -51,12 +54,22 @@ var state_algebra = null
 
 ## Records drained from the chunk by the last resolve_next() call (§6.1 step 5).
 var last_drained: Array = []
+## Ephemeral value projection of the most recently attempted single-reservation
+## effect commit. Read through last_effect_commit_outcome(); it is intentionally
+## outside snapshot state and empty before / when no reservation was attempted.
+var _last_effect_commit_outcome: Dictionary = {}
 ## Engineering backstop for same-tick reaction cascades (§6.2 bounded rounds).
 var max_cascade_rounds: int = 8
 ## Absolute window-nest backstop (SEM §8 engineering max depth, EQM-114).
 var max_window_depth: int = 16
 
 var _order_hook: Callable = Callable()
+
+
+## Deep-copy inspection surface. SUCCESS contains version/status plus value
+## records and ordered event_views; FAILURE contains version/status/diagnostic.
+func last_effect_commit_outcome() -> Dictionary:
+	return _last_effect_commit_outcome.duplicate(true)
 
 
 ## Registers the acceptance ordering hook (SEM §7.1, Q20/Q38, EQM-115):
@@ -670,8 +683,11 @@ func save_state() -> Dictionary:
 
 
 ## Verify-before-mutate (SEM §5.5/§6.1): every name the bundle references must
-## already be registered on THIS instance. Returns true when safe to apply.
+## already be registered on THIS instance, and every saved legacy/typed handler
+## mode must match that registry. Returns true when safe to apply.
 func verify_state(data: Dictionary) -> bool:
+	var save_schema_version := int(data.get("schema_version", -1))
+	var require_effect_result_bindings := save_schema_version >= 4
 	var lines_d: Dictionary = data.get("event_lines", {})
 	var relations_d: Dictionary = data.get("relations", {})
 	var state_algebra_d: Dictionary = data.get("state_algebra", {})
@@ -721,10 +737,77 @@ func verify_state(data: Dictionary) -> bool:
 		reservation_dicts.append(s.get("reservation", {}))
 	for rd in reservation_dicts:
 		var def: Dictionary = rd.get("definition", {})
-		for key in ["effect_name", "expiry_effect_name"]:
-			var name := StringName(def.get(key, ""))
+		for binding in [
+			{
+				"slot": "main",
+				"definition_key": "effect_name",
+				"reservation_key": "effect_commit_result_version",
+			},
+			{
+				"slot": "expiry",
+				"definition_key": "expiry_effect_name",
+				"reservation_key": "expiry_effect_commit_result_version",
+			},
+		]:
+			var name := StringName(def.get(binding["definition_key"], ""))
+			if require_effect_result_bindings and not rd.has(binding["reservation_key"]):
+				runtime._fault(
+					EQError.EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED,
+					"schema 4 reservation is missing a required effect commit result binding",
+					{
+						"slot": binding["slot"],
+						"effect": String(name),
+						"schema_version": save_schema_version,
+						"reason": "missing_binding",
+					},
+					true
+				)
+				return false
+			var raw_bound = rd.get(binding["reservation_key"], 0)
+			if typeof(raw_bound) != TYPE_INT or int(raw_bound) < 0 or int(raw_bound) > 1:
+				runtime._fault(
+					EQError.EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED,
+					"saved effect commit result binding version is unsupported",
+					{
+						"slot": binding["slot"],
+						"effect": String(name),
+						"bound_version": raw_bound,
+					},
+					true
+				)
+				return false
+			if save_schema_version < 4 and int(raw_bound) != 0:
+				runtime._fault(
+					EQError.EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED,
+					"historical save schema cannot represent typed effect result bindings",
+					{
+						"slot": binding["slot"],
+						"effect": String(name),
+						"bound_version": raw_bound,
+						"schema_version": save_schema_version,
+						"reason": "binding_not_supported_by_schema",
+					},
+					true
+				)
+				return false
 			if name != &"" and not runtime.has_effect(name):
 				runtime._fault(EQError.EFFECT_UNREGISTERED, "effect '%s' in the save is not registered" % name, {"effect": String(name)}, true)
+				return false
+			var bound := int(raw_bound)
+			var current := runtime.effect_commit_result_version(name)
+			if bound != current:
+				runtime._fault(
+					EQError.EFFECT_COMMIT_RESULT_BINDING_MISMATCH,
+					"saved effect commit result binding does not match the registry",
+					{
+						"slot": binding["slot"],
+						"effect": String(name),
+						"bound_version": bound,
+						"registered_version": current,
+						"context": "load",
+					},
+					true
+				)
 				return false
 	return true
 
@@ -776,6 +859,50 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 		runtime._fault(issue["code"], issue["message"], {"actor_id": String(res.actor_id)}, true)
 		return -1
 	var kind := res.definition.kind
+	if not runtime.registry.is_registered(res.actor_id):
+		runtime._fault(
+			EQError.RUNTIME_SCHEDULE_UNREGISTERED_ACTOR,
+			"submit for unregistered actor",
+			{"actor_id": String(res.actor_id)},
+			true
+		)
+		return -1
+	if kind == EQActionDefinition.Kind.OPERATION:
+		if res.target_id == &"":
+			runtime._fault(
+				EQError.RESERVATION_OPERATION_NEEDS_TARGET,
+				"OPERATION submit requires a non-empty target_id",
+				{"actor_id": String(res.actor_id), "target_id": ""},
+				true
+			)
+			return -1
+		if not runtime.registry.is_registered(res.target_id):
+			runtime._fault(
+				EQError.RUNTIME_SCHEDULE_UNREGISTERED_ACTOR,
+				"OPERATION target is not registered at submit",
+				{
+					"actor_id": String(res.target_id),
+					"source_actor_id": String(res.actor_id),
+					"role": "operation_target",
+				},
+				true
+			)
+			return -1
+	if kind == EQActionDefinition.Kind.REACTION_PREPARATION:
+		var declared_expiry_effect := res.definition.expiry_effect_name
+		if (
+			declared_expiry_effect != &""
+			and runtime.effect_commit_result_version(declared_expiry_effect) > 0
+		):
+			runtime._fault(
+				EQError.EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED,
+				"transactional effect handlers are unsupported for expiry effects",
+				{"effect": String(declared_expiry_effect), "context": "expiry"},
+				true
+			)
+			return -1
+	if not _bind_effect_commit_versions(res, &"submit"):
+		return -1
 	match kind:
 		EQActionDefinition.Kind.WAIT:
 			# ending the turn schedules the actor's next turn as a READY reservation
@@ -851,6 +978,16 @@ func submit_bundle(reservations: Array, delay: int = 0) -> StringName:
 			runtime._fault(issue["code"], issue["message"], {"actor_id": String(res.actor_id)}, true)
 			_rollback_bundle_plan(planned)
 			return &""
+		for effect_name in [res.definition.effect_name, res.definition.expiry_effect_name]:
+			if effect_name != &"" and runtime.effect_commit_result_version(effect_name) > 0:
+				runtime._fault(
+					EQError.EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED,
+					"transactional effect handlers are unsupported in atomic bundles",
+					{"effect": String(effect_name), "context": "bundle"},
+					true
+				)
+				_rollback_bundle_plan(planned)
+				return &""
 		if not runtime.registry.is_registered(res.actor_id):
 			runtime._fault(EQError.RUNTIME_SCHEDULE_UNREGISTERED_ACTOR, "submit_bundle actor is not registered", {"actor_id": String(res.actor_id)}, true)
 			_rollback_bundle_plan(planned)
@@ -881,14 +1018,23 @@ func submit_bundle(reservations: Array, delay: int = 0) -> StringName:
 					runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "bundle member is pending and cannot be bundled", {"actor_id": String(res.actor_id)}, true)
 					_rollback_bundle_plan(planned)
 					return &""
+		var original_main_version := res.effect_commit_result_version
+		var original_expiry_version := res.expiry_effect_commit_result_version
+		if not _bind_effect_commit_versions(res, &"bundle_submit"):
+			_rollback_bundle_plan(planned)
+			return &""
 		var id := _schedule(res, delay)
 		if id <= 0:
+			res.effect_commit_result_version = original_main_version
+			res.expiry_effect_commit_result_version = original_expiry_version
 			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "submit_bundle failed to schedule a member", {"actor_id": String(res.actor_id)}, true)
 			_rollback_bundle_plan(planned)
 			return &""
 		if not (bound["inv"] as Array).is_empty():
 			_bound_inv[id] = bound["inv"]
 		plan_append_bundle_member(planned, id, res)
+		planned.back()["original_main_version"] = original_main_version
+		planned.back()["original_expiry_version"] = original_expiry_version
 	var bundle_id := StringName("eqm.bundle.%d" % (_bundle_seq + 1))
 	_bundle_seq += 1
 	var members: Array = []
@@ -906,6 +1052,14 @@ func plan_append_bundle_member(planned: Array, event_id: int, _res: EQReservatio
 func _rollback_bundle_plan(planned: Array) -> void:
 	for p in planned:
 		var event_id := int(p.get("event_id", -1))
+		var res: EQReservation = p.get("reservation", null)
+		if res != null:
+			res.effect_commit_result_version = int(
+				p.get("original_main_version", res.effect_commit_result_version)
+			)
+			res.expiry_effect_commit_result_version = int(
+				p.get("original_expiry_version", res.expiry_effect_commit_result_version)
+			)
 		if event_id > 0 and runtime.scheduler.cancel(event_id):
 			_by_event.erase(event_id)
 			_window_of_event.erase(event_id)
@@ -1222,11 +1376,100 @@ func _is_serializable(value) -> bool:
 	return true
 
 
+func _effect_commit_binding_entries(res: EQReservation) -> Array:
+	return [
+		{
+			"slot": &"main",
+			"effect": res.definition.effect_name,
+			"bound": res.effect_commit_result_version,
+		},
+		{
+			"slot": &"expiry",
+			"effect": res.definition.expiry_effect_name,
+			"bound": res.expiry_effect_commit_result_version,
+		},
+	]
+
+
+## First submission freezes the registry mode onto the reservation instance.
+## Resubmitting the same instance (rumination) verifies rather than rebinds it.
+func _bind_effect_commit_versions(res: EQReservation, context: StringName) -> bool:
+	var updates := {}
+	for entry in _effect_commit_binding_entries(res):
+		var slot := StringName(entry["slot"])
+		var effect := StringName(entry["effect"])
+		var bound := int(entry["bound"])
+		var current := runtime.effect_commit_result_version(effect)
+		if bound == -1:
+			updates[slot] = current
+			continue
+		if bound != current:
+			_fault_effect_commit_binding_mismatch(res, slot, effect, bound, current, context)
+			return false
+	if updates.has(&"main"):
+		res.effect_commit_result_version = int(updates[&"main"])
+	if updates.has(&"expiry"):
+		res.expiry_effect_commit_result_version = int(updates[&"expiry"])
+	return true
+
+
+## Resolution/load-restored instances must already be bound. This detects a
+## legacy <-> typed registry replacement after issuance and before invocation.
+func _verify_effect_commit_versions(res: EQReservation, context: StringName) -> bool:
+	for entry in _effect_commit_binding_entries(res):
+		var slot := StringName(entry["slot"])
+		var effect := StringName(entry["effect"])
+		var bound := int(entry["bound"])
+		var current := runtime.effect_commit_result_version(effect)
+		if bound < 0 or bound != current:
+			_fault_effect_commit_binding_mismatch(res, slot, effect, bound, current, context)
+			return false
+	return true
+
+
+func _fault_effect_commit_binding_mismatch(
+	res: EQReservation,
+	slot: StringName,
+	effect: StringName,
+	bound: int,
+	current: int,
+	context: StringName
+) -> void:
+	runtime._fault(
+		EQError.EFFECT_COMMIT_RESULT_BINDING_MISMATCH,
+		"effect commit result registry mode changed after reservation submission",
+		{
+			"actor": String(res.actor_id),
+			"slot": String(slot),
+			"effect": String(effect),
+			"bound_version": bound,
+			"registered_version": current,
+			"context": String(context),
+		},
+		true
+	)
+
+
+func _reject_effect_commit_binding(
+	res: EQReservation, event_id: int, context: StringName
+) -> void:
+	res.status = EQReservation.Status.INVALIDATED
+	_trace_invalidated(event_id, res.actor_id, &"effect_commit_binding")
+	_last_effect_commit_outcome = EQEffectCommitResult.make_failure(
+		{
+			"code": String(EQError.EFFECT_COMMIT_RESULT_BINDING_MISMATCH),
+			"actor": String(res.actor_id),
+			"context": String(context),
+		}
+	).to_dict()
+
+
 ## Resolves the next ready reservation through the §6.1 pipeline. Returns the
 ## resolved reservation; null when the queue is empty or the next event is not
 ## a tracked reservation (the L0 path). Expiry events are consumed internally.
 func resolve_next() -> EQReservation:
 	last_drained = []
+	_last_effect_commit_outcome = {}
 	while true:
 		var e := runtime.advance()
 		if e == null:
@@ -1248,9 +1491,10 @@ func resolve_next() -> EQReservation:
 			return _resolve_bundle(e.event_id, res, inv_terms_bundle, bundle_id)
 		_clear_bundle_event_link(e.event_id)
 		# step 1b — lazy invalidation at reference time (level semantics)
-		var inv_terms = inv_terms_bundle
-		if not inv_terms.is_empty():
-			var inv := EQConditionEval.invalidation_check(inv_terms, _ctx(_view_of(res)))
+		if not inv_terms_bundle.is_empty():
+			var inv := EQConditionEval.invalidation_check(
+				inv_terms_bundle, _ctx(_view_of(res))
+			)
 			if int(inv["result"]) == EQConditionEval.Result.YES:
 				res.status = EQReservation.Status.INVALIDATED
 				_trace_invalidated(e.event_id, res.actor_id, StringName(inv["closed_by"]))
@@ -1259,24 +1503,34 @@ func resolve_next() -> EQReservation:
 				var f: Dictionary = inv["fault"]
 				runtime._fault(f["code"], f["message"], f.get("context", {}), true)
 				continue
+		if not _verify_effect_commit_versions(res, &"single_resolution"):
+			_reject_effect_commit_binding(res, e.event_id, &"single_resolution")
+			return res
 		res.status = EQReservation.Status.RESOLVED
 		var race_gid: StringName = _race_of.get(res.get_instance_id(), &"")
 		if race_gid != &"" and _race_groups.has(race_gid):
 			_settle_race(race_gid, res, e.event_id)
-		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
-			_cause_target_reservation(res)
 		# step 2/3 — declared effect into the chunk
 		var raw_view := _view_of(res)
 		var transformed_view := _apply_effect_transforms(res, _apply_target_expansion(res, raw_view.duplicate(true)))
-		for r in _apply_effect(res.definition.effect_name, transformed_view):
+		var commit_result := _apply_single_effect_commit(
+			res.definition.effect_name, transformed_view, raw_view
+		)
+		_last_effect_commit_outcome = commit_result.to_dict()
+		if commit_result.is_failure():
+			# FAILURE is an ordinary consumer-owned transaction outcome. It adds
+			# no chunk records and deliberately has no reaction sweep fallback.
+			return res
+		for r in commit_result.records():
 			chunk.add(r)
+		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
+			_cause_target_reservation(res)
 		# rumination reschedule (count-bounded; reactions re-arm in the ENGINE
 		# at fire time instead — re-submitting here would double-arm them)
 		if res.definition.kind != EQActionDefinition.Kind.REACTION_PREPARATION and res.remaining_ruminations > 0:
-			res.remaining_ruminations -= 1
-			submit(res)
-		# step 4 — sweep
-		_sweep(raw_view)
+			_resubmit_rumination(res)
+		# step 4 — exactly one outer batch boundary over the declared order.
+		_sweep_bundle(commit_result.event_views())
 		# step 5 — drain; chunk-empty = save boundary
 		last_drained.append_array(chunk.drain())
 		return res
@@ -1311,6 +1565,58 @@ func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array
 	if candidates.is_empty():
 		_clear_bundle_group(bundle_id)
 		return first
+	# Registration may have changed after submit_bundle(). Preflight every
+	# candidate before invoking the first handler: a later typed member cannot
+	# be discovered after an earlier legacy member has already published.
+	for entry in candidates:
+		var candidate: EQReservation = entry["res"]
+		if not _verify_effect_commit_versions(candidate, &"bundle_resolution"):
+			var binding_diagnostic := {
+				"code": String(EQError.EFFECT_COMMIT_RESULT_BINDING_MISMATCH),
+				"actor": String(candidate.actor_id),
+				"context": "bundle",
+			}
+			_last_effect_commit_outcome = EQEffectCommitResult.make_failure(
+				binding_diagnostic
+			).to_dict()
+			for rejected in candidates:
+				var rejected_res: EQReservation = rejected["res"]
+				rejected_res.status = EQReservation.Status.INVALIDATED
+				_trace_invalidated(
+					int(rejected["event_id"]),
+					rejected_res.actor_id,
+					&"effect_commit_binding"
+				)
+			_clear_bundle_group(bundle_id)
+			return first
+		for effect_name in [
+			candidate.definition.effect_name, candidate.definition.expiry_effect_name
+		]:
+			if effect_name != &"" and runtime.effect_commit_result_version(effect_name) > 0:
+				var diagnostic := {
+					"code": String(EQError.EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED),
+					"effect": String(effect_name),
+					"context": "bundle",
+				}
+				_last_effect_commit_outcome = EQEffectCommitResult.make_failure(
+					diagnostic
+				).to_dict()
+				runtime._fault(
+					EQError.EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED,
+					"transactional effect handlers are unsupported in atomic bundles",
+					diagnostic,
+					true
+				)
+				for rejected in candidates:
+					var rejected_res: EQReservation = rejected["res"]
+					rejected_res.status = EQReservation.Status.INVALIDATED
+					_trace_invalidated(
+						int(rejected["event_id"]),
+						rejected_res.actor_id,
+						&"effect_commit_context"
+					)
+				_clear_bundle_group(bundle_id)
+				return first
 	var ordered := _order_candidates(candidates, func(x): return x["res"])
 	var ordered_event_ids: Array = []
 	for entry in ordered:
@@ -1334,14 +1640,13 @@ func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array
 		res.status = EQReservation.Status.RESOLVED
 		var raw_view := _view_of(res)
 		var transformed_view := _apply_effect_transforms(res, _apply_target_expansion(res, raw_view.duplicate(true)))
-		for r in _apply_effect(res.definition.effect_name, transformed_view):
+		for r in _apply_effect(res.definition.effect_name, transformed_view, &"bundle"):
 			chunk.add(r)
 		resolved_views.append(raw_view)
 		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
 			_cause_target_reservation(res)
 		if res.definition.kind != EQActionDefinition.Kind.REACTION_PREPARATION and res.remaining_ruminations > 0:
-			res.remaining_ruminations -= 1
-			submit(res)
+			_resubmit_rumination(res)
 		_clear_bundle_event_link(rid)
 	# 1) bundle trace
 	runtime.trace().record({"kind": "bundle_resolved", "bundle": String(bundle_id), "members": ordered_event_ids})
@@ -1354,8 +1659,6 @@ func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array
 
 
 func _sweep_bundle(views: Array) -> void:
-	if views.is_empty():
-		return
 	var tick := runtime.scheduler.current_tick
 	var fired: Array = []
 	for view in views:
@@ -1508,7 +1811,33 @@ func _resolve_expiry(e) -> void:
 		engine.disarm(res)
 		res.status = EQReservation.Status.INVALIDATED
 		_trace_invalidated(e.event_id, res.actor_id, &"duration")
-		for r in _apply_effect(res.definition.expiry_effect_name, _view_of(res)):
+		if not _verify_effect_commit_versions(res, &"expiry_resolution"):
+			_last_effect_commit_outcome = EQEffectCommitResult.make_failure(
+				{
+					"code": String(EQError.EFFECT_COMMIT_RESULT_BINDING_MISMATCH),
+					"actor": String(res.actor_id),
+					"context": "expiry",
+				}
+			).to_dict()
+			return
+		var expiry_effect := res.definition.expiry_effect_name
+		if expiry_effect != &"" and runtime.effect_commit_result_version(expiry_effect) > 0:
+			var diagnostic := {
+				"code": String(EQError.EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED),
+				"effect": String(expiry_effect),
+				"context": "expiry",
+			}
+			_last_effect_commit_outcome = EQEffectCommitResult.make_failure(
+				diagnostic
+			).to_dict()
+			runtime._fault(
+				EQError.EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED,
+				"transactional effect handlers are unsupported for expiry effects",
+				diagnostic,
+				true
+			)
+			return
+		for r in _apply_effect(expiry_effect, _view_of(res), &"expiry"):
 			chunk.add(r)
 		_sweep(_view_of(res))
 		last_drained.append_array(chunk.drain())
@@ -1516,13 +1845,85 @@ func _resolve_expiry(e) -> void:
 		_trace_invalidated(e.event_id, res.actor_id, &"already_closed")
 
 
-## §6.1 step 2 — declared linkage: empty = effect-less; set-but-unregistered =
-## stable error (dev halt / shipped skip), never a silent skip.
-func _apply_effect(name: StringName, view: Dictionary) -> Array:
+## Single-reservation transactional linkage. Legacy handlers are normalized to
+## SUCCESS(records, [raw reservation view]) so their sweep behaviour is byte-
+## compatible. A typed FAILURE (including an invalid typed return) carries no
+## records and is never given a raw-view fallback sweep.
+func _apply_single_effect_commit(
+	name: StringName, handler_view: Dictionary, legacy_event_view: Dictionary
+) -> EQEffectCommitResult:
+	var result_version := runtime.effect_commit_result_version(name)
+	if result_version <= 0:
+		return EQEffectCommitResult.make_success(
+			_apply_effect(name, handler_view, &"single"), [legacy_event_view]
+		)
+	if not runtime.has_effect(name):
+		runtime._fault(
+			EQError.EFFECT_UNREGISTERED,
+			"effect '%s' has no registered handler" % name,
+			{"effect": String(name)},
+			true
+		)
+		return _invalid_effect_commit_failure(name, EQError.EFFECT_UNREGISTERED)
+	var value = (runtime.effects()[name] as Callable).call(handler_view)
+	if not (value is EQEffectCommitResult):
+		runtime._fault(
+			EQError.EFFECT_COMMIT_RESULT_INVALID,
+			"transactional effect handler must return EQEffectCommitResult",
+			{"effect": String(name), "result_version": result_version},
+			true
+		)
+		return _invalid_effect_commit_failure(name, EQError.EFFECT_COMMIT_RESULT_INVALID)
+	var result := value as EQEffectCommitResult
+	if result.version() != result_version:
+		runtime._fault(
+			EQError.EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED,
+			"transactional effect result version does not match its registration",
+			{
+				"effect": String(name),
+				"registered_version": result_version,
+				"actual_version": result.version(),
+			},
+			true
+		)
+		return _invalid_effect_commit_failure(
+			name, EQError.EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED
+		)
+	var validation := result.validate()
+	if not validation.is_valid():
+		runtime._fault(
+			EQError.EFFECT_COMMIT_RESULT_INVALID,
+			"transactional effect handler returned an invalid result",
+			{
+				"effect": String(name),
+				"issues": validation.codes().map(func(code): return String(code)),
+			},
+			true
+		)
+		return _invalid_effect_commit_failure(name, EQError.EFFECT_COMMIT_RESULT_INVALID)
+	return result
+
+
+func _invalid_effect_commit_failure(name: StringName, code: StringName) -> EQEffectCommitResult:
+	return EQEffectCommitResult.make_failure({"code": String(code), "effect": String(name)})
+
+
+## §6.1 legacy linkage: empty = effect-less; set-but-unregistered = stable
+## error (dev halt / shipped skip), never a silent skip. A transactional
+## handler is never invoked through this helper in an unsupported context.
+func _apply_effect(name: StringName, view: Dictionary, context: StringName = &"legacy") -> Array:
 	if name == &"":
 		return []
 	if not runtime.has_effect(name):
 		runtime._fault(EQError.EFFECT_UNREGISTERED, "effect '%s' has no registered handler" % name, {"effect": String(name)}, true)
+		return []
+	if runtime.effect_commit_result_version(name) > 0:
+		runtime._fault(
+			EQError.EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED,
+			"transactional effect handler reached an unsupported context",
+			{"effect": String(name), "context": String(context)},
+			true
+		)
 		return []
 	var out = (runtime.effects()[name] as Callable).call(view)
 	return out if out is Array else []
@@ -1670,6 +2071,12 @@ func _trace_invalidated(event_id: int, actor_id: StringName, closed_by: StringNa
 ## An OPERATION reservation, on resolving, makes its target hold a reaction
 ## reservation tagged with the operation's target tag.
 func _cause_target_reservation(op_res: EQReservation) -> void:
+	# The effect handler may have removed/defeated the target through the normal
+	# actor lifecycle. Do not arm a reservation owned by an absent actor; this is
+	# local scheduling hygiene, not a game-level rule about what defeat means.
+	if not runtime.registry.is_registered(op_res.target_id):
+		_trace_invalidated(-1, op_res.target_id, &"actor_removed")
+		return
 	var def := EQActionDefinition.new()
 	def.kind = EQActionDefinition.Kind.REACTION_PREPARATION
 	def.duration = EQActionDefinition.DURATION_UNLIMITED
@@ -1682,6 +2089,18 @@ func _cause_target_reservation(op_res: EQReservation) -> void:
 		"meta_level": int(op_res.definition.meta_level if op_res.definition != null else 0),
 	})
 	submit(caused)
+
+
+func _resubmit_rumination(res: EQReservation) -> void:
+	# A successful effect remains successful even when it removes its source.
+	# Only the implicit future repetitions are cancelled; current records and
+	# the current outer sweep continue normally.
+	if not runtime.registry.is_registered(res.actor_id):
+		res.remaining_ruminations = 0
+		_trace_invalidated(-1, res.actor_id, &"actor_removed")
+		return
+	res.remaining_ruminations -= 1
+	submit(res)
 
 
 ## Reaction preparations currently armed for an actor.

@@ -15,9 +15,9 @@ extends RefCounted
 ## Recoverability classes — mirror RUNTIME_RESILIENCE_POLICY §1 exactly.
 enum Recoverability {
 	CONTRACT_VIOLATION,  ## dead-actor reservation, unknown schema_version, invalid base_type
-	BUDGET_EXCEEDED,     ## reentrancy depth / reaction-chain limit
-	RESOURCE_INVALID,    ## missing policy, ambiguous tie-breaker
-	EXTERNAL_STATE,      ## actor node freed, WeakRef expired
+	BUDGET_EXCEEDED,  ## reentrancy depth / reaction-chain limit
+	RESOURCE_INVALID,  ## missing policy, ambiguous tie-breaker
+	EXTERNAL_STATE,  ## actor node freed, WeakRef expired
 }
 
 enum Severity { WARNING, ERROR }
@@ -57,43 +57,165 @@ const WINDOW_CLOSE_INVALID := &"eqm.window.close_invalid"
 const WINDOW_COMMIT_CONFLICT := &"eqm.window.commit_conflict"
 const ORDER_HOOK_INVALID := &"eqm.order.hook_invalid"
 const SAVE_BLOCKED := &"eqm.save.blocked"
+const EFFECT_COMMIT_RESULT_INVALID := &"eqm.effect.commit_result_invalid"
+const EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED := &"eqm.effect.commit_result_version_unsupported"
+const EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED := &"eqm.effect.commit_result_context_unsupported"
+const EFFECT_COMMIT_RESULT_BINDING_MISMATCH := &"eqm.effect.commit_result_binding_mismatch"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
-	POLICY_MISSING: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	POLICY_BASE_INSTANCE: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	TIE_BREAK_AMBIGUOUS: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	TIE_BREAK_UNKNOWN: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	POLICY_NAME_EMPTY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.WARNING, "surface": ["editor"]},
-	ACTOR_DUPLICATE_ID: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	ACTOR_ID_REUSED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	ACTOR_EMPTY_ID: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	ACTION_NEGATIVE_DELAY: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	ACTION_NEGATIVE_COST: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RUNTIME_UNREGISTERED_ACTOR_EVENT: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RUNTIME_SCHEDULE_UNREGISTERED_ACTOR: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RESERVATION_NEGATIVE_DELAY: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RESERVATION_IMMEDIATE_NONZERO_DELAY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RESERVATION_PREPARED_ZERO_DELAY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RESERVATION_NEGATIVE_RUMINATION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RESERVATION_INVALID_DURATION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RESERVATION_REACTION_NEEDS_DURATION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RESERVATION_OPERATION_NEEDS_TARGET: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	RESERVATION_MISSING_DEFINITION: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	TRIGGER_CHAIN_LIMIT: {"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	PRESENTATION_POLICY_CLASS_CONFLICT: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	CONDITION_LINE_ID_EMPTY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	CONDITION_PREDICATE_NAME_EMPTY: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	CONDITION_COUNTER_START_INVALID: {"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	CONDITION_PREDICATE_UNREGISTERED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	CONDITION_LINE_UNKNOWN: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	EFFECT_UNREGISTERED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	WINDOW_DEPTH_LIMIT: {"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	WINDOW_BUDGET_INSUFFICIENT: {"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	WINDOW_CLOSE_INVALID: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	WINDOW_COMMIT_CONFLICT: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	ORDER_HOOK_INVALID: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
-	SAVE_BLOCKED: {"rec": Recoverability.CONTRACT_VIOLATION, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	POLICY_MISSING:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	POLICY_BASE_INSTANCE:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	TIE_BREAK_AMBIGUOUS:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	TIE_BREAK_UNKNOWN:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	POLICY_NAME_EMPTY:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.WARNING, "surface": ["editor"]},
+	ACTOR_DUPLICATE_ID:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	ACTOR_ID_REUSED:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	ACTOR_EMPTY_ID:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	ACTION_NEGATIVE_DELAY:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	ACTION_NEGATIVE_COST:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RUNTIME_UNREGISTERED_ACTOR_EVENT:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	RUNTIME_SCHEDULE_UNREGISTERED_ACTOR:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	RESERVATION_NEGATIVE_DELAY:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	RESERVATION_IMMEDIATE_NONZERO_DELAY:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_PREPARED_ZERO_DELAY:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_NEGATIVE_RUMINATION:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_INVALID_DURATION:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_REACTION_NEEDS_DURATION:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_OPERATION_NEEDS_TARGET:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	RESERVATION_MISSING_DEFINITION:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	TRIGGER_CHAIN_LIMIT:
+	{"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	PRESENTATION_POLICY_CLASS_CONFLICT:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_LINE_ID_EMPTY:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_PREDICATE_NAME_EMPTY:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_COUNTER_START_INVALID:
+	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	CONDITION_PREDICATE_UNREGISTERED:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	CONDITION_LINE_UNKNOWN:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	EFFECT_UNREGISTERED:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	WINDOW_DEPTH_LIMIT:
+	{"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	WINDOW_BUDGET_INSUFFICIENT:
+	{"rec": Recoverability.BUDGET_EXCEEDED, "sev": Severity.ERROR, "surface": ["editor", "game"]},
+	WINDOW_CLOSE_INVALID:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	WINDOW_COMMIT_CONFLICT:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	ORDER_HOOK_INVALID:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	SAVE_BLOCKED:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	EFFECT_COMMIT_RESULT_INVALID:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	EFFECT_COMMIT_RESULT_BINDING_MISMATCH:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
 }
 
 

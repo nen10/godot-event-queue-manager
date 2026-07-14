@@ -51,7 +51,7 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.reservation.negative_rumination` | RESOURCE_INVALID | ERROR | editor, game | `rumination < 0` |
 | `eqm.reservation.invalid_duration` | RESOURCE_INVALID | ERROR | editor, game | `duration < -1` (-1 = unlimited) |
 | `eqm.reservation.reaction_needs_duration` | RESOURCE_INVALID | ERROR | editor, game | REACTION_PREPARATION with duration 0 |
-| `eqm.reservation.operation_needs_target` | RESOURCE_INVALID | ERROR | editor, game | OPERATION with empty `operation_target_tag` |
+| `eqm.reservation.operation_needs_target` | RESOURCE_INVALID | ERROR | editor, game | OPERATION with empty definition `operation_target_tag`, or an empty reservation `target_id` at submit |
 | `eqm.reservation.missing_definition` | RESOURCE_INVALID | ERROR | editor, game | `EQReservation` has no definition |
 | `eqm.trigger.chain_limit` | BUDGET_EXCEEDED | ERROR | editor, game | a trigger cascade exceeded `EQTriggerEngine.max_chain` (chain truncated, recorded) |
 | `eqm.presentation.policy_class_conflict` | RESOURCE_INVALID | ERROR | editor, game | a classification appears in both immediate and skip classes (EQM-081; row backfilled by EQM-111) |
@@ -67,6 +67,10 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.window.commit_conflict` | CONTRACT_VIOLATION | ERROR | editor, game | close_window(commit) while the live scheduler changed since open — commit would clobber; the draft rolls back instead (EQM-114 POLICY) |
 | `eqm.order.hook_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | the ordering hook returned a non-permutation (wrong length / duplicate / out of range); issuance order is used and the fault recorded (SEM §7.1, EQM-115) |
 | `eqm.save.blocked` | CONTRACT_VIOLATION | ERROR | editor, game | save requested off the boundary (effect chunk non-empty or an explicit window open) — SEM §10, no force flag (EQM-117) |
+| `eqm.effect.commit_result_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | a handler registered through `register_effect_commit` returned a non-`EQEffectCommitResult` value or a result whose records / event views / diagnostic failed value validation |
+| `eqm.effect.commit_result_version_unsupported` | CONTRACT_VIOLATION | ERROR | editor, game | transactional effect-result registration/return used an unsupported version; schema-v4 reservation omitted a required binding (`reason: missing_binding`); or schema v1-v3 carried a nonzero binding (`reason: binding_not_supported_by_schema`); load rejects before mutation |
+| `eqm.effect.commit_result_context_unsupported` | CONTRACT_VIOLATION | ERROR | editor, game | transactional effect-result v1 was declared or encountered in an atomic bundle or expiry-effect context, where rollback cannot be guaranteed |
+| `eqm.effect.commit_result_binding_mismatch` | CONTRACT_VIOLATION | ERROR | editor, game | an issued or loaded reservation's bound main/expiry handler mode (0 legacy / 1 typed) differs from the current named-effect registry; the replacement handler is not invoked |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

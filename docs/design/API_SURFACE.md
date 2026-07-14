@@ -17,7 +17,7 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 
 | layer | meaning | classes |
 |---|---|---|
-| `core` | foundational infra below the user layers | EQEntry, EQOrdering, EQScheduler, EQBackend, EQSortedArrayBackend, EQBinaryHeapBackend, EQSnapshot, EQTrace, EQError, EQValidation, EQVersion, EQRng, EQEffectRecord, EQEffectChunk, EQOrderExplanation |
+| `core` | foundational infra below the user layers | EQEntry, EQOrdering, EQScheduler, EQBackend, EQSortedArrayBackend, EQBinaryHeapBackend, EQSnapshot, EQTrace, EQError, EQValidation, EQVersion, EQRng, EQEffectRecord, EQEffectChunk, EQEffectCommitResult, EQOrderExplanation |
 | `L0` | turn order ("who acts next") | EQRuntime, EQActorRegistry, EQActorState, EQActionResult, EQManager, EQPrediction, EQSaveAdapter, EQNodeBridge |
 | `L1` | policy selection | EQConfig, EQPolicy, EQFixedRoundPolicy, EQCTBPolicy, EQEnergyPolicy, EQWaitTurnPolicy |
 | `L2` | reservation / prepared actions | EQActionDefinition, EQReservation, EQReservationRuntime, EQActionResolutionPolicy, EQCondition, EQTagMatcher, EQTriggerEngine, EQTransaction, EQTriggerIndex, EQConditionSpec (EQM-111), EQConditionEval (EQM-111), EQWindow (EQM-114) |
@@ -25,7 +25,9 @@ The user-facing surface is layered so a simple-path user never meets deep machin
 
 EQM-129 surface note: `EQRelationGraph.expand` (決定的 BFS の公開 helper — pipeline 2a と wrapper 連鎖が共用) / `EQStateAlgebra.relations` (optional 接続) / wrapper dict の optional `kind` (標準 2 種: inv_chain / relation_chain, SEM v1.2 §5.7)。
 
-EQM-127 surface note: `EQReservationRuntime.state_algebra` (optional 接続) / save bundle schema_version 3 (relations / state_algebra additive tables, SEM v1.2 §10.1)。
+Transactional effect-result v1 surface note: `EQEffectCommitResult` is a core value contract with `make_success(records, event_views)` / `make_failure(diagnostic)`, `validate()`, and read-only projections. `EQRuntime.register_effect_commit(name, handler, result_version=1)` marks a named handler as typed while `register_effect` stays the legacy Array path; `effect_commit_result_version(name)` distinguishes them. `EQReservationRuntime.last_effect_commit_outcome()` returns a deep-copy value snapshot of the most recent single-reservation attempt. `EQReservation.effect_commit_result_version` / `expiry_effect_commit_result_version` are instance bindings: -1 before first submission, then frozen to 0 legacy or 1 typed. Save-bundle schema v4 writes both fields for every serialized reservation; the v4 reader migrates missing v1-v3 fields to legacy 0, rejects explicit nonzero bindings under v1-v3, and rejects a v4 payload missing either field before mutation. Typed v1 is rejected for bundle and expiry contexts (SEM §6.1, §10.2).
+
+EQM-127 historical schema note: save-bundle schema_version 3 introduced the additive `relations` / `state_algebra` tables via optional `EQReservationRuntime.state_algebra` attachment; current schema v4 retains those tables unchanged (SEM v1.2 §10.1)。
 
 EQM-126 surface note: `EQReservationRuntime.open_phase` / `close_phase` / `current_window` (操作フェーズ sub-checkpoint, SEM v1.2 §8.4)。
 

@@ -33,7 +33,8 @@ LAYER_MAP = {
     "EQBackend": "core", "EQSortedArrayBackend": "core", "EQBinaryHeapBackend": "core",
     "EQSnapshot": "core", "EQTrace": "core",
     "EQError": "core", "EQValidation": "core", "EQVersion": "core", "EQRng": "core",
-    "EQEffectRecord": "core", "EQEffectChunk": "core", "EQOrderExplanation": "core",
+    "EQEffectRecord": "core", "EQEffectChunk": "core", "EQEffectCommitResult": "core",
+    "EQOrderExplanation": "core",
     # presentation (simulation/presentation split — must not leak into L0/L1)
     "EQPresentationEvent": "presentation",
     "EQPresentationPolicy": "presentation", "EQPresentationBuffer": "presentation",

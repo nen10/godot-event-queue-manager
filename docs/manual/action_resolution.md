@@ -134,5 +134,46 @@ rr.submit(load("res://.../counterattack_preparation.tres") as EQActionDefinition
 - **Fired reactions are scheduled**, never resolved in place — the master timeline
   stays the only resolution authority, and every step is in the trace.
 
+Use the transactional result v1 when one handler must publish external state
+once and then expose several ordered event views at one outer sweep boundary:
+
+```gdscript
+rr.runtime.register_effect_commit(&"transactional", func(view):
+    var candidate := EQEffectCommitResult.make_success(records, ordered_event_views)
+    var validation := candidate.validate() # pure gate before the world swap
+    if not validation.is_valid():
+        return EQEffectCommitResult.make_failure({"code": "consumer.invalid_candidate"})
+    commit_candidate_state_once()
+    return candidate
+)
+```
+
+Only SUCCESS appends records and sweeps its ordered views as one batch. FAILURE
+has zero records and zero sweeps; inspect a deep-copy snapshot through
+`last_effect_commit_outcome()`. Version 1 is limited to one reservation's main
+effect and is explicitly rejected for atomic bundle members and
+`expiry_effect_name`; those contexts retain the legacy Array handler contract.
+The first accepted submit stores both handler modes on the reservation (0 legacy
+/ 1 typed). Save/load and resolution verify those bindings, so changing a named
+handler from legacy to typed or vice versa cannot reinterpret pending work; use
+the stable `eqm.effect.commit_result_binding_mismatch` to surface that setup
+error. Schema v1-v3 saves with no binding fields remain legacy.
+The current schema-v4 writer always emits both binding fields. Its reader
+migrates missing fields only for schema v1-v3 bundles (to legacy 0); a v4
+reservation missing either field is rejected before load mutation with
+`eqm.effect.commit_result_version_unsupported`. A v3 reader rejects the v4
+bundle at the top-level version boundary, so it cannot silently ignore typed
+bindings. The current reader also rejects any explicit nonzero binding under a
+v1-v3 top-level version (`reason: binding_not_supported_by_schema`), so changing
+only that version cannot bypass the boundary.
+
+An OPERATION target must be non-empty and registered when submitted. After that
+valid issuance, an effect may remove an actor and still finish its current
+records and outer sweep. EQM only cancels implicit future work that would
+otherwise have an absent owner: non-reaction rumination resubmission and
+OPERATION-caused target arms for a target that has since departed.
+This guard does not define "defeated" for the game; keep an entity registered if
+the game's defeat rules still need it to participate.
+
 The hand-wired `run_trace()` in the dogfood slice predates this path and remains
 as a contrast; `run_l2_trace()` in the same file is the natural-path reference.

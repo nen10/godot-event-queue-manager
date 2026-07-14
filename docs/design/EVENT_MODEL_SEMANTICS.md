@@ -1,6 +1,6 @@
 # Event Model Semantics (v1)
 
-status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
+status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. **Transactional effect-result revision (2026-07-14)**: issued handler modes are persisted by save-bundle schema v4 (§6.1, §10.2). Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
 
 Inputs (confirmed):
 
@@ -194,12 +194,18 @@ The **sweep point** is the **collection window after each event resolves**. Trig
 One resolution follows exactly this sequence. `EQRuntime.advance` and the reservation pipeline are unified onto it (EQM-113); every mechanism (conditions, event-lines, triggers, chunk, trace) attaches here and nowhere else:
 
 1. **pop** — the scheduler pops the next event; lazy invalidation is evaluated (`invalid_event_skipped` / `closed_by` recorded).
-2. **effect** — if the event's definition declares `effect_name`, the runtime calls the registered effect handler (`register_effect(name, callable)`, same registry mechanism as §5.5) with a serializable event view; it returns `Array[EQEffectRecord]`.
-3. **chunk** — the returned records are appended to the effect-processing-chunk (this mechanizes §10's "appended at resolution time").
-4. **sweep** — triggers are collected/armed/fired (§6.2), numerical (event-line) invalidation conditions are re-checked, and event / event-line issuance and re-rates emitted by the resolution are applied (§5.4 key assignment).
+2. **effect** — if the event's definition declares `effect_name`, the runtime calls its named handler with a serializable event view. The compatibility registration `register_effect(name, callable)` returns `Array[EQEffectRecord]`. The additive transactional registration `register_effect_commit(name, callable, result_version=1)` returns `EQEffectCommitResult`: versioned `SUCCESS {records, event_views}` or `FAILURE {diagnostic}`.
+3. **chunk** — compatibility records, or a transactional SUCCESS's records, are appended to the effect-processing-chunk (this mechanizes §10's "appended at resolution time"). A transactional FAILURE appends zero records.
+4. **sweep** — compatibility handlers sweep the raw reservation view exactly as before. A transactional SUCCESS gives its ordered `event_views` to exactly one outer batch boundary; the views are evaluated in order but their reactions are scheduled only after the whole batch is collected. A transactional FAILURE performs zero sweeps. At a performed boundary, triggers are collected/armed/fired (§6.2), numerical (event-line) invalidation conditions are re-checked, and event / event-line issuance and re-rates emitted by the resolution are applied (§5.4 key assignment).
 5. **trace → drain** — the trace records the step; the chunk is drained; chunk-empty = the save boundary (§10). Next event.
 
 **Effect callback is optional, with declared linkage** (Q31 reconciliation): `EQActionDefinition.effect_name: StringName` is optional. Empty = explicitly effect-less resolution (legal — WAIT/READY, and the whole L0/L1 `finish_action` style where the developer applies game state at the await boundary; the simple path is never forced through a callback). **Set-but-unregistered is a stable error** — never a silent skip. Manageability comes from the guarantee "declared ⇒ wired": docs/templates/dogfood present the named-effect path as the natural L2 path, because chunk-based save strictness, effect-level trace, and presentation records all flow from it.
+
+**Transactional-result v1 boundary**: `EQEffectCommitResult` is game-vocabulary-neutral and its SUCCESS records / event views and FAILURE diagnostic must be serializable value data. The runtime validates the complete result before appending its first record. Version 1 is supported only for the main effect of one reservation. It is explicitly rejected for an atomic bundle member and for `expiry_effect_name`: invoking members sequentially cannot roll back an earlier handler's external publication when a later member fails, and expiry closure has a different lifecycle boundary. The legacy Array contract remains supported for bundles and expiry unchanged. A handler must use `register_effect_commit`; returning the typed value from `register_effect` does not opt into transactional semantics.
+
+**Issued-handler-mode binding**: on the first accepted submit, each reservation captures both named-effect registry modes (`effect_commit_result_version` / `expiry_effect_commit_result_version`: 0 legacy Array, 1 typed result). Save-bundle schema v4 writes both values, and they are checked again before a single, bundle, or expiry resolution and during verify-before-mutate load. Replacing a registered Callable while retaining its mode is legal; swapping legacy ↔ typed rejects with `eqm.effect.commit_result_binding_mismatch` before either replacement handler is called. The v4 reader migrates v1-v3 reservation dictionaries missing the fields to 0, so historical saves keep their legacy meaning. Missing bindings in a v4 payload are malformed and reject with `eqm.effect.commit_result_version_unsupported` before state mutation (§10.2).
+
+**Actor departure during an effect**: an OPERATION requires a non-empty, registered target when submitted; empty/unknown targets are issue-time contract errors, not departures. After valid issuance, a successful handler may remove actors through the normal lifecycle without changing the meaning of the current SUCCESS — its records and outer sweep still complete. Only implicit future work is guarded: non-reaction rumination is cancelled when its owner is no longer registered, and an OPERATION does not ghost-arm its caused reservation when that previously valid target has since departed. These are scheduling/lifecycle guards; EQM does not declare what defeat means, and a consumer may keep a defeated game entity registered when its GAME rules require further effects.
 
 Consumer implementation points are exactly: the named effect handlers, (optional) the §7.1 ordering hook, (optional) named predicates (§5.5) and sweep rules (§4.7).
 
@@ -211,7 +217,7 @@ A **cascade** is therefore the repetition "sweep → fire → schedule → resol
 
 ### 6.3 Expiry is an event *(v1.1, Q40; Q06 是正)*
 
-Arming a duration-limited reservation schedules an **expiry event** at `due_tick = armed_at + duration` (duration = ∞ schedules none). On resolution: if the target is still armed, it is closed with `closed_by: duration` and the optional on-expiry effect runs through §6.1; if it was already closed (e.g. by reaction count), the expiry event drops with a lightweight `closed_by: already_closed` record. Reaction-count exhaustion uses the same vocabulary (`closed_by: reaction_count`). Silent removal of an armed reaction is forbidden.
+Arming a duration-limited reservation schedules an **expiry event** at `due_tick = armed_at + duration` (duration = ∞ schedules none). On resolution: if the target is still armed, it is closed with `closed_by: duration` and the optional legacy Array-returning on-expiry effect runs through §6.1; transactional-result v1 is excluded as stated in §6.1. If it was already closed (e.g. by reaction count), the expiry event drops with a lightweight `closed_by: already_closed` record. Reaction-count exhaustion uses the same vocabulary (`closed_by: reaction_count`). Silent removal of an armed reaction is forbidden.
 
 ### 6.4 Resolution-stage rewrites: target expansion and effect pattern transforms *(v1.2, Q48/Q52)*
 
@@ -323,6 +329,21 @@ Deep OPERATION nesting (共鳴の 4 段階解決, 鏡面/水鏡の再帰的追�
 ### 10.1 Snapshot schema v3 (reserved) *(v1.2)*
 
 The v1.2 machinery adds state that must survive save/replay. **Schema_version 3** is reserved with the same compatibility pattern as v2 (Q41): additive tables `line_modifiers` (§4.8), `relations` (§13.1), `phase_checkpoints` (§8.4), with state wrappers (§5.7) inline on state entries and provenance chains (§6.5) inline on events. A v2 bundle loads via a v2→v3 migrator (missing tables = empty); a v3 bundle in a v2 implementation is a stable error. Owned by EQM-127 (replay proof: roundtrip across modifiers / relations / provenance / checkpoints → identical pop order + identical trace).
+
+### 10.2 Snapshot schema v4 — effect-result bindings
+
+Schema_version 4 makes the issued-handler-mode contract in §6.1 explicit on
+disk. Its writer includes `effect_commit_result_version` and
+`expiry_effect_commit_result_version` in every serialized reservation. The
+current reader migrates v1-v3 dictionaries that lack these fields to legacy
+mode `0`; this is the only missing-field migration. Schema v1-v3 can represent
+only binding `0`, so an explicit nonzero binding rejects verify-before-mutate
+with `reason: binding_not_supported_by_schema`. This prevents a typed v4 bundle
+from becoming acceptable when only its top-level version is rewritten. A v4 reservation missing
+either binding is rejected verify-before-mutate with
+`eqm.effect.commit_result_version_unsupported` and `reason: missing_binding`.
+A v3 reader rejects a v4 bundle from the top-level `schema_version`, so it never
+silently ignores the bindings and reinterprets pending typed work.
 
 ---
 

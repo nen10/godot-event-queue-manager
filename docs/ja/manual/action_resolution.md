@@ -110,5 +110,41 @@ rr.submit(load("res://.../counterattack_preparation.tres") ...)
 - **発火した反応は schedule されます** (その場で解決しない) — master timeline が唯一の
   解決権威のまま、全 step が trace に残ります。
 
+外部 state のtransactionを handler 内で一度だけcommitし、その成功時に作った複数の
+event viewを一つのouter sweepへ渡す場合は、型付きv1を登録します。
+
+```gdscript
+rr.runtime.register_effect_commit(&"transactional", func(view):
+    var candidate := EQEffectCommitResult.make_success(records, ordered_event_views)
+    var validation := candidate.validate() # world swap前のpure gate
+    if not validation.is_valid():
+        return EQEffectCommitResult.make_failure({"code": "consumer.invalid_candidate"})
+    commit_candidate_state_once()
+    return candidate
+)
+```
+
+`SUCCESS`だけがrecordsをchunkへ積み、ordered event viewsを一つのbatch境界でsweepします。
+`FAILURE {diagnostic}`はrecords 0件・sweep 0回です。直近結果は
+`last_effect_commit_outcome()` のdeep copyから観測できます。v1は単一予約のmain effect専用で、
+atomic bundle memberと`expiry_effect_name`では明示的に拒否されます。これら二つのcontextは
+既存Array handlerだけを使用してください。
+初回のaccepted submitはmain／expiry両handlerのmode（0 legacy / 1 typed）をreservationへ
+保存します。save/loadとresolutionはこのbindingを再検査するため、pending workを残したまま
+named handlerをlegacy↔typedへ変更して意味をすり替えることはできません。不一致は
+`eqm.effect.commit_result_binding_mismatch`で通知され、binding fieldのないschema v1-v3 saveはlegacyのままです。
+current schema v4 writerは両binding fieldを必ず書きます。readerが欠落fieldをlegacy 0へ
+migrateするのはschema v1-v3だけです。v4 reservationでどちらかが欠ける場合は
+`eqm.effect.commit_result_version_unsupported`としてstate適用前に拒否します。v3 readerは
+top-level versionでv4 bundle全体を拒否するため、typed bindingを無視して解釈し直しません。
+current readerもschema v1-v3で明示されたnonzero bindingを
+`reason: binding_not_supported_by_schema`で拒否するため、top-level versionだけを書き換えても回避できません。
+
+OPERATION targetはsubmit時点でnon-emptyかつregisteredでなければなりません。有効に発行された
+後でeffectがactorを除去しても、現在のrecordsとouter sweepは完了します。EQMが止めるのはownerが
+不在になった暗黙のfuture work（non-reaction ruminationの再submitと、その後離脱したtargetへ
+OPERATIONがcaused armする処理）だけです。このguardはGAME上の「撃破」を定義しません。撃破後も関与する
+GAME ruleなら、そのentityをregisteredのままにできます。
+
 dogfood の手動配線 `run_trace()` はこの path 以前の対照であり、同 file の
 `run_l2_trace()` が natural path のリファレンスです。

@@ -18,12 +18,29 @@
 > `relations` and `state_algebra` tables are added for L3 extension support
 > (relation graph / state stack algebra, SEM §13.1 / §5.7). No migration is
 > needed in this seam: missing tables are treated as empty. A v3 bundle is
-> rejected by a v1/v2 reader because of `schema_version`, while a future
-> `>4` reader is rejected by the same fail-safe boundary in this release.
+> rejected by a v1/v2 reader because of `schema_version`, while a bundle newer
+> than v3 is rejected by the same fail-safe boundary in the v3 reader.
 > Verification of v3 tables is verify-before-mutate:
 > `relations` / `state_algebra` are accepted only when the runtime has
 > corresponding optional attachment, relation maintenance predicates are
 > registered, and then restores are in-place (`restore`, not `from_dict`).
+
+> **Transactional effect-result binding (2026-07-14): bundle
+> `SCHEMA_VERSION` is now 4.** Every reservation written by the v4 writer
+> carries `effect_commit_result_version` and
+> `expiry_effect_commit_result_version`; these preserve whether each named
+> handler was issued as legacy Array mode (`0`) or typed-result mode (`1`).
+> The v4 reader migrates v1-v3 reservation dictionaries that lack either field
+> by assigning legacy mode `0`. Versions 1-3 can only express legacy mode:
+> explicitly supplied nonzero bindings are rejected as
+> `binding_not_supported_by_schema`, preventing a v4 typed bundle from being
+> accepted after only its top-level version is rewritten. A v4 payload must
+> contain both fields for every
+> serialized reservation; a missing field is rejected verify-before-mutate as
+> `eqm.effect.commit_result_version_unsupported` (`reason: missing_binding`).
+> A v3 reader rejects the whole v4 bundle at the top-level `schema_version`
+> boundary. It therefore cannot ignore the new fields and silently reinterpret
+> pending typed work as legacy work.
 
 The serialized scheduler snapshot (`EQSnapshot`, `SCHEMA_VERSION = 1`) and the
 save bundle (`EQSaveAdapter`, `schema_version`) are the on-disk contracts a
@@ -34,7 +51,7 @@ game shipping on v1.0 knows what survives an addon upgrade.
 
 | option | chosen? | meaning here |
 |---|---|---|
-| **preserve** | ✅ within v1.x | `schema_version = 1` stays readable across every v1.x release (patch + minor). No field is removed or repurposed within v1.x; only additive, optional fields may appear, and a v1.0 reader ignores unknown keys it doesn't need. |
+| **preserve** | ✅ within v1.x | The original `schema_version = 1` remains readable by later v1.x readers. No field is removed or repurposed within one schema; when a new field must not be ignored by an older reader, the bundle version is bumped and the later reader supplies an explicit migration. |
 | **migrate** | ✅ on a breaking change | a breaking schema change bumps `SCHEMA_VERSION` (and the addon minor/major) and ships an explicit migrator + a changelog entry. A save is never silently reinterpreted under a new schema. |
 | **replace** | ❌ | the addon does not silently discard or overwrite an incompatible snapshot. Loading an unsupported version fails safe (below), leaving the consumer to decide. |
 | **defer** | ✅ cross-major tooling | a v1→v2 migration tool is deferred until a v2 schema actually exists; building it now would be speculative. The seam (`schema_version` + `is_supported_version`) is in place so it can be added without redesign. |
@@ -47,18 +64,24 @@ game shipping on v1.0 knows what survives an addon upgrade.
   (`RUNTIME_RESILIENCE_POLICY`): the consumer's game is not crashed, and a bad save
   is not silently half-loaded.
 - `EQSaveAdapter.load(...)` returns `false` on an unsupported `schema_version`
-  (tested, EQM-085), so a consumer can branch on it.
+  (tested, EQM-085), so a consumer can branch on it. The current v4 reader
+  accepts bundle versions 1 through 4. For v1-v3 only, absent effect-result
+  binding fields migrate to legacy `0`, but any explicit nonzero binding is
+  rejected; v4 requires both fields and rejects a malformed bundle before
+  applying any state.
 
 ## What a consumer can rely on at v1.0
 
 1. A save written by any v1.x release loads in any later v1.x release.
-2. A save written by a *newer* schema (a future v2) is rejected cleanly on an older
-   reader, never partially applied.
+2. A save written by a *newer* schema is rejected cleanly on an older reader,
+   never partially applied. In particular, a v3 reader rejects a v4 bundle at
+   the top-level version boundary.
 3. When a breaking change ships, it is a version bump with a documented migrator —
    the change is visible, not silent.
 
-## Out of scope for v1.0
+## Out of scope in the original v1.0 release
 
-- Automatic v1→v2 migration (no v2 schema exists; deferred).
+- Automatic v1→v2 migration (no v2 schema existed at that release; the later
+  migration history is recorded above).
 - Cross-engine-version snapshot portability beyond what Godot's own Variant
   serialization guarantees.

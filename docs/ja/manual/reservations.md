@@ -116,7 +116,7 @@ var algebra := EQStateAlgebra.new(rr.lines)
 algebra.declare_inv_pair(&"欠損", &"虚飾", EQStateAlgebra.Rule.CANCEL)  # 相殺 = 符号付き 1 軸
 algebra.grant_state(&"hero", &"欠損", 3)
 algebra.grant_state(&"hero", &"虚飾", 1)   # 軸は +2 (欠損 2 に相殺)
-rr.state_algebra = algebra                 # save (schema v3) に載せる接続
+rr.state_algebra = algebra                 # schema v3で導入、current schema v4でも保存
 ```
 
 規則は pair ごとに `CANCEL` (相殺) / `EXCLUDE` (排他: 付与時に対を解除) / `COEXIST` (共存)。
@@ -159,4 +159,8 @@ rr.open_phase(&"入力", [&"mirror.a"])  # 操作フェーズ checkpoint。同�
 
 ### save
 
-上記の状態はすべて schema v3 の save bundle に載る (`relations` / `state_algebra` は接続時のみ)。load は登録名の検証が先に走り、未登録の predicate/effect/sweep 名があると何も適用せず安定 error になる。
+schema v3で上記の`relations` / `state_algebra` tableを導入し、current schema v4も保持する。
+v4はさらに全reservationへmain／expiryのeffect-result mode bindingを両方書く。loadは登録名と
+v4必須bindingを先に検証し、安定error時は何も適用しない。current readerが欠落bindingを
+legacy 0へmigrateするのはschema v1-v3だけで、こらのversionに明示された
+nonzero bindingは拒否する。旧v3 readerはtop-level versionでv4を拒否する。

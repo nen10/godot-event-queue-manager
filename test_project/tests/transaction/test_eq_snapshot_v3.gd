@@ -2,9 +2,13 @@ extends RefCounted
 ## EQM-127: v3 snapshot compatibility with additive `relations` and
 ## `state_algebra` tables plus verify-before-mutate protections.
 
-const EQReservationRuntime := preload("res://addons/event_queue_manager/runtime/eq_reservation_runtime.gd")
+const EQReservationRuntime := preload(
+	"res://addons/event_queue_manager/runtime/eq_reservation_runtime.gd"
+)
 const EQReservation := preload("res://addons/event_queue_manager/runtime/eq_reservation.gd")
-const EQActionDefinition := preload("res://addons/event_queue_manager/resources/eq_action_definition.gd")
+const EQActionDefinition := preload(
+	"res://addons/event_queue_manager/resources/eq_action_definition.gd"
+)
 const EQConditionSpec := preload("res://addons/event_queue_manager/resources/eq_condition_spec.gd")
 const EQCondition := preload("res://addons/event_queue_manager/resources/eq_condition.gd")
 const EQEffectRecord := preload("res://addons/event_queue_manager/runtime/eq_effect_record.gd")
@@ -15,9 +19,9 @@ const EQError := preload("res://addons/event_queue_manager/runtime/eq_error.gd")
 
 
 static func run(t) -> void:
-	_test_v3_roundtrip(t)
-	_test_v2_bundle_without_new_tables(t)
-	_test_schema_v4_rejected(t)
+	_test_v3_tables_roundtrip(t)
+	_test_missing_v3_tables_migrate_empty(t)
+	_test_schema_v5_rejected(t)
 	_test_detached_relations_rejected(t)
 	_test_unregistered_maintenance_predicate_rejected(t)
 	_test_restore_does_not_emit_state_wrapped(t)
@@ -59,14 +63,17 @@ static func _pipeline_base() -> EQReservationRuntime:
 	return rr
 
 
-static func _attach_relation_graph(rr: EQReservationRuntime, maintenance_predicate: StringName) -> void:
+static func _attach_relation_graph(
+	rr: EQReservationRuntime, maintenance_predicate: StringName
+) -> void:
 	rr.relations = EQRelationGraph.new(rr.runtime.trace())
 	var type_decl := {
 		"name": &"ally",
 		"category": &"social",
 		"inverse": &"",
 		"structure": EQRelationGraph.Structure.GRAPH,
-		"maintenance": {
+		"maintenance":
+		{
 			"type": EQConditionSpec.Type.NAMED_PREDICATE,
 			"predicate_name": String(maintenance_predicate),
 		},
@@ -81,7 +88,9 @@ static func _attach_state_algebra(rr: EQReservationRuntime) -> void:
 	rr.state_algebra = EQStateAlgebra.new(rr.lines, rr.runtime.trace())
 	rr.state_algebra.declare_inv_pair(&"focus", &"exhausted", EQStateAlgebra.Rule.CANCEL)
 	rr.state_algebra.grant_state(&"hero", &"focus", 2)
-	rr.state_algebra.wrap_state(&"hero", &"focus", {"name": &"focus_shield", "params": {"depth": 2}})
+	rr.state_algebra.wrap_state(
+		&"hero", &"focus", {"name": &"focus_shield", "params": {"depth": 2}}
+	)
 
 
 static func _attach_modded_pending(rr: EQReservationRuntime) -> void:
@@ -99,7 +108,9 @@ static func _attach_modded_pending(rr: EQReservationRuntime) -> void:
 	rr.submit(pending_res)
 
 
-static func _pipeline_setup_v3(maintenance_predicate: StringName = &"v3_maintenance") -> EQReservationRuntime:
+static func _pipeline_setup_v3(
+	maintenance_predicate: StringName = &"v3_maintenance"
+) -> EQReservationRuntime:
 	var rr := _pipeline_base()
 	_attach_relation_graph(rr, maintenance_predicate)
 	_attach_state_algebra(rr)
@@ -107,23 +118,27 @@ static func _pipeline_setup_v3(maintenance_predicate: StringName = &"v3_maintena
 	return rr
 
 
-static func _loader_runtime(maintenance_predicate: StringName = StringName(), register_predicate: bool = true) -> EQReservationRuntime:
+static func _loader_runtime(
+	maintenance_predicate: StringName = StringName(), register_predicate: bool = true
+) -> EQReservationRuntime:
 	var rr := EQReservationRuntime.new()
 	rr.runtime.emit_engine_diagnostics = false
 	_register_handlers(rr)
 	if register_predicate and maintenance_predicate != StringName():
-		rr.runtime.register_predicate(maintenance_predicate, func(_ctx) -> bool:
-			return true)
+		rr.runtime.register_predicate(maintenance_predicate, func(_ctx) -> bool: return true)
 	rr.relations = EQRelationGraph.new(rr.runtime.trace())
 	rr.state_algebra = EQStateAlgebra.new(rr.lines, rr.runtime.trace())
 	return rr
 
 
 static func _register_handlers(rr: EQReservationRuntime) -> void:
-	rr.runtime.register_effect(&"strike", func(_v) -> Array:
-		var rec := EQEffectRecord.new()
-		rec.kind = &"strike"
-		return [rec])
+	rr.runtime.register_effect(
+		&"strike",
+		func(_v) -> Array:
+			var rec := EQEffectRecord.new()
+			rec.kind = &"strike"
+			return [rec]
+	)
 
 
 static func _continuation(rr: EQReservationRuntime) -> Array:
@@ -161,20 +176,43 @@ static func _has_trace_kind(trace_records: Array, want: String) -> bool:
 	return false
 
 
-static func _test_v3_roundtrip(t) -> void:
+static func _test_v3_tables_roundtrip(t) -> void:
 	var original := _pipeline_setup_v3()
 	var bundle := EQSaveAdapter.save(original.runtime, original)
-	t.ok(not bundle.is_empty(), "v3 bundle saves")
+	t.ok(not bundle.is_empty(), "the current bundle saves v3 relation/state tables")
 
 	var restored := _loader_runtime(&"v3_maintenance", true)
-	t.ok(EQSaveAdapter.load(restored.runtime, bundle, {}, restored), "v3 bundle loads with attached relation graph / state algebra")
-	t.eq(restored.armed_for(&"hero").size(), original.armed_for(&"hero").size(), "armed triggers survived")
-	t.eq(restored.pending_conditional().size(), original.pending_conditional().size(), "pending reservations survived")
+	t.ok(
+		EQSaveAdapter.load(restored.runtime, bundle, {}, restored),
+		"v3 tables load with attached relation graph / state algebra"
+	)
+	t.eq(
+		restored.armed_for(&"hero").size(),
+		original.armed_for(&"hero").size(),
+		"armed triggers survived"
+	)
+	t.eq(
+		restored.pending_conditional().size(),
+		original.pending_conditional().size(),
+		"pending reservations survived"
+	)
 	t.eq(restored.relations.to_dict(), original.relations.to_dict(), "relations table restored")
-	t.eq(restored.state_algebra.to_dict(), original.state_algebra.to_dict(), "state_algebra table restored")
+	t.eq(
+		restored.state_algebra.to_dict(),
+		original.state_algebra.to_dict(),
+		"state_algebra table restored"
+	)
 	t.eq(restored.lines.to_dict(), original.lines.to_dict(), "event_lines with modifiers restored")
-	t.eq(restored.state_algebra.stacks_of(&"hero", &"focus"), original.state_algebra.stacks_of(&"hero", &"focus"), "axis stack restored")
-	t.eq(_pending_provenance_list(restored), _pending_provenance_list(original), "provenance on pending reservations restored")
+	t.eq(
+		restored.state_algebra.stacks_of(&"hero", &"focus"),
+		original.state_algebra.stacks_of(&"hero", &"focus"),
+		"axis stack restored"
+	)
+	t.eq(
+		_pending_provenance_list(restored),
+		_pending_provenance_list(original),
+		"provenance on pending reservations restored"
+	)
 
 	var original_trace_start := original.runtime.trace().size()
 	var restored_trace_start := restored.runtime.trace().size()
@@ -184,10 +222,11 @@ static func _test_v3_roundtrip(t) -> void:
 	t.eq(
 		_trace_suffix_without_index(restored.runtime.trace().records(), restored_trace_start),
 		_trace_suffix_without_index(original.runtime.trace().records(), original_trace_start),
-		"continuation trace is identical")
+		"continuation trace is identical"
+	)
 
 
-static func _test_v2_bundle_without_new_tables(t) -> void:
+static func _test_missing_v3_tables_migrate_empty(t) -> void:
 	var rr := _pipeline_setup_v3()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
 	bundle.erase("relations")
@@ -198,38 +237,42 @@ static func _test_v2_bundle_without_new_tables(t) -> void:
 	_register_handlers(fresh)
 	var before_faults := fresh.runtime.faults.size()
 	var before_trace := fresh.runtime.trace().size()
-	t.ok(EQSaveAdapter.load(fresh.runtime, bundle, {}, fresh), "v2 bundle without new tables loads")
+	t.ok(EQSaveAdapter.load(fresh.runtime, bundle, {}, fresh), "missing v3 tables migrate to empty")
 	t.eq(fresh.runtime.faults.size(), before_faults, "missing tables do not create faults")
 	t.eq(fresh.runtime.trace().size(), before_trace, "missing tables do not create trace")
 	t.eq(fresh.relations, null, "missing relations table keeps runtime detached")
 	t.eq(fresh.state_algebra, null, "missing state_algebra table keeps runtime detached")
 
 
-static func _test_schema_v4_rejected(t) -> void:
+static func _test_schema_v5_rejected(t) -> void:
 	var rr := _pipeline_setup_v3()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
-	bundle["schema_version"] = 4
+	bundle["schema_version"] = 5
 
 	var fresh := EQReservationRuntime.new()
 	fresh.runtime.emit_engine_diagnostics = false
 	_register_handlers(fresh)
-	t.ok(not EQSaveAdapter.load(fresh.runtime, bundle, {}, fresh), "schema 4 is rejected")
+	t.ok(not EQSaveAdapter.load(fresh.runtime, bundle, {}, fresh), "schema 5 is rejected")
 
 
 static func _test_detached_relations_rejected(t) -> void:
 	var rr := _pipeline_setup_v3()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
 	bundle["relations"] = {
-		"relation_types": [{
-			"name": &"solo",
-			"category": &"social",
-			"inverse": &"",
-			"structure": EQRelationGraph.Structure.GRAPH,
-			"maintenance": null,
-			"sweep": &"eqm.sweep.primary_threshold",
-			"on_dissolve": EQRelationGraph.Dissolve.NONE,
-		}],
-		"relations": [{"relation_id": &"eqm.rel.1", "type": &"solo", "from": &"hero", "to": &"orc"}],
+		"relation_types":
+		[
+			{
+				"name": &"solo",
+				"category": &"social",
+				"inverse": &"",
+				"structure": EQRelationGraph.Structure.GRAPH,
+				"maintenance": null,
+				"sweep": &"eqm.sweep.primary_threshold",
+				"on_dissolve": EQRelationGraph.Dissolve.NONE,
+			}
+		],
+		"relations":
+		[{"relation_id": &"eqm.rel.1", "type": &"solo", "from": &"hero", "to": &"orc"}],
 		"relation_seq": 1,
 	}
 
@@ -238,8 +281,15 @@ static func _test_detached_relations_rejected(t) -> void:
 	var before := detached.runtime.scheduler.snapshot()
 	var before_lines := detached.lines.to_dict()
 	var before_faults := detached.runtime.faults.size()
-	t.ok(not EQSaveAdapter.load(detached.runtime, bundle, {}, detached), "non-empty relations table rejects detached runtime")
-	t.eq(detached.runtime.faults.back()["code"], EQError.CONDITION_LINE_UNKNOWN, "relation attachment is a stable error")
+	t.ok(
+		not EQSaveAdapter.load(detached.runtime, bundle, {}, detached),
+		"non-empty relations table rejects detached runtime"
+	)
+	t.eq(
+		detached.runtime.faults.back()["code"],
+		EQError.CONDITION_LINE_UNKNOWN,
+		"relation attachment is a stable error"
+	)
 	t.eq(detached.runtime.faults.size(), before_faults + 1, "exactly one fault is recorded")
 	t.eq(detached.runtime.scheduler.snapshot(), before, "load failure keeps scheduler state")
 	t.eq(detached.lines.to_dict(), before_lines, "load failure keeps event lines")
@@ -254,8 +304,15 @@ static func _test_unregistered_maintenance_predicate_rejected(t) -> void:
 	var before := fresh.runtime.scheduler.snapshot()
 	var before_lines := fresh.lines.to_dict()
 	var before_faults := fresh.runtime.faults.size()
-	t.ok(not EQSaveAdapter.load(fresh.runtime, bundle, {}, fresh), "unregistered maintenance predicate rejects the load")
-	t.eq(fresh.runtime.faults.back()["code"], EQError.CONDITION_PREDICATE_UNREGISTERED, "maintenance predicate is verified before mutation")
+	t.ok(
+		not EQSaveAdapter.load(fresh.runtime, bundle, {}, fresh),
+		"unregistered maintenance predicate rejects the load"
+	)
+	t.eq(
+		fresh.runtime.faults.back()["code"],
+		EQError.CONDITION_PREDICATE_UNREGISTERED,
+		"maintenance predicate is verified before mutation"
+	)
 	t.eq(fresh.runtime.faults.size(), before_faults + 1, "exactly one fault is recorded")
 	t.eq(fresh.runtime.scheduler.snapshot(), before, "load failure keeps scheduler state")
 	t.eq(fresh.lines.to_dict(), before_lines, "load failure keeps event lines")
@@ -267,5 +324,12 @@ static func _test_restore_does_not_emit_state_wrapped(t) -> void:
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
 
 	var restored := _loader_runtime(&"v3_maintenance", true)
-	t.ok(EQSaveAdapter.load(restored.runtime, bundle, {}, restored), "load succeeds for trace emission proof")
-	t.eq(_has_trace_kind(restored.runtime.trace().records(), "state_wrapped"), false, "state_wrapped trace is not emitted during restore")
+	t.ok(
+		EQSaveAdapter.load(restored.runtime, bundle, {}, restored),
+		"load succeeds for trace emission proof"
+	)
+	t.eq(
+		_has_trace_kind(restored.runtime.trace().records(), "state_wrapped"),
+		false,
+		"state_wrapped trace is not emitted during restore"
+	)

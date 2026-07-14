@@ -7,9 +7,9 @@ extends RefCounted
 ## Serializable: to_dict inlines the definition by value and never stores a live
 ## Node reference (Adapter rule), so a snapshot survives save/load.
 
-const EQActionDefinition := preload("../resources/eq_action_definition.gd")
-
 enum Status { PENDING, ARMED, RESOLVED, INVALIDATED }
+
+const EQActionDefinition := preload("../resources/eq_action_definition.gd")
 
 var actor_id: StringName = &""
 var definition: EQActionDefinition
@@ -23,6 +23,12 @@ var status: int = Status.PENDING
 ## Countdowns initialised from the definition; consumed by the pipeline (EQM-051/062).
 var remaining_ruminations: int = 0
 var remaining_duration: int = 0
+## Named-effect registry contract versions captured on the first submit.
+## -1 = not submitted yet; 0 = legacy Array handler; 1 = typed commit result.
+## These are instance facts (not definition authoring fields) and cross saves so
+## a registry mode swap can never reinterpret an already-issued reservation.
+var effect_commit_result_version: int = -1
+var expiry_effect_commit_result_version: int = -1
 
 
 func _init(p_actor_id: StringName = &"", p_definition: EQActionDefinition = null) -> void:
@@ -41,6 +47,17 @@ func validate() -> EQValidation:
 	# delegate the schema checks, then add any instance-level ones
 	for issue in definition.validate().issues:
 		v.issues.append(issue)
+	for binding in [
+		["effect_commit_result_version", effect_commit_result_version],
+		["expiry_effect_commit_result_version", expiry_effect_commit_result_version],
+	]:
+		var version := int(binding[1])
+		if version < -1 or version > 1:
+			v.add(
+				EQError.EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED,
+				"%s must be -1 (unbound), 0 (legacy), or 1 (typed)" % binding[0],
+				{"field": binding[0], "version": version}
+			)
 	return v
 
 
@@ -53,6 +70,8 @@ func to_dict() -> Dictionary:
 		"status": status,
 		"remaining_ruminations": remaining_ruminations,
 		"remaining_duration": remaining_duration,
+		"effect_commit_result_version": effect_commit_result_version,
+		"expiry_effect_commit_result_version": expiry_effect_commit_result_version,
 		"provenance": provenance.duplicate(true),
 	}
 
@@ -68,6 +87,10 @@ static func from_dict(d: Dictionary) -> EQReservation:
 	r.status = int(d.get("status", Status.PENDING))
 	r.remaining_ruminations = int(d.get("remaining_ruminations", r.remaining_ruminations))
 	r.remaining_duration = int(d.get("remaining_duration", r.remaining_duration))
+	# Historical saves predate typed results and therefore bind to legacy (0),
+	# not to the fresh-instance sentinel (-1).
+	r.effect_commit_result_version = int(d.get("effect_commit_result_version", 0))
+	r.expiry_effect_commit_result_version = int(d.get("expiry_effect_commit_result_version", 0))
 	var provenance = d.get("provenance", [])
 	if provenance is Array:
 		r.provenance = provenance.duplicate(true)

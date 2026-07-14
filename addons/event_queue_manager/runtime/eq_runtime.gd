@@ -18,6 +18,7 @@ const EQScheduler := preload("eq_scheduler.gd")
 const EQActorRegistry := preload("eq_actor_registry.gd")
 const EQActionResult := preload("eq_action_result.gd")
 const EQTrace := preload("eq_trace.gd")
+const EQEffectCommitResult := preload("eq_effect_commit_result.gd")
 
 enum Mode { DEV, SHIPPED }
 
@@ -82,10 +83,13 @@ func predicates() -> Dictionary:
 
 # --- named effect registry (SEM §6.1, EQM-113) -----------------------------
 # Declared linkage: a reservation whose definition sets `effect_name` resolves
-# through the registered handler (view -> Array[EQEffectRecord]); set-but-
-# unregistered is a stable error (never a silent skip). Empty = effect-less.
+# through either the legacy handler (view -> Array[EQEffectRecord]) or the
+# versioned transactional handler registered by register_effect_commit().
+# Set-but-unregistered is a stable error (never a silent skip). Empty =
+# effect-less.
 
 var _effects: Dictionary = {}
+var _effect_commit_result_versions: Dictionary = {}
 
 
 ## Registers (or replaces — idempotent setup) a named effect handler.
@@ -94,11 +98,43 @@ func register_effect(name: StringName, handler: Callable) -> bool:
 		_fault(EQError.CONDITION_PREDICATE_NAME_EMPTY, "effect name must not be empty", {}, true)
 		return false
 	_effects[name] = handler
+	_effect_commit_result_versions.erase(name)
+	return true
+
+
+## Registers (or replaces) a transactional effect handler. The handler must
+## return EQEffectCommitResult at the declared version. Version 1 is supported
+## only for a single reservation's main effect; bundle and expiry contexts are
+## rejected by EQReservationRuntime before the handler is invoked.
+func register_effect_commit(
+	name: StringName,
+	handler: Callable,
+	result_version: int = EQEffectCommitResult.RESULT_VERSION
+) -> bool:
+	if name == &"":
+		_fault(EQError.CONDITION_PREDICATE_NAME_EMPTY, "effect name must not be empty", {}, true)
+		return false
+	if result_version != EQEffectCommitResult.RESULT_VERSION:
+		_fault(
+			EQError.EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED,
+			"effect commit result version %d is unsupported" % result_version,
+			{"effect": String(name), "result_version": result_version},
+			false
+		)
+		return false
+	_effects[name] = handler
+	_effect_commit_result_versions[name] = result_version
 	return true
 
 
 func has_effect(name: StringName) -> bool:
 	return _effects.has(name)
+
+
+## 0 identifies a legacy Array-returning handler; a positive value identifies
+## the registered EQEffectCommitResult contract version.
+func effect_commit_result_version(name: StringName) -> int:
+	return int(_effect_commit_result_versions.get(name, 0))
 
 
 ## A copy (same read-only rule as predicates()).

@@ -262,6 +262,7 @@
       "consts": [
         "EQActionResult",
         "EQActorRegistry",
+        "EQEffectCommitResult",
         "EQEntry",
         "EQScheduler",
         "EQTrace"
@@ -274,6 +275,11 @@
           "name": "advance",
           "params": "",
           "returns": "-> EQEntry"
+        },
+        {
+          "name": "effect_commit_result_version",
+          "params": "name: StringName",
+          "returns": "-> int"
         },
         {
           "name": "effects",
@@ -313,6 +319,11 @@
         {
           "name": "register_effect",
           "params": "name: StringName, handler: Callable",
+          "returns": "-> bool"
+        },
+        {
+          "name": "register_effect_commit",
+          "params": "name: StringName,\n\thandler: Callable,\n\tresult_version: int = EQEffectCommitResult.RESULT_VERSION",
           "returns": "-> bool"
         },
         {
@@ -733,7 +744,9 @@
       "vars": [
         "actor_id",
         "definition",
+        "effect_commit_result_version",
         "event_id",
+        "expiry_effect_commit_result_version",
         "provenance",
         "remaining_duration",
         "remaining_ruminations",
@@ -748,6 +761,7 @@
         "EQConditionEval",
         "EQConditionSpec",
         "EQEffectChunk",
+        "EQEffectCommitResult",
         "EQEventLines",
         "EQReservation",
         "EQRuntime",
@@ -802,6 +816,11 @@
           "name": "is_save_boundary",
           "params": "",
           "returns": "-> bool"
+        },
+        {
+          "name": "last_effect_commit_outcome",
+          "params": "",
+          "returns": "-> Dictionary"
         },
         {
           "name": "open_phase",
@@ -1506,6 +1525,71 @@
       "signals": [],
       "vars": []
     },
+    "EQEffectCommitResult": {
+      "consts": [
+        "EQEffectRecord",
+        "EQError",
+        "EQValidation",
+        "RESULT_VERSION",
+        "STATUS_FAILURE",
+        "STATUS_SUCCESS"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "diagnostic",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "event_views",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "is_failure",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "is_success",
+          "params": "",
+          "returns": "-> bool"
+        },
+        {
+          "name": "make_failure",
+          "params": "diagnostic: Dictionary",
+          "returns": ""
+        },
+        {
+          "name": "make_success",
+          "params": "records: Array, event_views: Array",
+          "returns": ""
+        },
+        {
+          "name": "records",
+          "params": "",
+          "returns": "-> Array"
+        },
+        {
+          "name": "to_dict",
+          "params": "",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "validate",
+          "params": "",
+          "returns": "-> EQValidation"
+        },
+        {
+          "name": "version",
+          "params": "",
+          "returns": "-> int"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
     "EQEffectRecord": {
       "consts": [
         "CLASS_IMPORTANT",
@@ -1585,6 +1669,10 @@
         "CONDITION_LINE_UNKNOWN",
         "CONDITION_PREDICATE_NAME_EMPTY",
         "CONDITION_PREDICATE_UNREGISTERED",
+        "EFFECT_COMMIT_RESULT_BINDING_MISMATCH",
+        "EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED",
+        "EFFECT_COMMIT_RESULT_INVALID",
+        "EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED",
         "EFFECT_UNREGISTERED",
         "ORDER_HOOK_INVALID",
         "POLICY_BASE_INSTANCE",
