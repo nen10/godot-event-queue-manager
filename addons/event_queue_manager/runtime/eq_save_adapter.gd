@@ -10,6 +10,12 @@ const EQSnapshot := preload("eq_snapshot.gd")
 ## is rebound to a live node via the `rebind` map (actor_id -> node). The node
 ## bridge (EQNodeBridge) is the usual source of that map.
 
+## v6: `reaction_expiries` owns every live reaction-expiry event independently
+## from armed membership. This preserves the stale expiry which must later emit
+## `closed_by: already_closed` after reaction-count exhaustion. v1-v5 armed
+## expiries migrate through `armed_triggers[].expiry_event_id`; a historical
+## orphan expiry is rejected because its reservation identity was never saved.
+##
 ## v5: every scheduled row carries `reaction_fire_context`; pending reaction
 ## FIRE rows require a valid context v1. Historical v1-v4 saves containing a
 ## pending reaction FIRE are rejected because its trigger cause cannot be
@@ -32,7 +38,7 @@ const EQSnapshot := preload("eq_snapshot.gd")
 # `event_lines` carries line modifiers and modifiers-only fields; line-level
 # provenance is serialized inside the reservation dicts. The phase-checkpoint
 # table that EQM-122 reserves remains boundary-gated to empty in this contract.
-const SCHEMA_VERSION := 5
+const SCHEMA_VERSION := 6
 
 
 ## A plain, node-free save bundle. With a pipeline (EQReservationRuntime), the
@@ -67,6 +73,7 @@ static func save(runtime, pipeline = null) -> Dictionary:
 					"event_lines": {},
 					"windows": [],
 					"armed_triggers": [],
+					"reaction_expiries": [],
 					"pending_conditional": [],
 					"scheduled_reservations": [],
 				}
@@ -83,7 +90,8 @@ static func save(runtime, pipeline = null) -> Dictionary:
 ## failed verification (runtime left as-is). v1 bundles load with empty tables;
 ## v1-v3 reservation dictionaries migrate missing effect-result bindings to 0
 ## but reject explicit nonzero bindings; schema v4+ requires both fields;
-## schema v5 requires the scheduled-row reaction context field.
+## schema v5 requires the scheduled-row reaction context field; schema v6
+## additionally requires the independent reaction-expiry table.
 static func load(into_runtime, data: Dictionary, rebind: Dictionary = {}, pipeline = null) -> bool:
 	var version := int(data.get("schema_version", -1))
 	if version < 1 or version > SCHEMA_VERSION:

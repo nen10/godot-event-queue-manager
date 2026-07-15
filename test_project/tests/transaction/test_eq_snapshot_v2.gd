@@ -104,9 +104,10 @@ static func _test_bundle_shape(t) -> void:
 	var rr := _pipeline_setup()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
 	var schema_version := int(bundle["schema_version"])
-	t.eq(schema_version, 5, "bundle saves at the current schema v5")
+	t.eq(schema_version, 6, "bundle saves at the current schema v6")
 	for key in [
-		"event_lines", "windows", "armed_triggers", "pending_conditional", "scheduled_reservations"
+		"event_lines", "windows", "armed_triggers", "reaction_expiries",
+		"pending_conditional", "scheduled_reservations"
 	]:
 		t.ok(bundle.has(key), "bundle carries the %s table" % key)
 	t.eq((bundle["armed_triggers"] as Array).size(), 1, "armed reaction serialized")
@@ -330,7 +331,7 @@ static func _test_schema_v4_requires_bindings(t) -> void:
 		var before_scheduler := restored.runtime.scheduler.snapshot()
 		t.ok(
 			not EQSaveAdapter.load(restored.runtime, incomplete_bundle, {}, restored),
-			"schema 5 retains the v4 binding requirement for %s" % missing_key
+			"schema 6 retains the v4 binding requirement for %s" % missing_key
 		)
 		t.eq(
 			restored.runtime.faults.back()["code"],

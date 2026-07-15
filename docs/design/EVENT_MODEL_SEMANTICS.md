@@ -1,6 +1,6 @@
 # Event Model Semantics (v1)
 
-status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. **Transactional effect-result revision (2026-07-14)**: issued handler modes are persisted by save-bundle schema v4 (§6.1, §10.2). **Reaction FIRE occurrence revision (EQM-132, 2026-07-15)**: each scheduled FIRE has an independent reservation and versioned cause value persisted by schema v5 (§6.2, §10.3). Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
+status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. **Transactional effect-result revision (2026-07-14)**: issued handler modes are persisted by save-bundle schema v4 (§6.1, §10.2). **Reaction FIRE occurrence revision (EQM-132, 2026-07-15)**: each scheduled FIRE has an independent reservation and versioned cause value persisted by schema v5 (§6.2, §10.3). **Reaction-expiry checkpoint revision (EQM-133, 2026-07-15)**: schema v6 persists every live reaction-expiry event independently from armed membership and exposes an exact one-scheduler-event resolution boundary (§6.3, §10.4). Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
 
 Inputs (confirmed):
 
@@ -361,6 +361,35 @@ while uses remain armed. Historical v1-v4 saves continue to migrate ordinary
 scheduled rows with an empty context, but a historical pending reaction FIRE is
 rejected: its trigger cause did not exist on disk and must not be reconstructed
 from the later world state. A v4 reader rejects v5 at the top-level boundary.
+
+### 10.4 Snapshot schema v6 — reaction expiry ownership
+
+Schema_version 6 adds the top-level `reaction_expiries` table. Each row is
+`{event_id, reservation}` and is in exact one-to-one correspondence with a
+live scheduler entry whose kind is `expiry`. This table, rather than armed
+membership, owns the reservation revision needed when that event eventually
+resolves. An armed duration-limited reaction references the same row through
+`armed_triggers[].expiry_event_id`; after reaction-count exhaustion the armed
+row disappears, while the expiry row remains with status `RESOLVED` and
+`remaining_ruminations == 0`. Resolving it later therefore preserves §6.3's
+observable `closed_by: already_closed` trace instead of silently cancelling it.
+
+The v6 reader verifies the table as a bijection with scheduler expiry events,
+including event id, actor, empty payload, reaction definition, duration, and
+armed-vs-closed reservation status. A matching armed row must contain the same
+reservation value and restores as the same live instance. Versions v1-v5
+migrate a duration-limited expiry only while its armed row still carries the
+link. A historical scheduler expiry without such an armed row is rejected
+verify-before-mutate with `eqm.reaction.expiry_state_invalid`, because those
+formats did not save the reservation identity required to reconstruct it.
+
+`EQReservationRuntime.resolve_one_scheduled_event()` is the public exact-pop
+boundary for checkpoint/interleaving consumers. It processes at most one
+scheduler event through the full pipeline and reports a stable outcome
+(`EMPTY`, `EXPIRY`, `RESERVATION`, `INVALIDATED`, `FAULT`, or `UNTRACKED`).
+The compatibility `resolve_next()` path retains its established behavior of
+consuming expiry/invalidated/fault events internally until it returns a tracked
+reservation or reaches a stopping boundary.
 
 ---
 

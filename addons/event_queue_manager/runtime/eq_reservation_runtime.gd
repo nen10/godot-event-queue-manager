@@ -40,6 +40,17 @@ const EQSnapshot := preload("eq_snapshot.gd")
 const EQWindow := preload("eq_window.gd")
 const EQTransaction := preload("eq_transaction.gd")
 
+## Outcome of one exact scheduler-pop boundary. `resolve_next()` preserves its
+## compatibility behavior by continuing across EXPIRY / INVALIDATED / FAULT.
+enum ScheduledEventOutcome {
+	EMPTY,
+	EXPIRY,
+	RESERVATION,
+	INVALIDATED,
+	FAULT,
+	UNTRACKED,
+}
+
 var runtime: EQRuntime
 var lines: EQEventLines
 var chunk: EQEffectChunk
@@ -53,7 +64,8 @@ var relations = null
 ## replay and keeps state transitions stable.
 var state_algebra = null
 
-## Records drained from the chunk by the last resolve_next() call (§6.1 step 5).
+## Records drained by the last resolve_next() or resolve_one_scheduled_event()
+## call (§6.1 step 5).
 var last_drained: Array = []
 ## Ephemeral value projection of the most recently attempted single-reservation
 ## effect commit. Read through last_effect_commit_outcome(); it is intentionally
@@ -659,8 +671,15 @@ func is_save_boundary() -> bool:
 
 func save_state() -> Dictionary:
 	var expiry_of := {}
-	for event_id in _expiry_by_event:
+	var expiry_event_ids: Array = _expiry_by_event.keys()
+	expiry_event_ids.sort()
+	var reaction_expiries: Array = []
+	for event_id in expiry_event_ids:
 		expiry_of[(_expiry_by_event[event_id] as EQReservation).get_instance_id()] = event_id
+		reaction_expiries.append({
+			"event_id": int(event_id),
+			"reservation": (_expiry_by_event[event_id] as EQReservation).to_dict(),
+		})
 	var armed: Array = []
 	for entry in engine.armed_entries():
 		var res: EQReservation = entry["reservation"]
@@ -692,6 +711,7 @@ func save_state() -> Dictionary:
 		"state_algebra": state_algebra.to_dict() if state_algebra != null else {},
 		"windows": [],  # boundary-gated saves always have depth 0 (POLICY)
 		"armed_triggers": armed,
+		"reaction_expiries": reaction_expiries,
 		"pending_conditional": conditional,
 		"scheduled_reservations": scheduled,
 	}
@@ -744,11 +764,16 @@ func verify_state(data: Dictionary) -> bool:
 				runtime._fault(EQError.CONDITION_PREDICATE_UNREGISTERED, "predicate '%s' in the save is not registered" % term.get("predicate_name", ""), {}, true)
 				return false
 	var live_scheduler_event_ids := {}
+	var scheduler_entries_by_event := {}
 	var scheduler_table = data.get("scheduler", {})
 	if scheduler_table is Dictionary:
 		for entry_value in (scheduler_table as Dictionary).get("entries", []):
 			if entry_value is Dictionary:
-				live_scheduler_event_ids[int((entry_value as Dictionary).get("event_id", -1))] = true
+				var scheduler_event_id := int(
+					(entry_value as Dictionary).get("event_id", -1)
+				)
+				live_scheduler_event_ids[scheduler_event_id] = true
+				scheduler_entries_by_event[scheduler_event_id] = entry_value
 	var seen_scheduled_event_ids := {}
 	for scheduled_value in data.get("scheduled_reservations", []):
 		if typeof(scheduled_value) != TYPE_DICTIONARY:
@@ -853,6 +878,10 @@ func verify_state(data: Dictionary) -> bool:
 				true
 			)
 			return false
+	if not _verify_reaction_expiry_state(
+		data, save_schema_version, scheduler_entries_by_event
+	):
+		return false
 	var reservation_dicts: Array = []
 	for a in data.get("armed_triggers", []):
 		reservation_dicts.append(a.get("reservation", {}))
@@ -860,6 +889,9 @@ func verify_state(data: Dictionary) -> bool:
 		reservation_dicts.append(c.get("reservation", {}))
 	for s in data.get("scheduled_reservations", []):
 		reservation_dicts.append(s.get("reservation", {}))
+	if save_schema_version >= 6:
+		for expiry in data.get("reaction_expiries", []):
+			reservation_dicts.append(expiry.get("reservation", {}))
 	for rd in reservation_dicts:
 		var def: Dictionary = rd.get("definition", {})
 		for binding in [
@@ -937,6 +969,211 @@ func verify_state(data: Dictionary) -> bool:
 	return true
 
 
+func _verify_reaction_expiry_state(
+	data: Dictionary, save_schema_version: int, scheduler_entries_by_event: Dictionary
+) -> bool:
+	var armed_value = data.get("armed_triggers", [])
+	if typeof(armed_value) != TYPE_ARRAY:
+		return _reaction_expiry_state_fault(
+			"armed_triggers must be an Array", {"reason": "armed_table_type"}
+		)
+	var armed_by_expiry := {}
+	for armed_value_entry in armed_value as Array:
+		if typeof(armed_value_entry) != TYPE_DICTIONARY:
+			return _reaction_expiry_state_fault(
+				"armed trigger row must be a Dictionary", {"reason": "armed_row_type"}
+			)
+		var armed := armed_value_entry as Dictionary
+		var reservation_value = armed.get("reservation", {})
+		if typeof(reservation_value) != TYPE_DICTIONARY:
+			return _reaction_expiry_state_fault(
+				"armed trigger reservation must be a Dictionary",
+				{"reason": "armed_reservation_type"}
+			)
+		var reservation := reservation_value as Dictionary
+		var definition_value = reservation.get("definition", {})
+		if typeof(definition_value) != TYPE_DICTIONARY:
+			return _reaction_expiry_state_fault(
+				"armed trigger definition must be a Dictionary",
+				{"reason": "armed_definition_type"}
+			)
+		var definition := definition_value as Dictionary
+		var duration := int(definition.get("duration", 0))
+		var expiry_event_id := int(armed.get("expiry_event_id", -1))
+		if duration > 0:
+			if expiry_event_id < 1 or armed_by_expiry.has(expiry_event_id):
+				return _reaction_expiry_state_fault(
+					"duration-limited armed trigger has an invalid expiry identity",
+					{"event_id": expiry_event_id, "reason": "armed_expiry_identity"}
+				)
+			if not scheduler_entries_by_event.has(expiry_event_id):
+				return _reaction_expiry_state_fault(
+					"armed trigger expiry is absent from the scheduler",
+					{"event_id": expiry_event_id, "reason": "armed_expiry_orphan"}
+				)
+			var scheduler_entry := scheduler_entries_by_event[expiry_event_id] as Dictionary
+			var armed_at := int(armed.get("armed_at", -1))
+			if (
+				StringName(scheduler_entry.get("kind", &"")) != &"expiry"
+				or String(scheduler_entry.get("actor_id", ""))
+				!= String(reservation.get("actor_id", ""))
+				or typeof(scheduler_entry.get("payload", {})) != TYPE_DICTIONARY
+				or not (scheduler_entry.get("payload", {}) as Dictionary).is_empty()
+				or armed_at < 0
+				or int(scheduler_entry.get("due_tick", -1)) != armed_at + duration
+				or int(reservation.get("status", -1)) != EQReservation.Status.ARMED
+			):
+				return _reaction_expiry_state_fault(
+					"armed trigger expiry does not match its scheduler entry",
+					{"event_id": expiry_event_id, "reason": "armed_expiry_mismatch"}
+				)
+			armed_by_expiry[expiry_event_id] = armed
+		elif expiry_event_id > 0:
+			return _reaction_expiry_state_fault(
+				"unlimited reaction must not reference an expiry event",
+				{"event_id": expiry_event_id, "reason": "unexpected_expiry"}
+			)
+
+	var scheduler_expiry_ids: Array[int] = []
+	for event_id_value in scheduler_entries_by_event:
+		var event_id := int(event_id_value)
+		var scheduler_entry := scheduler_entries_by_event[event_id] as Dictionary
+		if StringName(scheduler_entry.get("kind", &"")) == &"expiry":
+			scheduler_expiry_ids.append(event_id)
+	scheduler_expiry_ids.sort()
+
+	if save_schema_version < 6:
+		if data.has("reaction_expiries"):
+			var historical_table = data["reaction_expiries"]
+			if (
+				typeof(historical_table) != TYPE_ARRAY
+				or not (historical_table as Array).is_empty()
+			):
+				return _reaction_expiry_state_fault(
+					"historical schema cannot carry reaction_expiries",
+					{
+						"schema_version": save_schema_version,
+						"reason": "table_not_supported_by_schema",
+					}
+				)
+		var historical_expiry_ids: Array[int] = []
+		for event_id_value in armed_by_expiry:
+			historical_expiry_ids.append(int(event_id_value))
+		historical_expiry_ids.sort()
+		if historical_expiry_ids != scheduler_expiry_ids:
+			return _reaction_expiry_state_fault(
+				"historical save has an expiry event without reconstructable state",
+				{
+					"schema_version": save_schema_version,
+					"scheduler_event_ids": scheduler_expiry_ids,
+					"armed_event_ids": historical_expiry_ids,
+					"reason": "historical_orphan_expiry",
+				}
+			)
+		return true
+
+	if not data.has("reaction_expiries") or typeof(data["reaction_expiries"]) != TYPE_ARRAY:
+		return _reaction_expiry_state_fault(
+			"schema 6 requires the reaction_expiries Array",
+			{"schema_version": save_schema_version, "reason": "missing_table"}
+		)
+	var expiry_rows_by_event := {}
+	for row_value in data["reaction_expiries"] as Array:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			return _reaction_expiry_state_fault(
+				"reaction expiry row must be a Dictionary", {"reason": "row_type"}
+			)
+		var row := row_value as Dictionary
+		if row.size() != 2 or not row.has("event_id") or not row.has("reservation"):
+			return _reaction_expiry_state_fault(
+				"reaction expiry row has an invalid shape", {"reason": "row_shape"}
+			)
+		if typeof(row["event_id"]) != TYPE_INT or int(row["event_id"]) < 1:
+			return _reaction_expiry_state_fault(
+				"reaction expiry event_id must be a positive int",
+				{"reason": "event_id_type"}
+			)
+		var event_id := int(row["event_id"])
+		if expiry_rows_by_event.has(event_id) or not scheduler_entries_by_event.has(event_id):
+			return _reaction_expiry_state_fault(
+				"reaction expiry identity is duplicate or orphaned",
+				{"event_id": event_id, "reason": "event_identity"}
+			)
+		if typeof(row["reservation"]) != TYPE_DICTIONARY:
+			return _reaction_expiry_state_fault(
+				"reaction expiry reservation must be a Dictionary",
+				{"event_id": event_id, "reason": "reservation_type"}
+			)
+		var reservation := row["reservation"] as Dictionary
+		var definition_value = reservation.get("definition", {})
+		var scheduler_entry := scheduler_entries_by_event[event_id] as Dictionary
+		if (
+			typeof(definition_value) != TYPE_DICTIONARY
+			or int((definition_value as Dictionary).get("kind", -1))
+			!= EQActionDefinition.Kind.REACTION_PREPARATION
+			or int((definition_value as Dictionary).get("duration", 0)) <= 0
+			or StringName(scheduler_entry.get("kind", &"")) != &"expiry"
+			or String(scheduler_entry.get("actor_id", ""))
+			!= String(reservation.get("actor_id", ""))
+			or typeof(scheduler_entry.get("payload", {})) != TYPE_DICTIONARY
+			or not (scheduler_entry.get("payload", {}) as Dictionary).is_empty()
+		):
+			return _reaction_expiry_state_fault(
+				"reaction expiry row does not match its scheduler event",
+				{"event_id": event_id, "reason": "scheduler_mismatch"}
+			)
+		var expected_status := (
+			EQReservation.Status.ARMED
+			if armed_by_expiry.has(event_id)
+			else EQReservation.Status.RESOLVED
+		)
+		if int(reservation.get("status", -1)) != expected_status:
+			return _reaction_expiry_state_fault(
+				"reaction expiry reservation status disagrees with armed membership",
+				{
+					"event_id": event_id,
+					"expected_status": expected_status,
+					"reason": "status_mismatch",
+				}
+			)
+		if (
+			armed_by_expiry.has(event_id)
+			and reservation != (armed_by_expiry[event_id] as Dictionary)["reservation"]
+		):
+			return _reaction_expiry_state_fault(
+				"armed and expiry tables disagree about the reservation revision",
+				{"event_id": event_id, "reason": "reservation_mismatch"}
+			)
+		if (
+			not armed_by_expiry.has(event_id)
+			and int(reservation.get("remaining_ruminations", -1)) != 0
+		):
+			return _reaction_expiry_state_fault(
+				"count-closed expiry must have no remaining reaction fires",
+				{"event_id": event_id, "reason": "remaining_count_mismatch"}
+			)
+		expiry_rows_by_event[event_id] = row
+	var expiry_row_ids: Array[int] = []
+	for event_id_value in expiry_rows_by_event:
+		expiry_row_ids.append(int(event_id_value))
+	expiry_row_ids.sort()
+	if expiry_row_ids != scheduler_expiry_ids:
+		return _reaction_expiry_state_fault(
+			"reaction expiry table must be a bijection with scheduler expiry events",
+			{
+				"scheduler_event_ids": scheduler_expiry_ids,
+				"reaction_expiry_event_ids": expiry_row_ids,
+				"reason": "event_set_mismatch",
+			}
+		)
+	return true
+
+
+func _reaction_expiry_state_fault(message: String, context: Dictionary) -> bool:
+	runtime._fault(EQError.REACTION_EXPIRY_STATE_INVALID, message, context, true)
+	return false
+
+
 ## Applies the verified tables (call verify_state first; the adapter does).
 func apply_state(data: Dictionary) -> void:
 	lines.restore_values(data.get("event_lines", {}))
@@ -944,16 +1181,29 @@ func apply_state(data: Dictionary) -> void:
 		relations.restore(data.get("relations", {}))
 	if state_algebra != null:
 		state_algebra.restore(data.get("state_algebra", {}))
+	var save_schema_version := int(data.get("schema_version", -1))
+	var restored_expiries := {}
+	if save_schema_version >= 6:
+		for expiry_value in data.get("reaction_expiries", []):
+			var expiry := expiry_value as Dictionary
+			var expiry_event_id := int(expiry["event_id"])
+			var expiry_reservation := EQReservation.from_dict(expiry["reservation"])
+			restored_expiries[expiry_event_id] = expiry_reservation
+			_expiry_by_event[expiry_event_id] = expiry_reservation
 	for a in data.get("armed_triggers", []):
-		var res := EQReservation.from_dict(a.get("reservation", {}))
+		var expiry_id := int(a.get("expiry_event_id", -1))
+		var res: EQReservation = (
+			restored_expiries[expiry_id]
+			if expiry_id > 0 and restored_expiries.has(expiry_id)
+			else EQReservation.from_dict(a.get("reservation", {}))
+		)
 		var cond = null
 		var cd: Dictionary = a.get("condition", {})
 		if not cd.is_empty():
 			cond = EQCondition.from_dict(cd)
 		res.status = EQReservation.Status.ARMED
 		engine.arm(res, cond, int(a.get("armed_at", 0)))
-		var expiry_id := int(a.get("expiry_event_id", -1))
-		if expiry_id > 0:
+		if expiry_id > 0 and save_schema_version < 6:
 			_expiry_by_event[expiry_id] = res
 	for c in data.get("pending_conditional", []):
 		_pending_conditional.append({
@@ -1613,90 +1863,149 @@ func resolve_next() -> EQReservation:
 	last_drained = []
 	_last_effect_commit_outcome = {}
 	while true:
-		var e := runtime.advance()
-		if e == null:
-			return null
-		lines.sync_primary(runtime.scheduler.current_tick)
-		_check_deadlines()
-		if _expiry_by_event.has(e.event_id):
-			_resolve_expiry(e)
-			continue
-		var res = _by_event.get(e.event_id, null)
-		if res == null:
-			return null
-		var bundle_id := _bundle_of.get(e.event_id, &"")
-		var inv_terms_bundle := _bound_inv.get(e.event_id, [])
-		var raw_view := _view_of(res)
-		var fire_context := reaction_fire_context_for_event(e.event_id)
-		var invalidation_view := raw_view.duplicate(true)
-		if not fire_context.is_empty():
-			invalidation_view["reaction_fire_context"] = fire_context.duplicate(true)
-		_by_event.erase(e.event_id)
-		_bound_inv.erase(e.event_id)
-		_window_of_event.erase(e.event_id)
-		_reaction_fire_context_by_event.erase(e.event_id)
-		if bundle_id != &"":
-			return _resolve_bundle(e.event_id, res, inv_terms_bundle, bundle_id)
-		_clear_bundle_event_link(e.event_id)
-		# step 1b — lazy invalidation at reference time (level semantics)
-		if not inv_terms_bundle.is_empty():
-			var inv := EQConditionEval.invalidation_check(
-				inv_terms_bundle, _ctx(invalidation_view)
-			)
-			if int(inv["result"]) == EQConditionEval.Result.YES:
-				res.status = EQReservation.Status.INVALIDATED
-				_trace_invalidated(e.event_id, res.actor_id, StringName(inv["closed_by"]))
+		var result := _resolve_one_scheduled_event()
+		match int(result["outcome"]):
+			ScheduledEventOutcome.EXPIRY, ScheduledEventOutcome.INVALIDATED, ScheduledEventOutcome.FAULT:
 				continue
-			if int(inv["result"]) == EQConditionEval.Result.FAULT:
-				var f: Dictionary = inv["fault"]
-				runtime._fault(f["code"], f["message"], f.get("context", {}), true)
-				continue
-		if not _verify_effect_commit_versions(res, &"single_resolution"):
-			_reject_effect_commit_binding(res, e.event_id, &"single_resolution")
-			return res
-		res.status = EQReservation.Status.RESOLVED
-		if not fire_context.is_empty():
-			runtime.trace().record(
-				{
-					"kind": "reaction_fire_resolved",
-					"actor": String(res.actor_id),
-					"event_id": e.event_id,
-					"reaction_fire_context": fire_context.duplicate(true),
-				}
-			)
-		var race_gid: StringName = _race_of.get(res.get_instance_id(), &"")
-		if race_gid != &"" and _race_groups.has(race_gid):
-			_settle_race(race_gid, res, e.event_id)
-		# step 2/3 — declared effect into the chunk
-		var transformed_view := _apply_effect_transforms(
-			res, _apply_target_expansion(res, raw_view.duplicate(true))
-		)
-		if not fire_context.is_empty():
-			# Cause is occurrence metadata, not an effect operand: inject after
-			# expansion/transforms so a retarget cannot rewrite trigger truth.
-			transformed_view["reaction_fire_context"] = fire_context.duplicate(true)
-		var commit_result := _apply_single_effect_commit(
-			res.definition.effect_name, transformed_view, raw_view
-		)
-		_last_effect_commit_outcome = commit_result.to_dict()
-		if commit_result.is_failure():
-			# FAILURE is an ordinary consumer-owned transaction outcome. It adds
-			# no chunk records and deliberately has no reaction sweep fallback.
-			return res
-		for r in commit_result.records():
-			chunk.add(r)
-		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
-			_cause_target_reservation(res)
-		# rumination reschedule (count-bounded; reactions re-arm in the ENGINE
-		# at fire time instead — re-submitting here would double-arm them)
-		if res.definition.kind != EQActionDefinition.Kind.REACTION_PREPARATION and res.remaining_ruminations > 0:
-			_resubmit_rumination(res)
-		# step 4 — exactly one outer batch boundary over the declared order.
-		_sweep_bundle(_event_view_occurrences(commit_result.event_views(), e.event_id))
-		# step 5 — drain; chunk-empty = save boundary
-		last_drained.append_array(chunk.drain())
-		return res
+			ScheduledEventOutcome.RESERVATION:
+				return result["reservation"] as EQReservation
+			_:
+				return null
 	return null
+
+
+## Processes at most one scheduler pop through the complete reservation
+## pipeline. Unlike resolve_next(), an expiry is returned as its own boundary
+## and can therefore be checkpointed/interleaved without reaching into private
+## expiry bookkeeping. The exact result fields are:
+## `{advanced, event_id, event_kind, outcome, reservation}`.
+func resolve_one_scheduled_event() -> Dictionary:
+	last_drained = []
+	_last_effect_commit_outcome = {}
+	return _resolve_one_scheduled_event()
+
+
+func _resolve_one_scheduled_event() -> Dictionary:
+	var e := runtime.advance()
+	if e == null:
+		return _scheduled_event_result(false, -1, &"", ScheduledEventOutcome.EMPTY, null)
+	lines.sync_primary(runtime.scheduler.current_tick)
+	_check_deadlines()
+	if _expiry_by_event.has(e.event_id):
+		var expiry_res := _expiry_by_event[e.event_id] as EQReservation
+		_resolve_expiry(e)
+		return _scheduled_event_result(
+			true, e.event_id, e.kind, ScheduledEventOutcome.EXPIRY, expiry_res
+		)
+	var res = _by_event.get(e.event_id, null)
+	if res == null:
+		return _scheduled_event_result(
+			true, e.event_id, e.kind, ScheduledEventOutcome.UNTRACKED, null
+		)
+	var bundle_id := _bundle_of.get(e.event_id, &"")
+	var inv_terms_bundle := _bound_inv.get(e.event_id, [])
+	var raw_view := _view_of(res)
+	var fire_context := reaction_fire_context_for_event(e.event_id)
+	var invalidation_view := raw_view.duplicate(true)
+	if not fire_context.is_empty():
+		invalidation_view["reaction_fire_context"] = fire_context.duplicate(true)
+	_by_event.erase(e.event_id)
+	_bound_inv.erase(e.event_id)
+	_window_of_event.erase(e.event_id)
+	_reaction_fire_context_by_event.erase(e.event_id)
+	if bundle_id != &"":
+		var bundle_res := _resolve_bundle(e.event_id, res, inv_terms_bundle, bundle_id)
+		return _scheduled_event_result(
+			true, e.event_id, e.kind, ScheduledEventOutcome.RESERVATION, bundle_res
+		)
+	_clear_bundle_event_link(e.event_id)
+	# step 1b — lazy invalidation at reference time (level semantics)
+	if not inv_terms_bundle.is_empty():
+		var inv := EQConditionEval.invalidation_check(
+			inv_terms_bundle, _ctx(invalidation_view)
+		)
+		if int(inv["result"]) == EQConditionEval.Result.YES:
+			res.status = EQReservation.Status.INVALIDATED
+			_trace_invalidated(e.event_id, res.actor_id, StringName(inv["closed_by"]))
+			return _scheduled_event_result(
+				true, e.event_id, e.kind, ScheduledEventOutcome.INVALIDATED, res
+			)
+		if int(inv["result"]) == EQConditionEval.Result.FAULT:
+			var f: Dictionary = inv["fault"]
+			runtime._fault(f["code"], f["message"], f.get("context", {}), true)
+			return _scheduled_event_result(
+				true, e.event_id, e.kind, ScheduledEventOutcome.FAULT, res
+			)
+	if not _verify_effect_commit_versions(res, &"single_resolution"):
+		_reject_effect_commit_binding(res, e.event_id, &"single_resolution")
+		return _scheduled_event_result(
+			true, e.event_id, e.kind, ScheduledEventOutcome.RESERVATION, res
+		)
+	res.status = EQReservation.Status.RESOLVED
+	if not fire_context.is_empty():
+		runtime.trace().record(
+			{
+				"kind": "reaction_fire_resolved",
+				"actor": String(res.actor_id),
+				"event_id": e.event_id,
+				"reaction_fire_context": fire_context.duplicate(true),
+			}
+		)
+	var race_gid: StringName = _race_of.get(res.get_instance_id(), &"")
+	if race_gid != &"" and _race_groups.has(race_gid):
+		_settle_race(race_gid, res, e.event_id)
+	# step 2/3 — declared effect into the chunk
+	var transformed_view := _apply_effect_transforms(
+		res, _apply_target_expansion(res, raw_view.duplicate(true))
+	)
+	if not fire_context.is_empty():
+		# Cause is occurrence metadata, not an effect operand: inject after
+		# expansion/transforms so a retarget cannot rewrite trigger truth.
+		transformed_view["reaction_fire_context"] = fire_context.duplicate(true)
+	var commit_result := _apply_single_effect_commit(
+		res.definition.effect_name, transformed_view, raw_view
+	)
+	_last_effect_commit_outcome = commit_result.to_dict()
+	if commit_result.is_failure():
+		# FAILURE is an ordinary consumer-owned transaction outcome. It adds
+		# no chunk records and deliberately has no reaction sweep fallback.
+		return _scheduled_event_result(
+			true, e.event_id, e.kind, ScheduledEventOutcome.RESERVATION, res
+		)
+	for r in commit_result.records():
+		chunk.add(r)
+	if res.definition.kind == EQActionDefinition.Kind.OPERATION:
+		_cause_target_reservation(res)
+	# rumination reschedule (count-bounded; reactions re-arm in the ENGINE
+	# at fire time instead — re-submitting here would double-arm them)
+	if (
+		res.definition.kind != EQActionDefinition.Kind.REACTION_PREPARATION
+		and res.remaining_ruminations > 0
+	):
+		_resubmit_rumination(res)
+	# step 4 — exactly one outer batch boundary over the declared order.
+	_sweep_bundle(_event_view_occurrences(commit_result.event_views(), e.event_id))
+	# step 5 — drain; chunk-empty = save boundary
+	last_drained.append_array(chunk.drain())
+	return _scheduled_event_result(
+		true, e.event_id, e.kind, ScheduledEventOutcome.RESERVATION, res
+	)
+
+
+func _scheduled_event_result(
+	advanced: bool,
+	event_id: int,
+	event_kind: StringName,
+	outcome: ScheduledEventOutcome,
+	reservation: EQReservation
+) -> Dictionary:
+	return {
+		"advanced": advanced,
+		"event_id": event_id,
+		"event_kind": event_kind,
+		"outcome": int(outcome),
+		"reservation": reservation,
+	}
 
 
 func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array, bundle_id: StringName) -> EQReservation:

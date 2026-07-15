@@ -118,7 +118,7 @@ var algebra := EQStateAlgebra.new(rr.lines)
 algebra.declare_inv_pair(&"欠損", &"虚飾", EQStateAlgebra.Rule.CANCEL)  # 相殺 = 符号付き 1 軸
 algebra.grant_state(&"hero", &"欠損", 3)
 algebra.grant_state(&"hero", &"虚飾", 1)   # 軸は +2 (欠損 2 に相殺)
-rr.state_algebra = algebra                 # schema v3で導入、current schema v5でも保存
+rr.state_algebra = algebra                 # schema v3で導入、current schema v6でも保存
 ```
 
 規則は pair ごとに `CANCEL` (相殺) / `EXCLUDE` (排他: 付与時に対を解除) / `COEXIST` (共存)。
@@ -162,6 +162,9 @@ rr.open_phase(&"入力", [&"mirror.a"])  # 操作フェーズ checkpoint。同�
 ### save
 
 schema v3で上記の`relations` / `state_algebra` tableを導入し、schema v4で全reservationの
-main／expiry effect-result mode bindingを導入した。current schema v5は両方を保持し、さらに
-scheduled reaction FIRE contextを保存する。loadは登録名・binding・occurrence identityを先に
-検証し、安定error時は何も適用しない。原因を保存していなかったhistorical pending FIREは推測せず拒否し、通常のhistorical scheduled workはmigrateする。
+main／expiry effect-result mode binding、schema v5でscheduled reaction FIRE contextを導入した。
+current schema v6はこれらを保持し、回数でarmed slotが閉じた後もduration eventを保持する
+`reaction_expiries` tableを追加する。loadは登録名・binding・occurrence／expiry identityを先に
+検証し、安定error時は何も適用しない。原因を保存していなかったhistorical pending FIREや、
+reservationを保存していなかったhistorical orphan expiryは推測せず拒否する。通常のhistorical
+scheduled workとstill-armed expiryはmigrateする。

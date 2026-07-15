@@ -31,7 +31,9 @@ transactional effect-result v1 の公開面として、core value `EQEffectCommi
 
 EQM-132 reaction occurrence 公開面: `EQReactionFireContext` がversion 1のJSON-safe原因値を検証・複製し、`EQTriggerEngine.on_event_resolved_occurrences()` が1始まりのfire indexを公開します。従来のreservation配列projectionは維持します。`EQReservationRuntime.reaction_fire_context_for_event(event_id)`はpending FIREの独立copyを返し、同じ値がeffect handler・save・traceへ渡ります。save-bundle schema v5はscheduled rowのfieldを必須とし、historical pending FIREの原因を推測しません (`EVENT_MODEL_SEMANTICS.md` §6.2、§10.3)。
 
-EQM-127のhistorical schema note: save-bundle schema_version 3でoptionalな`EQReservationRuntime.state_algebra`接続とadditiveな`relations` / `state_algebra` tableを導入しました。current schema v5もこれらを変更せず保持します (`EVENT_MODEL_SEMANTICS.md` §10.1)。
+EQM-133 reaction-expiry checkpoint公開面: save-bundle schema v6はarmed membershipから独立したevent-id keyed value table `reaction_expiries`を追加します。`EQReservationRuntime.ScheduledEventOutcome`と`resolve_one_scheduled_event()`は、exactなscheduler pop 1件を`{advanced, event_id, event_kind, outcome, reservation}`として公開します。expiryを観測しても次のreservationを同じcallで消費しません。既存`resolve_next()`の挙動は維持します (`EVENT_MODEL_SEMANTICS.md` §6.3、§10.4)。
+
+EQM-127のhistorical schema note: save-bundle schema_version 3でoptionalな`EQReservationRuntime.state_algebra`接続とadditiveな`relations` / `state_algebra` tableを導入しました。current schema v6もこれらを変更せず保持します (`EVENT_MODEL_SEMANTICS.md` §10.1)。
 
 layer map に存在しない public class (`tools/check_api_surface.py` の `LAYER_MAP`) は gate を失敗させます。すべての public class はちょうど 1 つの layer に割り当てられている必要があります。この表と `LAYER_MAP` は一緒に更新してください。
 

@@ -53,6 +53,18 @@
 > formats never stored its trigger cause. A v4 reader rejects v5 at the
 > top-level boundary and cannot silently discard the cause.
 
+> **Reaction-expiry ownership (EQM-133, 2026-07-15): bundle
+> `SCHEMA_VERSION` is now 6.** The additive `reaction_expiries` table contains
+> every live scheduler expiry event and its reservation value, including the
+> stale event retained after reaction-count exhaustion. Its event ids must be
+> a bijection with scheduler `expiry` entries. A still-armed reaction's
+> `expiry_event_id` points at the same value; a count-closed row is `RESOLVED`
+> with no remaining uses and later preserves `closed_by: already_closed`.
+> Versions 1-5 migrate expiry state only when an armed row retains that link.
+> A historical orphan scheduler expiry is rejected before mutation because
+> those formats did not store the reservation identity required to rebuild it.
+> A v5 reader rejects v6 at the top-level boundary.
+
 The serialized scheduler snapshot (`EQSnapshot`, `SCHEMA_VERSION = 1`) and the
 save bundle (`EQSaveAdapter`, `schema_version`) are the on-disk contracts a
 consumer's save files depend on. This declares the v1.0 compatibility stance so a
@@ -75,18 +87,19 @@ game shipping on v1.0 knows what survives an addon upgrade.
   (`RUNTIME_RESILIENCE_POLICY`): the consumer's game is not crashed, and a bad save
   is not silently half-loaded.
 - `EQSaveAdapter.load(...)` returns `false` on an unsupported `schema_version`
-  (tested, EQM-085), so a consumer can branch on it. The current v5 reader
-  accepts bundle versions 1 through 5. For v1-v3 only, absent effect-result
+  (tested, EQM-085), so a consumer can branch on it. The current v6 reader
+  accepts bundle versions 1 through 6. For v1-v3 only, absent effect-result
   binding fields migrate to legacy `0`, but any explicit nonzero binding is
   rejected; v4+ requires both fields. Schema v5 additionally requires the
-  scheduled-row context field and rejects a malformed bundle before applying
+  scheduled-row context field. Schema v6 additionally requires exact
+  `reaction_expiries` ownership. Both reject malformed bundles before applying
   any state.
 
 ## What a consumer can rely on at v1.0
 
 1. A save written by any v1.x release loads in any later v1.x release.
 2. A save written by a *newer* schema is rejected cleanly on an older reader,
-   never partially applied. In particular, a v4 reader rejects a v5 bundle at
+   never partially applied. In particular, a v5 reader rejects a v6 bundle at
    the top-level version boundary.
 3. When a breaking change ships, it is a version bump with a documented migrator —
    the change is visible, not silent.

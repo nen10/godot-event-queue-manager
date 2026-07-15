@@ -174,6 +174,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 | id | status | dependencies | source task | deliverable | acceptance / test path |
 |---|---|---|---|---|---|
 | EQM-132 | COMPLETE | EQM-131 | Amberground reaction counter runtime profile | FIRE ごとの独立 occurrence + versioned cause transport + schema-v5 checkpoint | armed と pending FIRE の instance 分離、context deep-copy、2回発火、expiry、save/load continuation、stable rejection を `test_eq_reaction_fire_context.gd` と full gate で証明。 |
+| EQM-133 | COMPLETE | EQM-132 | Amberground reaction checkpoint audit | schema-v6 reaction-expiry ownership + exact one-event resolution boundary | count終了後のexpiryをsave/loadしFIRE/FIRE/`already_closed` continuation一致、v5 armed migration／orphan rejection、table tamper、後続reservationを消費しない1-event boundaryをfull gateで証明。 |
 
 ## Current pointer
 
@@ -181,7 +182,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: none — **EQM-132 reaction fire occurrence context COMPLETE** (2026-07-15)。Amberground の反応カウンター実需要から、armed lifecycle と scheduled FIRE lifecycle を分離し、cause を callback / trace / save-load へ同じ versioned value として運ぶ additive L2 contract を追加した。回数・duration・ゲーム側 AP/cost は独立のまま維持する。Phase 12 (v1.2 EBS 拡張ラウンド) は引き続き COMPLETE。**意図監査 (2026-07-05, `docs/review/EQM_V12_INTENT_AUDIT_2026-07-05.md`)**: 依頼意図に対する縮小 重大 2・中 3・acceptance 2 を検出。
+Current: none — **EQM-133 reaction-expiry checkpoint COMPLETE** (2026-07-15)。EQM-132後のAmberground checkpoint監査で、count終了後もliveなexpiryがschema v5ではarmed row消失により復元不能になるseamを検出した。schema v6の独立`reaction_expiries` ownership、strict verify-before-mutate、v1-v5 migration境界、exact one-scheduler-event APIで修復した。`resolve_next()`の互換挙動、回数・duration・ゲーム側 AP/costの独立性、`closed_by: already_closed`の凍結意味を維持する。Phase 12 (v1.2 EBS 拡張ラウンド) は引き続き COMPLETE。**意図監査 (2026-07-05, `docs/review/EQM_V12_INTENT_AUDIT_2026-07-05.md`)**: 依頼意図に対する縮小 重大 2・中 3・acceptance 2 を検出。
 
 Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
@@ -1486,3 +1487,31 @@ proof:
 ```
 
 Dependency sweep: EQM-132 COMPLETE → dynamic follow-up closed。queue に READY/BACKLOG task なし。Current pointer → none。
+
+### EQM-133 — COMPLETE (2026-07-15) — reaction-expiry checkpoint
+
+```text
+proof:
+  plan: docs/plan/2026-06-09_event_queue_manager/EQM-133_reaction_expiry_checkpoint/
+  review: docs/review/autopilot/EQM-133_SELF_REVIEW_2026-07-15.md
+  tests:
+    - ./tools/test.sh -> RESULT: PASS (files=72 checks=1566 failures=0)
+  docs:
+    - docs/devflow/TEST.md
+    - docs/design/EVENT_MODEL_SEMANTICS.md
+    - docs/design/SNAPSHOT_COMPAT_V1.md
+    - docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md
+    - docs/design/API_SURFACE.md
+    - docs/design/ERROR_CONTRACT.md
+  golden:
+    - tests/golden/api_surface.json (enum + exact one-event method + stable error)
+    - deterministic trace fixtures unchanged
+  major files:
+    - addons/event_queue_manager/runtime/eq_reservation_runtime.gd
+    - addons/event_queue_manager/runtime/eq_save_adapter.gd
+    - addons/event_queue_manager/runtime/eq_error.gd
+    - test_project/tests/trigger/test_eq_reaction_fire_context.gd
+    - test_project/tests/transaction/test_eq_snapshot_v2.gd
+```
+
+Dependency sweep: EQM-133 COMPLETE → checkpoint blocker closed。queue に READY/BACKLOG task なし。Current pointer → none。

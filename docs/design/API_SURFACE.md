@@ -29,7 +29,9 @@ Transactional effect-result v1 surface note: `EQEffectCommitResult` is a core va
 
 EQM-132 reaction occurrence surface note: `EQReactionFireContext` validates and copies the version-1 JSON-safe cause value; `EQTriggerEngine.on_event_resolved_occurrences()` exposes 1-based fire indices while preserving the legacy reservation projection; `EQReservationRuntime.reaction_fire_context_for_event(event_id)` returns an isolated pending-FIRE context. The same value reaches the effect handler and save/trace projections. Save-bundle schema v5 requires the scheduled-row field and refuses to invent a cause for a historical pending FIRE (SEM §6.2, §10.3).
 
-EQM-127 historical schema note: save-bundle schema_version 3 introduced the additive `relations` / `state_algebra` tables via optional `EQReservationRuntime.state_algebra` attachment; current schema v5 retains those tables unchanged (SEM v1.2 §10.1)。
+EQM-133 reaction-expiry checkpoint surface note: save-bundle schema v6 adds `reaction_expiries`, an event-id-keyed value table independent of armed membership. `EQReservationRuntime.ScheduledEventOutcome` and `resolve_one_scheduled_event()` expose one exact scheduler-pop boundary as `{advanced, event_id, event_kind, outcome, reservation}`; this makes an expiry observable without consuming the following reservation. Existing `resolve_next()` behavior is unchanged (SEM §6.3, §10.4).
+
+EQM-127 historical schema note: save-bundle schema_version 3 introduced the additive `relations` / `state_algebra` tables via optional `EQReservationRuntime.state_algebra` attachment; current schema v6 retains those tables unchanged (SEM v1.2 §10.1)。
 
 EQM-126 surface note: `EQReservationRuntime.open_phase` / `close_phase` / `current_window` (操作フェーズ sub-checkpoint, SEM v1.2 §8.4)。
 

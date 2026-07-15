@@ -804,7 +804,9 @@
         "EQTriggerEngine",
         "EQWindow"
       ],
-      "enums": [],
+      "enums": [
+        "ScheduledEventOutcome"
+      ],
       "methods": [
         {
           "name": "apply_state",
@@ -895,6 +897,11 @@
           "name": "resolve_next",
           "params": "",
           "returns": "-> EQReservation"
+        },
+        {
+          "name": "resolve_one_scheduled_event",
+          "params": "",
+          "returns": "-> Dictionary"
         },
         {
           "name": "save_state",
@@ -1723,6 +1730,7 @@
         "POLICY_MISSING",
         "POLICY_NAME_EMPTY",
         "PRESENTATION_POLICY_CLASS_CONFLICT",
+        "REACTION_EXPIRY_STATE_INVALID",
         "REACTION_FIRE_CONTEXT_INVALID",
         "REACTION_FIRE_CONTEXT_MISSING",
         "RESERVATION_IMMEDIATE_NONZERO_DELAY",

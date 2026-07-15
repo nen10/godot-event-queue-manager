@@ -158,7 +158,7 @@ The first accepted submit stores both handler modes on the reservation (0 legacy
 handler from legacy to typed or vice versa cannot reinterpret pending work; use
 the stable `eqm.effect.commit_result_binding_mismatch` to surface that setup
 error. Schema v1-v3 saves with no binding fields remain legacy.
-Schema v4 introduced both binding fields and the current schema-v5 writer
+Schema v4 introduced both binding fields and the current schema-v6 writer
 retains them. Its reader
 migrates missing fields only for schema v1-v3 bundles (to legacy 0); a v4
 or newer reservation missing either field is rejected before load mutation with
@@ -174,7 +174,17 @@ For a scheduled reaction FIRE, the handler view also carries
 consumer-owned value copy. Schema v5 saves this per scheduled row. Armed state
 and pending FIRE are separate reservation instances; a historical pending FIRE
 without a stored cause is rejected instead of being reconstructed from current
-world state.
+world state. Schema v6 retains that row context and also stores every live
+reaction expiry independently from armed membership. This keeps the eventual
+`closed_by: already_closed` event deterministic after count exhaustion and
+save/load; a historical orphan expiry that cannot be reconstructed is rejected.
+
+For consumers that need checkpoint or interleaving control at the exact master
+timeline boundary, call `resolve_one_scheduled_event()`. It processes at most
+one scheduler pop and returns `{advanced, event_id, event_kind, outcome,
+reservation}`; an `EXPIRY` outcome never consumes the following reservation.
+Continue using `resolve_next()` when expiry/invalidated/fault events should stay
+internal and the next tracked reservation is the desired boundary.
 
 An OPERATION target must be non-empty and registered when submitted. After that
 valid issuance, an effect may remove an actor and still finish its current
