@@ -10,6 +10,11 @@ const EQSnapshot := preload("eq_snapshot.gd")
 ## is rebound to a live node via the `rebind` map (actor_id -> node). The node
 ## bridge (EQNodeBridge) is the usual source of that map.
 
+## v5: every scheduled row carries `reaction_fire_context`; pending reaction
+## FIRE rows require a valid context v1. Historical v1-v4 saves containing a
+## pending reaction FIRE are rejected because its trigger cause cannot be
+## reconstructed. Other historical rows migrate with an empty context.
+##
 ## v4: reservation dictionaries require main/expiry effect-result mode bindings.
 ## v1-v3 bundles migrate missing bindings to legacy mode (0) and reject
 ## explicit nonzero bindings, while a v4 bundle is rejected by older readers at
@@ -20,14 +25,14 @@ const EQSnapshot := preload("eq_snapshot.gd")
 ## pending_conditional / scheduled_reservations) next to the v1 keys. A v2
 ## bundle loads via the migrator (missing tables = empty); an unknown/newer
 ## version is rejected (SNAPSHOT_COMPAT_V1.md fail-safe).
-# Reservation dictionaries carry main/expiry effect-result mode bindings. A v4
-# writer always emits both fields; historical v1-v3 missing fields migrate to
+# Reservation dictionaries carry main/expiry effect-result mode bindings. A
+# v4+ writer always emits both fields; historical v1-v3 missing fields migrate to
 # legacy (0), never to the fresh-instance sentinel (-1).
 #
 # `event_lines` carries line modifiers and modifiers-only fields; line-level
 # provenance is serialized inside the reservation dicts. The phase-checkpoint
 # table that EQM-122 reserves remains boundary-gated to empty in this contract.
-const SCHEMA_VERSION := 4
+const SCHEMA_VERSION := 5
 
 
 ## A plain, node-free save bundle. With a pipeline (EQReservationRuntime), the
@@ -77,7 +82,8 @@ static func save(runtime, pipeline = null) -> Dictionary:
 ## stable error, nothing applied). Returns false on an unknown schema or a
 ## failed verification (runtime left as-is). v1 bundles load with empty tables;
 ## v1-v3 reservation dictionaries migrate missing effect-result bindings to 0
-## but reject explicit nonzero bindings; schema v4 requires both fields.
+## but reject explicit nonzero bindings; schema v4+ requires both fields;
+## schema v5 requires the scheduled-row reaction context field.
 static func load(into_runtime, data: Dictionary, rebind: Dictionary = {}, pipeline = null) -> bool:
 	var version := int(data.get("schema_version", -1))
 	if version < 1 or version > SCHEMA_VERSION:

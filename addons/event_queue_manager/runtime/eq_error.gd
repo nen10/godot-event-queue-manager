@@ -61,6 +61,8 @@ const EFFECT_COMMIT_RESULT_INVALID := &"eqm.effect.commit_result_invalid"
 const EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED := &"eqm.effect.commit_result_version_unsupported"
 const EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED := &"eqm.effect.commit_result_context_unsupported"
 const EFFECT_COMMIT_RESULT_BINDING_MISMATCH := &"eqm.effect.commit_result_binding_mismatch"
+const REACTION_FIRE_CONTEXT_INVALID := &"eqm.reaction.fire_context_invalid"
+const REACTION_FIRE_CONTEXT_MISSING := &"eqm.reaction.fire_context_missing"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -211,6 +213,18 @@ const _META := {
 		"surface": ["editor", "game"]
 	},
 	EFFECT_COMMIT_RESULT_BINDING_MISMATCH:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	REACTION_FIRE_CONTEXT_INVALID:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	REACTION_FIRE_CONTEXT_MISSING:
 	{
 		"rec": Recoverability.CONTRACT_VIOLATION,
 		"sev": Severity.ERROR,

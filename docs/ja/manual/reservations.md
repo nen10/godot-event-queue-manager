@@ -60,11 +60,13 @@ trigger.arm(reservation, cond, 0)  # tick 0 で arm
 # later: hero への attack が解決されたとき (sweep point)
 var view := {"kind": &"hit", "source": &"orc", "target": &"hero", "tags": [&"damage"]}
 for fired in trigger.on_event_resolved(view, current_tick):
-    # `fired` は condition に match した reservation。ここで counter を解決する
+    # standalone engine互換projection: conditionにmatchしたarmed reservation
     pass
 ```
 
 `rumination` は同じ armed reaction が消費されるまでに何回 fire できるかを制御します。`duration` (`DURATION_UNLIMITED` を含む) は tick 上でどれだけ armed のまま残るかを制御します。
+
+reservation pipelineではmatchをその場で解決しません。matchごとに独立したFIRE reservationをscheduleし、handler viewへversion 1の`reaction_fire_context`を渡します。ここには`fire_event_id`、1始まりの`fire_index`、trigger event id/tick/view/source/target/cellとconsumer-owned event view copyが入ります。pending copyは`reaction_fire_context_for_event(event_id)`で取得できます。armed slotは別instanceなので、残り回数とexpiryはpending FIREやsave/loadを跨いでも保たれます。
 
 ## 4. Worked example
 
@@ -116,7 +118,7 @@ var algebra := EQStateAlgebra.new(rr.lines)
 algebra.declare_inv_pair(&"欠損", &"虚飾", EQStateAlgebra.Rule.CANCEL)  # 相殺 = 符号付き 1 軸
 algebra.grant_state(&"hero", &"欠損", 3)
 algebra.grant_state(&"hero", &"虚飾", 1)   # 軸は +2 (欠損 2 に相殺)
-rr.state_algebra = algebra                 # schema v3で導入、current schema v4でも保存
+rr.state_algebra = algebra                 # schema v3で導入、current schema v5でも保存
 ```
 
 規則は pair ごとに `CANCEL` (相殺) / `EXCLUDE` (排他: 付与時に対を解除) / `COEXIST` (共存)。
@@ -159,8 +161,7 @@ rr.open_phase(&"入力", [&"mirror.a"])  # 操作フェーズ checkpoint。同�
 
 ### save
 
-schema v3で上記の`relations` / `state_algebra` tableを導入し、current schema v4も保持する。
-v4はさらに全reservationへmain／expiryのeffect-result mode bindingを両方書く。loadは登録名と
-v4必須bindingを先に検証し、安定error時は何も適用しない。current readerが欠落bindingを
-legacy 0へmigrateするのはschema v1-v3だけで、こらのversionに明示された
-nonzero bindingは拒否する。旧v3 readerはtop-level versionでv4を拒否する。
+schema v3で上記の`relations` / `state_algebra` tableを導入し、schema v4で全reservationの
+main／expiry effect-result mode bindingを導入した。current schema v5は両方を保持し、さらに
+scheduled reaction FIRE contextを保存する。loadは登録名・binding・occurrence identityを先に
+検証し、安定error時は何も適用しない。原因を保存していなかったhistorical pending FIREは推測せず拒否し、通常のhistorical scheduled workはmigrateする。

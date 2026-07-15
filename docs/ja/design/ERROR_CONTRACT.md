@@ -57,9 +57,11 @@ determinism は両 mode で維持されます。skip/degrade は trace に現れ
 | `eqm.reservation.missing_definition` | RESOURCE_INVALID | ERROR | editor, game | `EQReservation` に definition がない |
 | `eqm.trigger.chain_limit` | BUDGET_EXCEEDED | ERROR | editor, game | trigger cascade が `EQTriggerEngine.max_chain` を超えた (chain は truncate され、record される) |
 | `eqm.effect.commit_result_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | `register_effect_commit` で登録した handler が `EQEffectCommitResult` 以外、または records / event views / diagnostic の value validation に失敗する result を返した |
-| `eqm.effect.commit_result_version_unsupported` | CONTRACT_VIOLATION | ERROR | editor, game | transactional effect-result の登録／返却にruntime非対応versionを使用した、schema v4 reservationで必須bindingが欠けた (`reason: missing_binding`)、またはschema v1-v3がnonzero bindingを持った (`reason: binding_not_supported_by_schema`)。loadはstate適用前に拒否する |
+| `eqm.effect.commit_result_version_unsupported` | CONTRACT_VIOLATION | ERROR | editor, game | transactional effect-result の登録／返却にruntime非対応versionを使用した、schema v4+ reservationで必須bindingが欠けた (`reason: missing_binding`)、またはschema v1-v3がnonzero bindingを持った (`reason: binding_not_supported_by_schema`)。loadはstate適用前に拒否する |
 | `eqm.effect.commit_result_context_unsupported` | CONTRACT_VIOLATION | ERROR | editor, game | rollback を保証できない atomic bundle または expiry-effect context で transactional effect-result v1 を宣言・検出した |
 | `eqm.effect.commit_result_binding_mismatch` | CONTRACT_VIOLATION | ERROR | editor, game | 発行済み／load対象reservationが固定したmain／expiry handler mode（0 legacy / 1 typed）と現在のnamed-effect registryが不一致。置換後handlerは呼び出さない |
+| `eqm.reaction.fire_context_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | reaction FIRE原因が不正、JSON-safeでない、別／重複／orphan event idへ結合、または非reaction workへ付与された |
+| `eqm.reaction.fire_context_missing` | CONTRACT_VIOLATION | ERROR | editor, game | schema v5のscheduled-row context fieldが欠ける、またはpending reaction FIREの原因を復元できない（historical v1-v4を含む） |
 
 code は後続 task (snapshot / actor / reservation / trigger) でも同じ rules の下で追加されます。snapshot load codes (EQM-012 `EQSnapshot.Load`) はこの taxonomy より前に存在しており、現時点では独自 enum のままです。EQM-022 で rename なしに取り込む可能性があります。
 

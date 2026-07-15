@@ -21,7 +21,7 @@ const EQError := preload("res://addons/event_queue_manager/runtime/eq_error.gd")
 static func run(t) -> void:
 	_test_v3_tables_roundtrip(t)
 	_test_missing_v3_tables_migrate_empty(t)
-	_test_schema_v5_rejected(t)
+	_test_schema_v6_rejected(t)
 	_test_detached_relations_rejected(t)
 	_test_unregistered_maintenance_predicate_rejected(t)
 	_test_restore_does_not_emit_state_wrapped(t)
@@ -244,15 +244,15 @@ static func _test_missing_v3_tables_migrate_empty(t) -> void:
 	t.eq(fresh.state_algebra, null, "missing state_algebra table keeps runtime detached")
 
 
-static func _test_schema_v5_rejected(t) -> void:
+static func _test_schema_v6_rejected(t) -> void:
 	var rr := _pipeline_setup_v3()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
-	bundle["schema_version"] = 5
+	bundle["schema_version"] = 6
 
 	var fresh := EQReservationRuntime.new()
 	fresh.runtime.emit_engine_diagnostics = false
 	_register_handlers(fresh)
-	t.ok(not EQSaveAdapter.load(fresh.runtime, bundle, {}, fresh), "schema 5 is rejected")
+	t.ok(not EQSaveAdapter.load(fresh.runtime, bundle, {}, fresh), "schema 6 is rejected")
 
 
 static func _test_detached_relations_rejected(t) -> void:

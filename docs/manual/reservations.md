@@ -68,12 +68,20 @@ trigger.arm(reservation, cond, 0)  # arm at tick 0
 # later, when an attack on hero resolves (the sweep point):
 var view := {"kind": &"hit", "source": &"orc", "target": &"hero", "tags": [&"damage"]}
 for fired in trigger.on_event_resolved(view, current_tick):
-    # `fired` is the reservation whose condition matched — resolve the counter here
+    # Standalone engine compatibility projection: the matching armed reservation.
     pass
 ```
 
 `rumination` controls how many times the same armed reaction may fire before it is
 spent; `duration` (or `DURATION_UNLIMITED`) controls how long it stays armed by tick.
+
+In the reservation pipeline, matching never resolves in place. Each match creates
+an independent scheduled FIRE reservation. Its handler view contains
+`reaction_fire_context` version 1, including `fire_event_id`, 1-based
+`fire_index`, and the triggering event id/tick/view/source/target/cell plus the
+open consumer event-view copy. Read a pending copy with
+`reaction_fire_context_for_event(event_id)`. The armed slot remains separate so
+remaining uses and expiry survive a pending FIRE and a save/load boundary.
 
 ## 4. Worked example
 
@@ -128,7 +136,7 @@ Nothing closes silently.
 
 Declarations added by the EBS extension round (SEM v1.2). All are L2/L3 opt-in — with no declarations the runtime behaves exactly as before.
 
-- **Inv pairs**: `EQStateAlgebra.declare_inv_pair(a, b, Rule.CANCEL | EXCLUDE | COEXIST)`; CANCEL keeps one signed axis per pair, so cancellation is arithmetic. Rate suspensions are modifiers (`add_rate_modifier(line, "override", 0)` = freeze); removing one restores the remaining effective rate automatically. Attach via `rr.state_algebra`; its save tables were introduced by schema v3 and remain in current schema v4.
+- **Inv pairs**: `EQStateAlgebra.declare_inv_pair(a, b, Rule.CANCEL | EXCLUDE | COEXIST)`; CANCEL keeps one signed axis per pair, so cancellation is arithmetic. Rate suspensions are modifiers (`add_rate_modifier(line, "override", 0)` = freeze); removing one restores the remaining effective rate automatically. Attach via `rr.state_algebra`; its save tables were introduced by schema v3 and remain in current schema v5.
 - **Relations & rewrites**: declare relation types (`TREE`/`GRAPH`, `SERIAL_SUTURE` on dissolve), `bind` instances, then `declare_expansion_rule` (tag-gated target expansion along relations, cost-bounded) and `register_transform` (`retarget` to a provenance stage / `state_inv`). Transforms may apply repeatedly; validating the application structure is the consumer's job — the core guarantees deterministic order, per-application trace, and a bounded-rounds backstop.
 - **Meta-level & interventions**: `EQActionDefinition.meta_level` (int, default 0) is carried by events and windows. `intervene_close(window_id, {"meta_level": n})` closes prematurely when `n >= window meta` (tie succeeds): resolved effects stay, pending members close with `closed_by: intervention`. `submit_bundle` resolves same-tick members atomically (single sweep after all members). `open_phase`/`close_phase` add sub-checkpoints inside a window; revisiting a phase name detects the minimal loop and rolls back to its start, tracing `cleared_inputs`.
-- **Saving**: schema v3 introduced the `relations` / `state_algebra` tables used above; current schema v4 retains them and additionally writes both effect-result mode bindings on every reservation. Loading verifies registered names and required v4 bindings first and applies nothing on a stable error. Current readers migrate missing binding fields to legacy 0 only for schema v1-v3 bundles and reject explicit nonzero bindings under those versions; old v3 readers reject v4 at the top-level version boundary.
+- **Saving**: schema v3 introduced the `relations` / `state_algebra` tables used above; schema v4 added both effect-result mode bindings; current schema v5 retains both and adds the scheduled reaction-FIRE context. Loading verifies names, bindings, and occurrence identity first and applies nothing on a stable error. A historical pending FIRE is rejected because its trigger cause was never stored; ordinary historical scheduled work still migrates.

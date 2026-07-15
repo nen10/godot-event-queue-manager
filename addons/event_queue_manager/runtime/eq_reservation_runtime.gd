@@ -34,6 +34,7 @@ const EQConditionEval := preload("eq_condition_eval.gd")
 const EQEventLines := preload("eq_event_lines.gd")
 const EQEffectChunk := preload("eq_effect_chunk.gd")
 const EQEffectCommitResult := preload("eq_effect_commit_result.gd")
+const EQReactionFireContext := preload("eq_reaction_fire_context.gd")
 const EQTriggerEngine := preload("eq_trigger_engine.gd")
 const EQSnapshot := preload("eq_snapshot.gd")
 const EQWindow := preload("eq_window.gd")
@@ -70,6 +71,13 @@ var _order_hook: Callable = Callable()
 ## records and ordered event_views; FAILURE contains version/status/diagnostic.
 func last_effect_commit_outcome() -> Dictionary:
 	return _last_effect_commit_outcome.duplicate(true)
+
+
+## Deep-copy inspection of one scheduled reaction FIRE occurrence. Empty means
+## the event is not a reaction FIRE (or no longer pending).
+func reaction_fire_context_for_event(event_id: int) -> Dictionary:
+	var context = _reaction_fire_context_by_event.get(event_id, {})
+	return EQReactionFireContext.copy(context) if context is Dictionary else {}
 
 
 ## Registers the acceptance ordering hook (SEM §7.1, Q20/Q38, EQM-115):
@@ -296,6 +304,8 @@ func _transform_matches(transform: Dictionary, tags: Array) -> bool:
 var _by_event: Dictionary = {}          # event_id -> EQReservation (scheduled)
 var _bound_inv: Dictionary = {}         # event_id -> Array bound invalidation terms
 var _expiry_by_event: Dictionary = {}   # expiry event_id -> EQReservation
+## scheduled FIRE event_id -> immutable/versioned cause value
+var _reaction_fire_context_by_event: Dictionary = {}
 var _pending_conditional: Array[Dictionary] = []  # {res, solve, inv, view} in submit order
 var _cascade_tick: int = -1
 var _cascade_round: int = 0
@@ -587,9 +597,13 @@ func _reconcile_runtime_state_after_snapshot_restore() -> void:
 	for event_id in _by_event.keys():
 		if not live_event_ids.has(int(event_id)):
 			_by_event.erase(event_id)
+			_reaction_fire_context_by_event.erase(event_id)
 			_clear_bundle_event_link(int(event_id))
 			_window_of_event.erase(event_id)
 			_bound_inv.erase(event_id)
+	for event_id in _reaction_fire_context_by_event.keys():
+		if not live_event_ids.has(int(event_id)) or not _by_event.has(event_id):
+			_reaction_fire_context_by_event.erase(event_id)
 	var dead_bundles: Array[StringName] = []
 	for bid in _bundle_members.keys():
 		var members: Array = _bundle_members[bid]
@@ -670,6 +684,7 @@ func save_state() -> Dictionary:
 			"event_id": int(event_id),
 			"reservation": (_by_event[event_id] as EQReservation).to_dict(),
 			"inv": (_bound_inv.get(event_id, []) as Array).duplicate(true),
+			"reaction_fire_context": reaction_fire_context_for_event(int(event_id)),
 		})
 	return {
 		"event_lines": lines.to_dict(),
@@ -728,6 +743,116 @@ func verify_state(data: Dictionary) -> bool:
 			if int(term.get("type", -1)) == EQConditionSpec.Type.NAMED_PREDICATE and not runtime.has_predicate(StringName(term.get("predicate_name", ""))):
 				runtime._fault(EQError.CONDITION_PREDICATE_UNREGISTERED, "predicate '%s' in the save is not registered" % term.get("predicate_name", ""), {}, true)
 				return false
+	var live_scheduler_event_ids := {}
+	var scheduler_table = data.get("scheduler", {})
+	if scheduler_table is Dictionary:
+		for entry_value in (scheduler_table as Dictionary).get("entries", []):
+			if entry_value is Dictionary:
+				live_scheduler_event_ids[int((entry_value as Dictionary).get("event_id", -1))] = true
+	var seen_scheduled_event_ids := {}
+	for scheduled_value in data.get("scheduled_reservations", []):
+		if typeof(scheduled_value) != TYPE_DICTIONARY:
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_INVALID,
+				"scheduled reservation row must be a Dictionary",
+				{"reason": "row_type"},
+				true
+			)
+			return false
+		var scheduled: Dictionary = scheduled_value
+		var scheduled_event_id := int(scheduled.get("event_id", -1))
+		if (
+			scheduled_event_id < 1
+			or seen_scheduled_event_ids.has(scheduled_event_id)
+			or not live_scheduler_event_ids.has(scheduled_event_id)
+		):
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_INVALID,
+				"scheduled reservation event identity is duplicate or orphaned",
+				{"event_id": scheduled_event_id, "reason": "event_identity"},
+				true
+			)
+			return false
+		seen_scheduled_event_ids[scheduled_event_id] = true
+		var reservation_value = scheduled.get("reservation", {})
+		if typeof(reservation_value) != TYPE_DICTIONARY:
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_INVALID,
+				"scheduled reservation payload must be a Dictionary",
+				{"reason": "reservation_type"},
+				true
+			)
+			return false
+		var definition_value = (reservation_value as Dictionary).get("definition", {})
+		var is_reaction_fire := (
+			definition_value is Dictionary
+			and int((definition_value as Dictionary).get("kind", -1))
+			== EQActionDefinition.Kind.REACTION_PREPARATION
+		)
+		if save_schema_version >= 5 and not scheduled.has("reaction_fire_context"):
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_MISSING,
+				"schema 5 scheduled reservation is missing reaction_fire_context",
+				{"event_id": int(scheduled.get("event_id", -1)), "reason": "missing_field"},
+				true
+			)
+			return false
+		var fire_context = scheduled.get("reaction_fire_context", {})
+		if is_reaction_fire and save_schema_version < 5:
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_MISSING,
+				"historical save cannot represent a pending reaction FIRE cause",
+				{
+					"event_id": int(scheduled.get("event_id", -1)),
+					"schema_version": save_schema_version,
+					"reason": "context_not_supported_by_schema",
+				},
+				true
+			)
+			return false
+		if is_reaction_fire:
+			if typeof(fire_context) != TYPE_DICTIONARY or (fire_context as Dictionary).is_empty():
+				runtime._fault(
+					EQError.REACTION_FIRE_CONTEXT_MISSING,
+					"pending reaction FIRE is missing its cause context",
+					{"event_id": int(scheduled.get("event_id", -1))},
+					true
+				)
+				return false
+			var context_validation := EQReactionFireContext.validate(fire_context)
+			if not context_validation.is_valid():
+				runtime._fault(
+					EQError.REACTION_FIRE_CONTEXT_INVALID,
+					"pending reaction FIRE has an invalid cause context",
+					{
+						"event_id": int(scheduled.get("event_id", -1)),
+						"issues": context_validation.codes().map(func(code): return String(code)),
+					},
+					true
+				)
+				return false
+			if int((fire_context as Dictionary).get("fire_event_id", -1)) != scheduled_event_id:
+				runtime._fault(
+					EQError.REACTION_FIRE_CONTEXT_INVALID,
+					"reaction FIRE context event id does not match its scheduled row",
+					{
+						"event_id": scheduled_event_id,
+						"context_event_id": int(
+							(fire_context as Dictionary).get("fire_event_id", -1)
+						),
+						"reason": "event_id_mismatch",
+					},
+					true
+				)
+				return false
+		elif fire_context is Dictionary and not (fire_context as Dictionary).is_empty():
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_INVALID,
+				"non-reaction reservation must not carry reaction_fire_context",
+				{"event_id": int(scheduled.get("event_id", -1)), "reason": "wrong_kind"},
+				true
+			)
+			return false
 	var reservation_dicts: Array = []
 	for a in data.get("armed_triggers", []):
 		reservation_dicts.append(a.get("reservation", {}))
@@ -753,7 +878,7 @@ func verify_state(data: Dictionary) -> bool:
 			if require_effect_result_bindings and not rd.has(binding["reservation_key"]):
 				runtime._fault(
 					EQError.EFFECT_COMMIT_RESULT_VERSION_UNSUPPORTED,
-					"schema 4 reservation is missing a required effect commit result binding",
+					"schema 4+ reservation is missing a required effect commit result binding",
 					{
 						"slot": binding["slot"],
 						"effect": String(name),
@@ -844,6 +969,11 @@ func apply_state(data: Dictionary) -> void:
 		var inv: Array = s.get("inv", [])
 		if not inv.is_empty():
 			_bound_inv[event_id] = inv
+		var fire_context = s.get("reaction_fire_context", {})
+		if fire_context is Dictionary and not (fire_context as Dictionary).is_empty():
+			_reaction_fire_context_by_event[event_id] = EQReactionFireContext.copy(
+				fire_context
+			)
 
 
 ## Schedules (or arms) a reservation per its kind. A reservation with solve
@@ -993,8 +1123,18 @@ func submit_bundle(reservations: Array, delay: int = 0) -> StringName:
 			_rollback_bundle_plan(planned)
 			return &""
 		var kind := res.definition.kind
-		if kind == EQActionDefinition.Kind.WAIT or kind == EQActionDefinition.Kind.READY or kind == EQActionDefinition.Kind.OPERATION:
-			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "submit_bundle rejects WAIT/READY/OPERATION members", {"actor_id": String(res.actor_id), "kind": str(kind)}, true)
+		if (
+			kind == EQActionDefinition.Kind.WAIT
+			or kind == EQActionDefinition.Kind.READY
+			or kind == EQActionDefinition.Kind.OPERATION
+			or kind == EQActionDefinition.Kind.REACTION_PREPARATION
+		):
+			runtime._fault(
+				EQError.CONDITION_LINE_UNKNOWN,
+				"submit_bundle rejects WAIT/READY/OPERATION/REACTION_PREPARATION members",
+				{"actor_id": String(res.actor_id), "kind": str(kind)},
+				true
+			)
 			_rollback_bundle_plan(planned)
 			return &""
 		var bound := _bind_conditions(res)
@@ -1062,6 +1202,7 @@ func _rollback_bundle_plan(planned: Array) -> void:
 			)
 		if event_id > 0 and runtime.scheduler.cancel(event_id):
 			_by_event.erase(event_id)
+			_reaction_fire_context_by_event.erase(event_id)
 			_window_of_event.erase(event_id)
 			_bound_inv.erase(event_id)
 			_clear_bundle_event_link(event_id)
@@ -1110,6 +1251,7 @@ func _settle_race(gid: StringName, winner: EQReservation, winner_event_id: int) 
 			runtime.scheduler.cancel(res.event_id)
 			_clear_bundle_event_link(res.event_id)
 			_by_event.erase(res.event_id)
+			_reaction_fire_context_by_event.erase(res.event_id)
 			_window_of_event.erase(res.event_id)
 			_bound_inv.erase(res.event_id)
 		res.status = EQReservation.Status.INVALIDATED
@@ -1484,16 +1626,22 @@ func resolve_next() -> EQReservation:
 			return null
 		var bundle_id := _bundle_of.get(e.event_id, &"")
 		var inv_terms_bundle := _bound_inv.get(e.event_id, [])
+		var raw_view := _view_of(res)
+		var fire_context := reaction_fire_context_for_event(e.event_id)
+		var invalidation_view := raw_view.duplicate(true)
+		if not fire_context.is_empty():
+			invalidation_view["reaction_fire_context"] = fire_context.duplicate(true)
 		_by_event.erase(e.event_id)
 		_bound_inv.erase(e.event_id)
 		_window_of_event.erase(e.event_id)
+		_reaction_fire_context_by_event.erase(e.event_id)
 		if bundle_id != &"":
 			return _resolve_bundle(e.event_id, res, inv_terms_bundle, bundle_id)
 		_clear_bundle_event_link(e.event_id)
 		# step 1b — lazy invalidation at reference time (level semantics)
 		if not inv_terms_bundle.is_empty():
 			var inv := EQConditionEval.invalidation_check(
-				inv_terms_bundle, _ctx(_view_of(res))
+				inv_terms_bundle, _ctx(invalidation_view)
 			)
 			if int(inv["result"]) == EQConditionEval.Result.YES:
 				res.status = EQReservation.Status.INVALIDATED
@@ -1507,12 +1655,26 @@ func resolve_next() -> EQReservation:
 			_reject_effect_commit_binding(res, e.event_id, &"single_resolution")
 			return res
 		res.status = EQReservation.Status.RESOLVED
+		if not fire_context.is_empty():
+			runtime.trace().record(
+				{
+					"kind": "reaction_fire_resolved",
+					"actor": String(res.actor_id),
+					"event_id": e.event_id,
+					"reaction_fire_context": fire_context.duplicate(true),
+				}
+			)
 		var race_gid: StringName = _race_of.get(res.get_instance_id(), &"")
 		if race_gid != &"" and _race_groups.has(race_gid):
 			_settle_race(race_gid, res, e.event_id)
 		# step 2/3 — declared effect into the chunk
-		var raw_view := _view_of(res)
-		var transformed_view := _apply_effect_transforms(res, _apply_target_expansion(res, raw_view.duplicate(true)))
+		var transformed_view := _apply_effect_transforms(
+			res, _apply_target_expansion(res, raw_view.duplicate(true))
+		)
+		if not fire_context.is_empty():
+			# Cause is occurrence metadata, not an effect operand: inject after
+			# expansion/transforms so a retarget cannot rewrite trigger truth.
+			transformed_view["reaction_fire_context"] = fire_context.duplicate(true)
 		var commit_result := _apply_single_effect_commit(
 			res.definition.effect_name, transformed_view, raw_view
 		)
@@ -1530,7 +1692,7 @@ func resolve_next() -> EQReservation:
 		if res.definition.kind != EQActionDefinition.Kind.REACTION_PREPARATION and res.remaining_ruminations > 0:
 			_resubmit_rumination(res)
 		# step 4 — exactly one outer batch boundary over the declared order.
-		_sweep_bundle(commit_result.event_views())
+		_sweep_bundle(_event_view_occurrences(commit_result.event_views(), e.event_id))
 		# step 5 — drain; chunk-empty = save boundary
 		last_drained.append_array(chunk.drain())
 		return res
@@ -1543,7 +1705,7 @@ func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array
 		_clear_bundle_group(bundle_id)
 		return first
 	var candidates: Array = []
-	var resolved_views: Array = []
+	var resolved_occurrences: Array = []
 	for id_val in member_ids:
 		var rid := int(id_val)
 		var res: EQReservation
@@ -1555,6 +1717,7 @@ func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array
 			res = _by_event[rid]
 			inv_terms = (_bound_inv.get(rid, []) as Array).duplicate(true)
 			_by_event.erase(rid)
+			_reaction_fire_context_by_event.erase(rid)
 			_window_of_event.erase(rid)
 			_bound_inv.erase(rid)
 			_clear_bundle_event_link(rid)
@@ -1642,7 +1805,7 @@ func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array
 		var transformed_view := _apply_effect_transforms(res, _apply_target_expansion(res, raw_view.duplicate(true)))
 		for r in _apply_effect(res.definition.effect_name, transformed_view, &"bundle"):
 			chunk.add(r)
-		resolved_views.append(raw_view)
+		resolved_occurrences.append_array(_event_view_occurrences([raw_view], rid))
 		if res.definition.kind == EQActionDefinition.Kind.OPERATION:
 			_cause_target_reservation(res)
 		if res.definition.kind != EQActionDefinition.Kind.REACTION_PREPARATION and res.remaining_ruminations > 0:
@@ -1651,20 +1814,45 @@ func _resolve_bundle(event_id: int, first: EQReservation, first_inv_terms: Array
 	# 1) bundle trace
 	runtime.trace().record({"kind": "bundle_resolved", "bundle": String(bundle_id), "members": ordered_event_ids})
 	# 2) single bundle boundary sweep
-	_sweep_bundle(resolved_views)
+	_sweep_bundle(resolved_occurrences)
 	# 3) single drain after the bundle
 	last_drained.append_array(chunk.drain())
 	_clear_bundle_group(bundle_id)
 	return first
 
 
-func _sweep_bundle(views: Array) -> void:
+func _event_view_occurrences(views: Array, trigger_event_id: int) -> Array:
+	var out: Array = []
+	for view_index in range(views.size()):
+		out.append(
+			{
+				"event_id": trigger_event_id,
+				"view_index": view_index,
+				"view": (views[view_index] as Dictionary).duplicate(true),
+			}
+		)
+	return out
+
+
+func _reaction_fire_reservation(armed: EQReservation) -> EQReservation:
+	var occurrence := EQReservation.from_dict(armed.to_dict())
+	occurrence.event_id = -1
+	occurrence.status = EQReservation.Status.PENDING
+	return occurrence
+
+
+func _sweep_bundle(trigger_occurrences: Array) -> void:
 	var tick := runtime.scheduler.current_tick
 	var fired: Array = []
-	for view in views:
-		var chunk_fired := engine.on_event_resolved(view, tick)
-		for res in chunk_fired:
-			fired.append(res)
+	for trigger_occurrence in trigger_occurrences:
+		var view: Dictionary = trigger_occurrence["view"]
+		var producer_view := EQReactionFireContext.canonical_event_view(view)
+		var chunk_fired := engine.on_event_resolved_occurrences(view.duplicate(true), tick)
+		for fire in chunk_fired:
+			fire["trigger_event_id"] = int(trigger_occurrence["event_id"])
+			fire["trigger_view_index"] = int(trigger_occurrence["view_index"])
+			fire["trigger_view"] = producer_view
+			fired.append(fire)
 	if fired.is_empty():
 		_recheck_scheduled_invalidation()
 		_evaluate_pending_conditional()
@@ -1677,23 +1865,55 @@ func _sweep_bundle(views: Array) -> void:
 	if _cascade_round > max_cascade_rounds:
 		runtime._fault(EQError.TRIGGER_CHAIN_LIMIT, "same-tick reaction cascade exceeded %d rounds" % max_cascade_rounds, {"tick": tick}, true)
 		return
-	for res in _order_candidates(fired, func(x): return x):
-		var consumed: bool = (res as EQReservation).status == EQReservation.Status.RESOLVED
-		if consumed:
-			# the armed slot closed by count exhaustion (its final
-			# resolution still happens through the schedule below)
-			_trace_invalidated(-1, (res as EQReservation).actor_id, &"reaction_count")
-		var id := _schedule(res, 0)
-		if (res as EQReservation).definition != null and (res as EQReservation).definition.kind == EQActionDefinition.Kind.REACTION_PREPARATION:
-			var bound_inv := _bind_conditions(res).get("inv", [])
+	for fire in _order_candidates(fired, func(x): return x["reservation"]):
+		var armed: EQReservation = fire["reservation"]
+		var closes_arm := bool(fire["closes_arm"])
+		var occurrence := _reaction_fire_reservation(armed)
+		var id := _schedule(occurrence, 0)
+		if id <= 0:
+			continue
+		var context := EQReactionFireContext.capture(
+			id,
+			int(fire["trigger_event_id"]),
+			int(fire["trigger_view_index"]),
+			tick,
+			int(fire["fire_index"]),
+			fire["trigger_view"]
+		)
+		if context.is_empty():
+			runtime.scheduler.cancel(id)
+			_by_event.erase(id)
+			_window_of_event.erase(id)
+			_bound_inv.erase(id)
+			occurrence.status = EQReservation.Status.INVALIDATED
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_INVALID,
+				"matching trigger could not produce a reaction FIRE context",
+				{
+					"actor": String(armed.actor_id),
+					"trigger_event_id": int(fire["trigger_event_id"]),
+				},
+				true
+			)
+			continue
+		if closes_arm:
+			# Exactly the occurrence which exhausted the armed slot records
+			# count closure; later status mutation cannot duplicate it.
+			_trace_invalidated(-1, armed.actor_id, &"reaction_count")
+		_reaction_fire_context_by_event[id] = context
+		if occurrence.definition != null:
+			var bound_inv := _bind_conditions(occurrence).get("inv", [])
 			if not bound_inv.is_empty():
 				_bound_inv[id] = bound_inv
-		runtime.trace().record({
-			"kind": "reaction_fired",
-			"round": _cascade_round,
-			"actor": String((res as EQReservation).actor_id),
-			"event_id": id,
-		})
+		runtime.trace().record(
+			{
+				"kind": "reaction_fired",
+				"round": _cascade_round,
+				"actor": String(occurrence.actor_id),
+				"event_id": id,
+				"reaction_fire_context": context.duplicate(true),
+			}
+		)
 	_recheck_scheduled_invalidation()
 	_evaluate_pending_conditional()
 func _clear_bundle_event_link(event_id: int) -> void:
@@ -1720,6 +1940,7 @@ func _cancel_window_pending_members(window_id: int) -> void:
 		runtime.scheduler.cancel(event_id)
 		_window_of_event.erase(event_id)
 		_by_event.erase(event_id)
+		_reaction_fire_context_by_event.erase(event_id)
 		_bound_inv.erase(event_id)
 		_clear_bundle_event_link(event_id)
 		if res != null:
@@ -1789,6 +2010,7 @@ func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed"
 			(_by_event[event_id] as EQReservation).status = EQReservation.Status.INVALIDATED
 			_clear_bundle_event_link(event_id)
 			_by_event.erase(event_id)
+			_reaction_fire_context_by_event.erase(event_id)
 			_window_of_event.erase(event_id)
 			_bound_inv.erase(event_id)
 	for event_id in _expiry_by_event.keys():
@@ -1807,8 +2029,10 @@ func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed"
 func _resolve_expiry(e) -> void:
 	var res: EQReservation = _expiry_by_event[e.event_id]
 	_expiry_by_event.erase(e.event_id)
-	if res.status == EQReservation.Status.ARMED:
-		engine.disarm(res)
+	# Armed membership is authoritative. A scheduled FIRE occurrence is a
+	# distinct reservation instance, so its status can never mask this slot;
+	# this membership check also repairs historical status drift safely.
+	if engine.disarm(res):
 		res.status = EQReservation.Status.INVALIDATED
 		_trace_invalidated(e.event_id, res.actor_id, &"duration")
 		if not _verify_effect_commit_versions(res, &"expiry_resolution"):
@@ -1839,7 +2063,7 @@ func _resolve_expiry(e) -> void:
 			return
 		for r in _apply_effect(expiry_effect, _view_of(res), &"expiry"):
 			chunk.add(r)
-		_sweep(_view_of(res))
+		_sweep(_view_of(res), e.event_id)
 		last_drained.append_array(chunk.drain())
 	else:
 		_trace_invalidated(e.event_id, res.actor_id, &"already_closed")
@@ -1933,37 +2157,8 @@ func _apply_effect(name: StringName, view: Dictionary, context: StringName = &"l
 ## SCHEDULED at the current tick with their declared priority, bounded by
 ## same-tick rounds), re-check numeric invalidation, evaluate pending
 ## conditions.
-func _sweep(view: Dictionary) -> void:
-	var tick := runtime.scheduler.current_tick
-	var fired := engine.on_event_resolved(view, tick)
-	if not fired.is_empty():
-		if tick == _cascade_tick:
-			_cascade_round += 1
-		else:
-			_cascade_tick = tick
-			_cascade_round = 1
-		if _cascade_round > max_cascade_rounds:
-			runtime._fault(EQError.TRIGGER_CHAIN_LIMIT, "same-tick reaction cascade exceeded %d rounds" % max_cascade_rounds, {"tick": tick}, true)
-			return
-		for res in _order_candidates(fired, func(x): return x):
-			var consumed: bool = (res as EQReservation).status == EQReservation.Status.RESOLVED
-			if consumed:
-				# the armed slot closed by count exhaustion (its final
-				# resolution still happens through the schedule below)
-				_trace_invalidated(-1, (res as EQReservation).actor_id, &"reaction_count")
-			var id := _schedule(res, 0)
-			if (res as EQReservation).definition != null and (res as EQReservation).definition.kind == EQActionDefinition.Kind.REACTION_PREPARATION:
-				var bound_inv := _bind_conditions(res).get("inv", [])
-				if not bound_inv.is_empty():
-					_bound_inv[id] = bound_inv
-			runtime.trace().record({
-				"kind": "reaction_fired",
-				"round": _cascade_round,
-				"actor": String((res as EQReservation).actor_id),
-				"event_id": id,
-			})
-	_recheck_scheduled_invalidation()
-	_evaluate_pending_conditional()
+func _sweep(view: Dictionary, trigger_event_id: int) -> void:
+	_sweep_bundle(_event_view_occurrences([view], trigger_event_id))
 
 
 ## §5.3 numeric "eager": invalidation terms of scheduled reservations are
@@ -1974,14 +2169,22 @@ func _recheck_scheduled_invalidation() -> void:
 		var res: EQReservation = _by_event.get(event_id, null)
 		if res == null:
 			_bound_inv.erase(event_id)
+			_reaction_fire_context_by_event.erase(event_id)
 			continue
-		var inv := EQConditionEval.invalidation_check(_bound_inv[event_id], _ctx(_view_of(res)))
+		var scheduled_view := _view_of(res)
+		var fire_context := reaction_fire_context_for_event(int(event_id))
+		if not fire_context.is_empty():
+			scheduled_view["reaction_fire_context"] = fire_context
+		var inv := EQConditionEval.invalidation_check(
+			_bound_inv[event_id], _ctx(scheduled_view)
+		)
 		if int(inv["result"]) == EQConditionEval.Result.YES:
 			runtime.scheduler.cancel(event_id)
 			res.status = EQReservation.Status.INVALIDATED
 			_clear_bundle_event_link(event_id)
 			_window_of_event.erase(event_id)
 			_by_event.erase(event_id)
+			_reaction_fire_context_by_event.erase(event_id)
 			_bound_inv.erase(event_id)
 			_trace_invalidated(event_id, res.actor_id, StringName(inv["closed_by"]))
 

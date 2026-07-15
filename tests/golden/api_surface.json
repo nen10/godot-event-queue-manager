@@ -716,6 +716,39 @@
         "type"
       ]
     },
+    "EQReactionFireContext": {
+      "consts": [
+        "EQError",
+        "EQValidation",
+        "VERSION",
+        "VERSION_FIELD"
+      ],
+      "enums": [],
+      "methods": [
+        {
+          "name": "canonical_event_view",
+          "params": "value: Dictionary",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "capture",
+          "params": "fire_event_id: int,\n\ttrigger_event_id: int,\n\ttrigger_view_index: int,\n\ttrigger_tick: int,\n\tfire_index: int,\n\tevent_view: Dictionary",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "copy",
+          "params": "value: Dictionary",
+          "returns": "-> Dictionary"
+        },
+        {
+          "name": "validate",
+          "params": "value",
+          "returns": "-> EQValidation"
+        }
+      ],
+      "signals": [],
+      "vars": []
+    },
     "EQReservation": {
       "consts": [
         "EQActionDefinition"
@@ -763,6 +796,7 @@
         "EQEffectChunk",
         "EQEffectCommitResult",
         "EQEventLines",
+        "EQReactionFireContext",
         "EQReservation",
         "EQRuntime",
         "EQSnapshot",
@@ -846,6 +880,11 @@
           "name": "plan_append_bundle_member",
           "params": "planned: Array, event_id: int, _res: EQReservation",
           "returns": "-> void"
+        },
+        {
+          "name": "reaction_fire_context_for_event",
+          "params": "event_id: int",
+          "returns": "-> Dictionary"
         },
         {
           "name": "register_transform",
@@ -1025,6 +1064,11 @@
         },
         {
           "name": "on_event_resolved",
+          "params": "view: Dictionary, current_tick: int",
+          "returns": "-> Array"
+        },
+        {
+          "name": "on_event_resolved_occurrences",
           "params": "view: Dictionary, current_tick: int",
           "returns": "-> Array"
         }
@@ -1679,6 +1723,8 @@
         "POLICY_MISSING",
         "POLICY_NAME_EMPTY",
         "PRESENTATION_POLICY_CLASS_CONFLICT",
+        "REACTION_FIRE_CONTEXT_INVALID",
+        "REACTION_FIRE_CONTEXT_MISSING",
         "RESERVATION_IMMEDIATE_NONZERO_DELAY",
         "RESERVATION_INVALID_DURATION",
         "RESERVATION_MISSING_DEFINITION",

@@ -42,6 +42,17 @@
 > boundary. It therefore cannot ignore the new fields and silently reinterpret
 > pending typed work as legacy work.
 
+> **Reaction FIRE occurrence context (EQM-132, 2026-07-15): bundle
+> `SCHEMA_VERSION` is now 5.** Every `scheduled_reservations` row carries
+> `reaction_fire_context` (`{}` for ordinary reservations). A pending reaction
+> FIRE requires a valid version-1 value whose `fire_event_id` matches the row;
+> duplicate/orphan identities and malformed values reject before mutation.
+> Armed state and scheduled FIRE occurrences serialize as distinct reservation
+> instances. Versions 1-4 continue to migrate ordinary rows with an empty
+> context, but a historical pending reaction FIRE is rejected because those
+> formats never stored its trigger cause. A v4 reader rejects v5 at the
+> top-level boundary and cannot silently discard the cause.
+
 The serialized scheduler snapshot (`EQSnapshot`, `SCHEMA_VERSION = 1`) and the
 save bundle (`EQSaveAdapter`, `schema_version`) are the on-disk contracts a
 consumer's save files depend on. This declares the v1.0 compatibility stance so a
@@ -64,17 +75,18 @@ game shipping on v1.0 knows what survives an addon upgrade.
   (`RUNTIME_RESILIENCE_POLICY`): the consumer's game is not crashed, and a bad save
   is not silently half-loaded.
 - `EQSaveAdapter.load(...)` returns `false` on an unsupported `schema_version`
-  (tested, EQM-085), so a consumer can branch on it. The current v4 reader
-  accepts bundle versions 1 through 4. For v1-v3 only, absent effect-result
+  (tested, EQM-085), so a consumer can branch on it. The current v5 reader
+  accepts bundle versions 1 through 5. For v1-v3 only, absent effect-result
   binding fields migrate to legacy `0`, but any explicit nonzero binding is
-  rejected; v4 requires both fields and rejects a malformed bundle before
-  applying any state.
+  rejected; v4+ requires both fields. Schema v5 additionally requires the
+  scheduled-row context field and rejects a malformed bundle before applying
+  any state.
 
 ## What a consumer can rely on at v1.0
 
 1. A save written by any v1.x release loads in any later v1.x release.
 2. A save written by a *newer* schema is rejected cleanly on an older reader,
-   never partially applied. In particular, a v3 reader rejects a v4 bundle at
+   never partially applied. In particular, a v4 reader rejects a v5 bundle at
    the top-level version boundary.
 3. When a breaking change ships, it is a version bump with a documented migrator —
    the change is visible, not silent.

@@ -158,14 +158,23 @@ The first accepted submit stores both handler modes on the reservation (0 legacy
 handler from legacy to typed or vice versa cannot reinterpret pending work; use
 the stable `eqm.effect.commit_result_binding_mismatch` to surface that setup
 error. Schema v1-v3 saves with no binding fields remain legacy.
-The current schema-v4 writer always emits both binding fields. Its reader
+Schema v4 introduced both binding fields and the current schema-v5 writer
+retains them. Its reader
 migrates missing fields only for schema v1-v3 bundles (to legacy 0); a v4
-reservation missing either field is rejected before load mutation with
+or newer reservation missing either field is rejected before load mutation with
 `eqm.effect.commit_result_version_unsupported`. A v3 reader rejects the v4
 bundle at the top-level version boundary, so it cannot silently ignore typed
 bindings. The current reader also rejects any explicit nonzero binding under a
 v1-v3 top-level version (`reason: binding_not_supported_by_schema`), so changing
 only that version cannot bypass the boundary.
+
+For a scheduled reaction FIRE, the handler view also carries
+`reaction_fire_context` version 1. The context identifies the FIRE event and
+1-based use, and preserves the exact trigger event id/tick/ordered view and its
+consumer-owned value copy. Schema v5 saves this per scheduled row. Armed state
+and pending FIRE are separate reservation instances; a historical pending FIRE
+without a stored cause is rejected instead of being reconstructed from current
+world state.
 
 An OPERATION target must be non-empty and registered when submitted. After that
 valid issuance, an effect may remove an actor and still finish its current

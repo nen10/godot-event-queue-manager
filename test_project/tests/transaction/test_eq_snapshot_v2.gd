@@ -104,7 +104,7 @@ static func _test_bundle_shape(t) -> void:
 	var rr := _pipeline_setup()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
 	var schema_version := int(bundle["schema_version"])
-	t.eq(schema_version, 4, "bundle saves at the current schema v4")
+	t.eq(schema_version, 5, "bundle saves at the current schema v5")
 	for key in [
 		"event_lines", "windows", "armed_triggers", "pending_conditional", "scheduled_reservations"
 	]:
@@ -139,7 +139,7 @@ static func _test_v1_migrator_and_unknown(t) -> void:
 	)
 	t.eq(int(fresh.runtime.registry.get_state(&"hero").data["hp"]), 3, "v1 actor data restored")
 	t.ok(
-		not EQSaveAdapter.load(fresh.runtime, {"schema_version": 5}),
+		not EQSaveAdapter.load(fresh.runtime, {"schema_version": 6}),
 		"a newer schema is rejected cleanly (fail-safe)"
 	)
 
@@ -330,7 +330,7 @@ static func _test_schema_v4_requires_bindings(t) -> void:
 		var before_scheduler := restored.runtime.scheduler.snapshot()
 		t.ok(
 			not EQSaveAdapter.load(restored.runtime, incomplete_bundle, {}, restored),
-			"schema 4 rejects missing required field %s" % missing_key
+			"schema 5 retains the v4 binding requirement for %s" % missing_key
 		)
 		t.eq(
 			restored.runtime.faults.back()["code"],

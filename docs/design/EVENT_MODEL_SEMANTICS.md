@@ -1,6 +1,6 @@
 # Event Model Semantics (v1)
 
-status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. **Transactional effect-result revision (2026-07-14)**: issued handler modes are persisted by save-bundle schema v4 (§6.1, §10.2). Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
+status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. **Transactional effect-result revision (2026-07-14)**: issued handler modes are persisted by save-bundle schema v4 (§6.1, §10.2). **Reaction FIRE occurrence revision (EQM-132, 2026-07-15)**: each scheduled FIRE has an independent reservation and versioned cause value persisted by schema v5 (§6.2, §10.3). Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
 
 Inputs (confirmed):
 
@@ -213,6 +213,10 @@ Consumer implementation points are exactly: the named effect handlers, (optional
 
 A reaction that fires during the sweep is **pushed onto the master timeline** (`due_tick = current`, `priority =` its declared value, fresh sequence) and resolves through the normal pipeline (§6.1) on a subsequent pop — it is never resolved in place inside the sweep. This preserves the three-plane invariant (*only timeline events resolve*) and makes reaction order explainable by the §3 comparator; no reaction-specific ordering rule exists (priority + sequence suffice, e.g. "counter before the follow-up" = higher priority at the same tick).
 
+The armed slot and a scheduled FIRE are different runtime instances. The armed reservation alone owns remaining uses and expiry; each match creates a fresh FIRE reservation and binds its event id to `reaction_fire_context_version: 1`. The context is deterministic value data: FIRE event id/index plus the triggering scheduler event id, tick, ordered view index, source/target/nullable cell summary, and an open consumer-owned event-view copy. It is captured before condition evaluation can mutate its input, injected into the effect-handler view only after target expansion/transforms, and never implicitly forwarded into the FIRE's later sweep. A typed handler publishes its own committed event views when the FIRE should cause another reaction.
+
+The context is game-vocabulary-neutral. EQM transports the value; a consumer decides whether its `source` means `TRIGGER_SOURCE`, whether the source is defeated, or whether a cost/refund applies. Reaction use count/duration/priority remain independent of consumer cost policy.
+
 A **cascade** is therefore the repetition "sweep → fire → schedule → resolve → sweep …", bounded by the reentrancy rounds (§8) plus a same-`(event, reaction)` re-fire guard; each round is recorded in the trace with its round number. The v1.0 in-place `fire_cascade` resolution is superseded by this contract (EQM-113).
 
 ### 6.3 Expiry is an event *(v1.1, Q40; Q06 是正)*
@@ -345,6 +349,19 @@ either binding is rejected verify-before-mutate with
 A v3 reader rejects a v4 bundle from the top-level `schema_version`, so it never
 silently ignores the bindings and reinterprets pending typed work.
 
+### 10.3 Snapshot schema v5 — reaction FIRE occurrence context
+
+Schema_version 5 adds `reaction_fire_context` to every
+`scheduled_reservations` row (`{}` for ordinary work). A pending
+`REACTION_PREPARATION` row is a scheduled FIRE occurrence and must carry a
+valid version-1 context whose `fire_event_id` equals the row event id; duplicate
+or orphan rows reject verify-before-mutate. The writer saves armed state and
+pending FIRE reservations as different instances, so save-load-save is stable
+while uses remain armed. Historical v1-v4 saves continue to migrate ordinary
+scheduled rows with an empty context, but a historical pending reaction FIRE is
+rejected: its trigger cause did not exist on disk and must not be reconstructed
+from the later world state. A v4 reader rejects v5 at the top-level boundary.
+
 ---
 
 ## 11. Trace record kinds
@@ -355,7 +372,7 @@ The canonical trace (EQM-013) already has an **open record-kind schema** (sorted
 - `window_opened` / `window_closed` — window lifecycle (fields per §8.1; close carries a cause, e.g. `deadline`).
 - invalidation records carry `closed_by: <condition id>` (and `invalid_event_skipped` for lazy skips).
 - **`closed_by` vocabulary** *(v1.1)*: condition ids plus the reserved causes `duration`, `reaction_count`, `already_closed` (§6.3), `actor_removed` (§13). Cascade resolutions carry their **round number** (§6.2). Sweep-rule executions record rule name + affected count (§4.7).
-- **`event_invalidated`** *(v1.1, EQM-113)* — the invalidation record kind (carries `closed_by`, and `event_id` when the drop maps to a scheduled event). **`reaction_fired`** *(v1.1, EQM-113)* — a fired reaction was scheduled (fields: `round`, `actor`, `event_id`).
+- **`event_invalidated`** *(v1.1, EQM-113)* — the invalidation record kind (carries `closed_by`, and `event_id` when the drop maps to a scheduled event). **`reaction_fired`** *(v1.1, EQM-113; extended EQM-132)* — a fired reaction was scheduled (fields: `round`, `actor`, `event_id`, versioned `reaction_fire_context`). **`reaction_fire_resolved`** *(EQM-132)* records the same isolated context when that exact occurrence resolves, allowing a save/restore continuation to prove its cause without replaying the earlier scheduling trace.
 - Effect records carry a deterministic `classification` (important / sensed / offscreen) — **simulation-side data (Q12)**, implemented in EQM-080/081; presentation may not alter it.
 - **v1.2 reserved kinds/fields** *(Q44–Q53)*: `relation_bound` / `relation_dissolved` / `relation_rebound` / `relation_inverted` (§13.1); `targets_expanded` (§6.4 2a); `effect_transformed` (§6.4 2b, one record per application); `state_wrapped` / `state_unwrapped` (§5.7); `bundle_resolved` (bundle id + member sequence, §7.2); `phase_rolled_back` (rollback span + cleared inputs, §8.4). `window_closed` cause vocabulary gains `intervention` (with intervener event id + both meta-levels, §8.3); a failed intervention (回避) is recorded as **`intervention_avoided`** (window id + both meta-levels — normal gameplay, not a fault; added with EQM-125). Standard wrapper applications are recorded as **`state_wrapper_applied`** (actor / state / wrapper / kind; added with EQM-129). `event_line_progressed` gains an optional `modifier_id` field for modifier-caused rate changes (§4.8). Window/event records carry their `meta_level` (§8.2).
 

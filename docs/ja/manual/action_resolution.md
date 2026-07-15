@@ -133,12 +133,14 @@ atomic bundle memberと`expiry_effect_name`では明示的に拒否されます�
 保存します。save/loadとresolutionはこのbindingを再検査するため、pending workを残したまま
 named handlerをlegacy↔typedへ変更して意味をすり替えることはできません。不一致は
 `eqm.effect.commit_result_binding_mismatch`で通知され、binding fieldのないschema v1-v3 saveはlegacyのままです。
-current schema v4 writerは両binding fieldを必ず書きます。readerが欠落fieldをlegacy 0へ
-migrateするのはschema v1-v3だけです。v4 reservationでどちらかが欠ける場合は
+schema v4が両binding fieldを導入し、current schema v5 writerも必ず書きます。readerが欠落fieldをlegacy 0へ
+migrateするのはschema v1-v3だけです。v4以降のreservationでどちらかが欠ける場合は
 `eqm.effect.commit_result_version_unsupported`としてstate適用前に拒否します。v3 readerは
 top-level versionでv4 bundle全体を拒否するため、typed bindingを無視して解釈し直しません。
 current readerもschema v1-v3で明示されたnonzero bindingを
 `reason: binding_not_supported_by_schema`で拒否するため、top-level versionだけを書き換えても回避できません。
+
+scheduled reaction FIREのhandler viewにはversion 1の`reaction_fire_context`も入ります。FIRE eventと1始まりの使用回数を識別し、trigger event id/tick/ordered viewとconsumer-owned value copyを保持します。schema v5はscheduled rowごとにこれを保存します。armed stateとpending FIREは別reservation instanceであり、保存原因を持たないhistorical pending FIREは現在worldから再構築せず拒否します。
 
 OPERATION targetはsubmit時点でnon-emptyかつregisteredでなければなりません。有効に発行された
 後でeffectがactorを除去しても、現在のrecordsとouter sweepは完了します。EQMが止めるのはownerが

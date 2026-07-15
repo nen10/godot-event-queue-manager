@@ -41,11 +41,11 @@ func arm(reservation: EQReservation, condition, current_tick: int) -> void:
 	})
 
 
-## Sweep point: call right after an event resolves. First expires timed-out
-## reactions (so an expired reaction cannot fire), then fires every armed
-## reaction whose condition matches the event view. Fired/expired reactions are
-## removed (one-shot). Returns the fired reservations (in arm order).
-func on_event_resolved(view: Dictionary, current_tick: int) -> Array:
+## Sweep point with occurrence metadata. Each result is
+## `{reservation, fire_index}` in arm order. `fire_index` is 1-based and is
+## computed before the rumination counter changes, so it remains exact even
+## when several views match in one outer batch.
+func on_event_resolved_occurrences(view: Dictionary, current_tick: int) -> Array:
 	_expire(current_tick)
 	var fired: Array = []
 	var survivors: Array[Dictionary] = []
@@ -53,7 +53,17 @@ func on_event_resolved(view: Dictionary, current_tick: int) -> Array:
 		var cond = armed["condition"]
 		if cond != null and cond.matches(view):
 			var res: EQReservation = armed["reservation"]
-			fired.append(res)
+			var authored_ruminations := (
+				res.definition.rumination if res.definition != null else 0
+			)
+			var closes_arm := res.remaining_ruminations <= 0
+			fired.append(
+				{
+					"reservation": res,
+					"fire_index": authored_ruminations - res.remaining_ruminations + 1,
+					"closes_arm": closes_arm,
+				}
+			)
 			# rumination: re-arm while ruminations remain, else consume (one-shot).
 			if res.remaining_ruminations > 0:
 				res.remaining_ruminations -= 1
@@ -65,6 +75,16 @@ func on_event_resolved(view: Dictionary, current_tick: int) -> Array:
 			survivors.append(armed)
 	_armed = survivors
 	return fired
+
+
+## Compatibility projection retained for direct trigger-engine consumers.
+## The reservation lifecycle is identical; the pipeline uses the occurrence
+## form above so it can bind an exact cause to each scheduled FIRE event.
+func on_event_resolved(view: Dictionary, current_tick: int) -> Array:
+	var reservations: Array = []
+	for occurrence in on_event_resolved_occurrences(view, current_tick):
+		reservations.append(occurrence["reservation"])
+	return reservations
 
 
 ## Disarms one reservation (e.g. an expiry event closed it, or its owner left).

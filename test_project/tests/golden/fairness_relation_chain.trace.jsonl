@@ -1,5 +1,6 @@
 {"actor":"hero","cause":"timer","event_id":1,"i":0,"kind":"resolved","priority":0,"seq":0,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"terminal"}}
 {"actor":"hero","expanded":["ally","hero"],"i":1,"kind":"targets_expanded","origin":"ally","rule":"裁定"}
 {"actor":"ally","closed_by":"reaction_count","i":2,"kind":"event_invalidated"}
-{"actor":"ally","event_id":3,"i":3,"kind":"reaction_fired","round":1}
+{"actor":"ally","event_id":3,"i":3,"kind":"reaction_fired","reaction_fire_context":{"event_view":{"kind":"reservation","meta_level":0,"source":"hero","tags":["裁定"],"target":"ally"},"fire_event_id":3,"fire_index":1,"reaction_fire_context_version":1,"trigger":{"cell":null,"event_id":1,"source":"hero","target":"ally","tick":0,"view_index":0}},"round":1}
 {"actor":"ally","cause":"timer","event_id":3,"i":4,"kind":"resolved","priority":0,"seq":2,"tick":0,"tie_break":{"compared":["due_tick","priority","sequence"],"decided_by":"due_tick"}}
+{"actor":"ally","event_id":3,"i":5,"kind":"reaction_fire_resolved","reaction_fire_context":{"event_view":{"kind":"reservation","meta_level":0,"source":"hero","tags":["裁定"],"target":"ally"},"fire_event_id":3,"fire_index":1,"reaction_fire_context_version":1,"trigger":{"cell":null,"event_id":1,"source":"hero","target":"ally","tick":0,"view_index":0}}}
