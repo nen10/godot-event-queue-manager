@@ -292,7 +292,6 @@ static func _test_retarget_stage_index_argument(t) -> void:
 
 static func _test_state_inv_transform(t) -> void:
 	var rr := _rr([&"hero"])
-	rr.max_transform_rounds = 1
 	var seen: Array[Dictionary] = []
 	var reg_ok := rr.register_transform({
 		"name": &"damage_toggle",
@@ -325,16 +324,18 @@ static func _test_state_inv_transform(t) -> void:
 	t.eq(state_probe_out.get("state", &""), &"injured", "state_inv transform probe rewrites healthy to injured")
 	var transformed := rr._apply_effect_transforms(r, rr._apply_target_expansion(r, raw_view.duplicate(true)))
 	t.eq(transformed.get("state", &""), &"injured", "state_inv transforms directly mutate effect view")
+	t.ok(rr.runtime.faults.is_empty(), "state_inv converges without relying on the round guard")
 	rr.submit(r)
 	rr.resolve_next()
 	t.eq(seen.size(), 1, "state inversion transform emitted one transformed view")
+	t.eq(seen[0].get("state", &""), &"injured", "resolved view keeps the one-shot inverse")
+	t.ok(rr.runtime.faults.is_empty(), "state inversion resolution publishes no transform-round fault")
 	var view: Dictionary = seen[0]
 	t.eq(view.get("state", &""), &"injured", "state_inv transform rewrites paired state")
 
 
 static func _test_transform_multiround_and_limit(t) -> void:
 	var rr := _rr([&"hero"])
-	rr.max_transform_rounds = 1
 	var reg_ok_a := rr.register_transform({
 		"name": &"state_progress_first",
 		"match_tags": [&"rounder"],
@@ -375,7 +376,6 @@ static func _test_transform_multiround_and_limit(t) -> void:
 	t.eq(v.get("state", &""), &"c", "two-state_inv declarations required multiple rounds: a -> b -> c")
 
 	var rr_tight := _rr([&"hero"])
-	rr_tight.max_transform_rounds = 2
 	var reg_ok_loop := rr_tight.register_transform({
 		"name": &"state_loop",
 		"match_tags": [&"toggle"],
@@ -395,8 +395,25 @@ static func _test_transform_multiround_and_limit(t) -> void:
 	d2.tags = [&"toggle"]
 	rr_tight.submit(EQReservation.new(&"hero", d2))
 	rr_tight.resolve_next()
-	t.ok(rr_tight.runtime.faults.size() > 0, "transform round hardening records a fault")
-	var last: Dictionary = rr_tight.runtime.faults.back()
+	t.ok(rr_tight.runtime.faults.is_empty(), "one-shot state inversion converges before the round guard")
+
+	var rr_zero_round := _rr([&"hero"])
+	rr_zero_round.max_transform_rounds = 0
+	rr_zero_round.register_transform({
+		"name": &"state_guard_probe",
+		"match_tags": [&"toggle"],
+		"kind": "state_inv",
+		"params": {"pair": [&"left", &"right"]},
+		"meta_level": 0,
+		"priority": 0,
+	})
+	rr_zero_round.runtime.register_effect(&"toggle", func(_v: Dictionary) -> Array:
+		return []
+	)
+	rr_zero_round.submit(EQReservation.new(&"hero", d2))
+	rr_zero_round.resolve_next()
+	t.ok(rr_zero_round.runtime.faults.size() > 0, "zero transform-round budget records a fault")
+	var last: Dictionary = rr_zero_round.runtime.faults.back()
 	t.eq(last.get("code", ""), EQError.CONDITION_LINE_UNKNOWN, "round-limit fault is reported through a stable error code")
 
 

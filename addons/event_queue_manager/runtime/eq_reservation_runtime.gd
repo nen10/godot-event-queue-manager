@@ -1595,18 +1595,39 @@ func _apply_target_expansion(res: EQReservation, view: Dictionary) -> Dictionary
 func _apply_effect_transforms(res: EQReservation, view: Dictionary) -> Dictionary:
 	var transformed := view.duplicate(true)
 	var round := 0
+	# A state inversion is an involution, not a fixed-point rewrite: applying the
+	# same declaration twice would restore the original token and then oscillate
+	# until the transform-round guard faults.  Keep its application identity
+	# local to this one effect resolution.  Other transforms may still converge
+	# over several rounds, and distinct state_inv declarations each run once in
+	# their deterministic transform order.
+	var applied_one_shot_transforms := {}
 	while true:
+		var matching := _matching_transforms(res)
+		if matching.is_empty():
+			break
+		var applicable: Array[Dictionary] = []
+		for transform in matching:
+			var transform_kind := String(transform.get("kind", ""))
+			var transform_name := String(transform.get("name", ""))
+			if (
+				transform_kind == "state_inv"
+				and applied_one_shot_transforms.has(transform_name)
+			):
+				continue
+			applicable.append(transform)
+		if applicable.is_empty():
+			break
 		round += 1
 		if round > max_transform_rounds:
 			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "transform rounds exceeded max_transform_rounds (%d)" % max_transform_rounds, {"actor": String(res.actor_id), "round": round}, false)
 			break
-		var matching := _matching_transforms(res)
-		if matching.is_empty():
-			break
 		var changed := false
-		for transform in matching:
+		for transform in applicable:
+			var transform_kind := String(transform.get("kind", ""))
+			var transform_name := String(transform.get("name", ""))
 			var before := transformed.duplicate(true)
-			match String(transform.get("kind", "")):
+			match transform_kind:
 				"retarget":
 					var next_target := _apply_retarg_transform(res, transformed, transform)
 					if next_target != null:
@@ -1623,6 +1644,7 @@ func _apply_effect_transforms(res: EQReservation, view: Dictionary) -> Dictionar
 				"state_inv":
 					var next_state := _apply_state_transform(transformed, transform)
 					if next_state != null:
+						applied_one_shot_transforms[transform_name] = true
 						transformed = next_state
 						if String(_view_state(transformed)) != String(before.get("state", "")):
 							changed = true

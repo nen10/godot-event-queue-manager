@@ -418,6 +418,14 @@ Determinism rules (unchanged from EQM-013): ordering keys are int only; fixed ke
 
 v1.x targets (measured like EQM-102, Godot 4.6 headless debug): concurrent actors ≤ 200, watched event-lines ≤ 300, armed triggers ≤ 200; the progression machinery (polling + sweep) adds ≤ 0.5 ms to one `advance()` call at those scales; prediction (EQM-033) runs within the same budget at depth N ≤ 20. RTS/STG scales remain out of scope (Q24 deferred). Budget tests are owned by EQM-112.
 
+State tokens, wrappers, relation edges, trigger declarations, and scheduler
+entries are independent work axes; none of the values above is a gameplay
+state-slot limit.  The reproducible multi-axis regression rung and its
+non-truncation rule are defined in
+[`STATE_RELATION_WORK_SCALE.md`](STATE_RELATION_WORK_SCALE.md).  Consumers own
+gameplay limits separately and must not derive them from an EQM engineering
+measurement.
+
 ---
 
 ## 13. Actor lifecycle (Q10)

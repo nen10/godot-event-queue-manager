@@ -16,6 +16,10 @@ var relations = null
 
 ## declaration key -> {state_a: StringName, state_b: StringName, rule: Rule}
 var _pair_rules: Dictionary = {}
+## state token -> sorted declaration keys containing that token.  Pair lookup is
+## on the grant/query hot path, so declarations maintain this deterministic
+## index instead of rescanning the complete rule table for every state token.
+var _pair_rule_keys_by_state: Dictionary = {}
 ## actor -> state -> [{name: StringName, params: Dictionary}]
 var _wrappers: Dictionary = {}
 
@@ -58,24 +62,34 @@ func declare_inv_pair(state_a: StringName, state_b: StringName, rule: int) -> bo
 	if rule < Rule.CANCEL or rule > Rule.COEXIST:
 		_fault("unknown state pair rule: %d" % rule, EQError.CONDITION_LINE_UNKNOWN)
 		return false
-	_pair_rules[_pair_key(state_a, state_b)] = {"state_a": state_a, "state_b": state_b, "rule": int(rule)}
+	_store_pair_rule(state_a, state_b, rule)
 	return true
 
 
 func _pair_for_state(state: StringName) -> Dictionary:
-	var matches: Array = []
-	for key in _pair_rules:
-		var entry: Dictionary = _pair_rules[key]
-		if entry["state_a"] == state or entry["state_b"] == state:
-			matches.append(entry)
-	if matches.is_empty():
+	var indexed_keys: Array = _pair_rule_keys_by_state.get(String(state), [])
+	if indexed_keys.is_empty():
 		return {}
-	if matches.size() > 1:
-		matches.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-			return String(a["state_a"]) + "__" + String(a["state_b"]) < String(b["state_a"]) + "__" + String(b["state_b"])
-		)
+	if indexed_keys.size() > 1:
 		_fault("state %s is declared in multiple pair rules" % state, EQError.CONDITION_LINE_UNKNOWN)
-	return matches[0]
+	return _pair_rules[indexed_keys[0]]
+
+
+func _store_pair_rule(state_a: StringName, state_b: StringName, rule: int) -> void:
+	var key := _pair_key(state_a, state_b)
+	_pair_rules[key] = {"state_a": state_a, "state_b": state_b, "rule": int(rule)}
+	_index_pair_state(state_a, key)
+	_index_pair_state(state_b, key)
+
+
+func _index_pair_state(state: StringName, key: String) -> void:
+	var state_key := String(state)
+	var indexed_keys: Array = _pair_rule_keys_by_state.get(state_key, [])
+	if indexed_keys.has(key):
+		return
+	indexed_keys.append(key)
+	indexed_keys.sort()
+	_pair_rule_keys_by_state[state_key] = indexed_keys
 
 
 func _rule_for_state(state: StringName) -> int:
@@ -407,14 +421,15 @@ static func from_dict(d: Dictionary, lines: EQEventLines, trace = null) -> RefCo
 
 func restore(d: Dictionary) -> void:
 	_pair_rules.clear()
+	_pair_rule_keys_by_state.clear()
 	_wrappers.clear()
 	for p in d.get("inv_pairs", []):
 		var pair := p as Dictionary
-		_pair_rules[_pair_key(StringName(pair.get("state_a", "")), StringName(pair.get("state_b", "")))] = {
-			"state_a": StringName(pair.get("state_a", "")),
-			"state_b": StringName(pair.get("state_b", "")),
-			"rule": int(pair.get("rule", Rule.COEXIST)),
-		}
+		_store_pair_rule(
+			StringName(pair.get("state_a", "")),
+			StringName(pair.get("state_b", "")),
+			int(pair.get("rule", Rule.COEXIST)),
+		)
 	for w in d.get("wrappers", []):
 		var entry := w as Dictionary
 		var actor_key := String(entry.get("actor", ""))

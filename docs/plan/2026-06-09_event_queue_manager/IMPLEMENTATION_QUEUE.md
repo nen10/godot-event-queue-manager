@@ -1515,3 +1515,18 @@ proof:
 ```
 
 Dependency sweep: EQM-133 COMPLETE → checkpoint blocker closed。queue に READY/BACKLOG task なし。Current pointer → none。
+
+### EQM-134 — COMPLETE (2026-07-16) — state/relation work-scale repair
+
+```text
+source: Amberground state/passive/perception implementation audit
+acceptance:
+  - state/relation/trigger scales are recorded as engineering evidence, never gameplay slots
+  - state_inv is one-shot per effect and does not oscillate into the round guard
+  - 64 tokens × 8 actors, 1,024 relations, and 200 actual triggers round-trip/resolve
+plan: docs/plan/2026-06-09_event_queue_manager/EQM-134_state_relation_work_scale/
+tests: ./tools/test.sh PASS (files=73, checks=1617, failures=0; run 20260716-092734-47551)
+review: docs/review/autopilot/EQM-134_SELF_REVIEW_2026-07-16.md
+```
+
+Current pointer → none。EQM-134 COMPLETE; gameplay state capacity remains consumer-owned。
