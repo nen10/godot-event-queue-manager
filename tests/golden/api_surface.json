@@ -844,6 +844,11 @@
           "returns": "-> bool"
         },
         {
+          "name": "intervene_reservation",
+          "params": "event_id: int, intervener: Dictionary",
+          "returns": "-> bool"
+        },
+        {
           "name": "invalidate_actor",
           "params": "actor_id: StringName, cause: StringName = &\"actor_removed\"",
           "returns": "-> int"
@@ -1734,7 +1739,9 @@
         "REACTION_FIRE_CONTEXT_INVALID",
         "REACTION_FIRE_CONTEXT_MISSING",
         "RESERVATION_IMMEDIATE_NONZERO_DELAY",
+        "RESERVATION_INTERVENTION_INVALID",
         "RESERVATION_INVALID_DURATION",
+        "RESERVATION_ISSUED_META_LEVEL_INVALID",
         "RESERVATION_MISSING_DEFINITION",
         "RESERVATION_NEGATIVE_DELAY",
         "RESERVATION_NEGATIVE_RUMINATION",

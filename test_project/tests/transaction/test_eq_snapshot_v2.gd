@@ -104,7 +104,7 @@ static func _test_bundle_shape(t) -> void:
 	var rr := _pipeline_setup()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
 	var schema_version := int(bundle["schema_version"])
-	t.eq(schema_version, 6, "bundle saves at the current schema v6")
+	t.eq(schema_version, 7, "bundle saves at the current schema v7")
 	for key in [
 		"event_lines", "windows", "armed_triggers", "reaction_expiries",
 		"pending_conditional", "scheduled_reservations"
@@ -140,7 +140,7 @@ static func _test_v1_migrator_and_unknown(t) -> void:
 	)
 	t.eq(int(fresh.runtime.registry.get_state(&"hero").data["hp"]), 3, "v1 actor data restored")
 	t.ok(
-		not EQSaveAdapter.load(fresh.runtime, {"schema_version": 6}),
+		not EQSaveAdapter.load(fresh.runtime, {"schema_version": 8}),
 		"a newer schema is rejected cleanly (fail-safe)"
 	)
 

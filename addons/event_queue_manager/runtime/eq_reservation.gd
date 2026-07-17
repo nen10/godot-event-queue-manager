@@ -19,6 +19,9 @@ var target_id: StringName = &""
 var provenance: Array = []
 ## Scheduler event id once scheduled (-1 = not yet scheduled).
 var event_id: int = -1
+## Internal issuance-time meta sample. Null only before a fresh reservation is
+## accepted by submit; serialized reservations always carry an int (EQM-135).
+var _issued_meta_level = null
 var status: int = Status.PENDING
 ## Countdowns initialised from the definition; consumed by the pipeline (EQM-051/062).
 var remaining_ruminations: int = 0
@@ -37,6 +40,18 @@ func _init(p_actor_id: StringName = &"", p_definition: EQActionDefinition = null
 	if definition != null:
 		remaining_ruminations = definition.rumination
 		remaining_duration = definition.duration
+
+
+func _bind_issued_meta_level() -> int:
+	if _issued_meta_level == null:
+		_issued_meta_level = int(definition.meta_level if definition != null else 0)
+	return int(_issued_meta_level)
+
+
+func _issued_meta_level_value() -> int:
+	if _issued_meta_level != null:
+		return int(_issued_meta_level)
+	return int(definition.meta_level if definition != null else 0)
 
 
 func validate() -> EQValidation:
@@ -67,6 +82,7 @@ func to_dict() -> Dictionary:
 		"target_id": String(target_id),
 		"definition": definition.to_dict() if definition != null else {},
 		"event_id": event_id,
+		"issued_meta_level": _issued_meta_level_value(),
 		"status": status,
 		"remaining_ruminations": remaining_ruminations,
 		"remaining_duration": remaining_duration,
@@ -84,6 +100,12 @@ static func from_dict(d: Dictionary) -> EQReservation:
 	var r := EQReservation.new(StringName(d.get("actor_id", "")), def)
 	r.target_id = StringName(d.get("target_id", ""))
 	r.event_id = int(d.get("event_id", -1))
+	var issued_meta = d.get("issued_meta_level", null)
+	r._issued_meta_level = (
+		int(issued_meta)
+		if typeof(issued_meta) == TYPE_INT
+		else int(def.meta_level if def != null else 0)
+	)
 	r.status = int(d.get("status", Status.PENDING))
 	r.remaining_ruminations = int(d.get("remaining_ruminations", r.remaining_ruminations))
 	r.remaining_duration = int(d.get("remaining_duration", r.remaining_duration))

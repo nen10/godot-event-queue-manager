@@ -74,6 +74,8 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.reaction.fire_context_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | a reaction FIRE cause is malformed, non-JSON-safe, bound to a different/duplicate/orphan event id, or attached to non-reaction work |
 | `eqm.reaction.fire_context_missing` | CONTRACT_VIOLATION | ERROR | editor, game | schema v5 omitted the scheduled-row context field, or a pending reaction FIRE has no reconstructable cause (including historical v1-v4) |
 | `eqm.reaction.expiry_state_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | schema v6 reaction-expiry rows are missing, malformed, duplicate/orphaned, or disagree with scheduler/armed state; also used when a historical v1-v5 orphan expiry cannot be reconstructed |
+| `eqm.reservation.intervention_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | reservation intervention targets an unknown/nonpending/non-PREPARED event or a v1-excluded bundle/race/reaction-FIRE context; target state is unchanged |
+| `eqm.reservation.issued_meta_level_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | schema v7 reservation lacks an integer issuance meta, or a historical top-level schema carries a differing value it cannot represent; load rejects before mutation |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 

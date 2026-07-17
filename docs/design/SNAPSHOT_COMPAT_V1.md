@@ -65,6 +65,15 @@
 > those formats did not store the reservation identity required to rebuild it.
 > A v5 reader rejects v6 at the top-level boundary.
 
+> **Issuance-time reservation meta (EQM-135, 2026-07-18): bundle
+> `SCHEMA_VERSION` is now 7.** Every serialized reservation carries
+> `issued_meta_level`, sampled once when submit is accepted. It can therefore
+> remain stable if a declaration changes later. Versions 1-6 migrate a missing
+> sample from the inline definition meta. Those versions cannot represent a
+> differing issued value; placing one under a historical top-level version is
+> rejected before mutation. A v6 reader rejects v7 at the top-level boundary
+> and cannot silently fall back to the later declaration value.
+
 The serialized scheduler snapshot (`EQSnapshot`, `SCHEMA_VERSION = 1`) and the
 save bundle (`EQSaveAdapter`, `schema_version`) are the on-disk contracts a
 consumer's save files depend on. This declares the v1.0 compatibility stance so a
@@ -87,19 +96,21 @@ game shipping on v1.0 knows what survives an addon upgrade.
   (`RUNTIME_RESILIENCE_POLICY`): the consumer's game is not crashed, and a bad save
   is not silently half-loaded.
 - `EQSaveAdapter.load(...)` returns `false` on an unsupported `schema_version`
-  (tested, EQM-085), so a consumer can branch on it. The current v6 reader
-  accepts bundle versions 1 through 6. For v1-v3 only, absent effect-result
+  (tested, EQM-085), so a consumer can branch on it. The current v7 reader
+  accepts bundle versions 1 through 7. For v1-v3 only, absent effect-result
   binding fields migrate to legacy `0`, but any explicit nonzero binding is
   rejected; v4+ requires both fields. Schema v5 additionally requires the
   scheduled-row context field. Schema v6 additionally requires exact
-  `reaction_expiries` ownership. Both reject malformed bundles before applying
-  any state.
+  `reaction_expiries` ownership. Schema v7 additionally requires an integer
+  `issued_meta_level` on every reservation; v1-v6 migrate it from the inline
+  definition and reject an explicit differing value. All reject malformed
+  bundles before applying any state.
 
 ## What a consumer can rely on at v1.0
 
 1. A save written by any v1.x release loads in any later v1.x release.
 2. A save written by a *newer* schema is rejected cleanly on an older reader,
-   never partially applied. In particular, a v5 reader rejects a v6 bundle at
+   never partially applied. In particular, a v6 reader rejects a v7 bundle at
    the top-level version boundary.
 3. When a breaking change ships, it is a version bump with a documented migrator —
    the change is visible, not silent.

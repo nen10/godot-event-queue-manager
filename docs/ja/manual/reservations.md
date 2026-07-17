@@ -118,7 +118,7 @@ var algebra := EQStateAlgebra.new(rr.lines)
 algebra.declare_inv_pair(&"欠損", &"虚飾", EQStateAlgebra.Rule.CANCEL)  # 相殺 = 符号付き 1 軸
 algebra.grant_state(&"hero", &"欠損", 3)
 algebra.grant_state(&"hero", &"虚飾", 1)   # 軸は +2 (欠損 2 に相殺)
-rr.state_algebra = algebra                 # schema v3で導入、current schema v6でも保存
+rr.state_algebra = algebra                 # schema v3で導入、current schema v7でも保存
 ```
 
 規則は pair ごとに `CANCEL` (相殺) / `EXCLUDE` (排他: 付与時に対を解除) / `COEXIST` (共存)。
@@ -152,19 +152,21 @@ rr.register_transform({"name": &"弱化反射", "match_tags": [&"弱化"], "kind
 var w := rr.open_window(&"mover", &"move", EQWindow.DEADLINE_UNLIMITED, 0, &"", 1)  # meta_level 1
 rr.intervene_close(w.window_id, {"meta_level": 1})  # 同値 = 介入成功。解決済み効果は残り
                                                     # pending だけ closed_by: intervention で閉じる
+var event_id := rr.submit(prepared)
+rr.intervene_reservation(event_id, {"meta_level": 1}) # PREPARED単独予約をeffect実行前に無効化
 rr.submit_bundle([a, b])       # 同 tick 原子解決 (member 間で反応は発火しない)
 rr.open_phase(&"入力", [&"mirror.a"])  # 操作フェーズ checkpoint。同名再訪 = ループ検出 →
                                         # 開始点へ巻き戻し + cleared_inputs が trace に出る
 ```
 
-メタレベルはスキル宣言の int 1 個 (`EQActionDefinition.meta_level`、未宣言 = 0)。スキルごとの値付けは利用側のゲームデザイン判断。
+メタレベルはスキル宣言の int 1 個 (`EQActionDefinition.meta_level`、未宣言 = 0)で、accepted submit時に予約へ固定する。同値は介入成功、不足時は`intervention_avoided`となる。reservation介入v1は通常PREPARED singletonだけを対象にし、bundle／race／reaction FIREはfail-closed。スキルごとの値付けは利用側のゲームデザイン判断。
 
 ### save
 
 schema v3で上記の`relations` / `state_algebra` tableを導入し、schema v4で全reservationの
 main／expiry effect-result mode binding、schema v5でscheduled reaction FIRE contextを導入した。
-current schema v6はこれらを保持し、回数でarmed slotが閉じた後もduration eventを保持する
-`reaction_expiries` tableを追加する。loadは登録名・binding・occurrence／expiry identityを先に
+schema v6は回数でarmed slotが閉じた後もduration eventを保持する`reaction_expiries` tableを追加した。
+current schema v7はさらに全reservationの`issued_meta_level`を保持する。loadは登録名・binding・occurrence／expiry identity・発行時metaを先に
 検証し、安定error時は何も適用しない。原因を保存していなかったhistorical pending FIREや、
 reservationを保存していなかったhistorical orphan expiryは推測せず拒否する。通常のhistorical
 scheduled workとstill-armed expiryはmigrateする。

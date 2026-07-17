@@ -63,6 +63,8 @@ determinism は両 mode で維持されます。skip/degrade は trace に現れ
 | `eqm.reaction.fire_context_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | reaction FIRE原因が不正、JSON-safeでない、別／重複／orphan event idへ結合、または非reaction workへ付与された |
 | `eqm.reaction.fire_context_missing` | CONTRACT_VIOLATION | ERROR | editor, game | schema v5のscheduled-row context fieldが欠ける、またはpending reaction FIREの原因を復元できない（historical v1-v4を含む） |
 | `eqm.reaction.expiry_state_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | schema v6のreaction-expiry rowが欠落・不正・重複／orphan、またはscheduler／armed stateと不一致。historical v1-v5のorphan expiryを復元できない場合にも使用する |
+| `eqm.reservation.intervention_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | reservation介入がunknown／非pending／非PREPARED event、またはv1対象外のbundle／race／reaction FIRE contextを指定した。対象stateは変更しない |
+| `eqm.reservation.issued_meta_level_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | schema v7 reservationの発行時metaが欠落／非int、またはhistorical top-level schemaが表現不能な異なる値を持つ。loadはstate適用前に拒否する |
 
 code は後続 task (snapshot / actor / reservation / trigger) でも同じ rules の下で追加されます。snapshot load codes (EQM-012 `EQSnapshot.Load`) はこの taxonomy より前に存在しており、現時点では独自 enum のままです。EQM-022 で rename なしに取り込む可能性があります。
 

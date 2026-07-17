@@ -247,7 +247,7 @@ static func _test_missing_v3_tables_migrate_empty(t) -> void:
 static func _test_schema_v6_rejected(t) -> void:
 	var rr := _pipeline_setup_v3()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
-	bundle["schema_version"] = 6
+	bundle["schema_version"] = 7
 
 	var fresh := EQReservationRuntime.new()
 	fresh.runtime.emit_engine_diagnostics = false

@@ -556,6 +556,96 @@ func intervene_close(window_id: int, intervener: Dictionary) -> bool:
 	return true
 
 
+## Attempts to invalidate one already-issued ordinary PREPARED reservation.
+## This is deliberately separate from window intervention: v1 excludes bundle,
+## race, and reaction-FIRE membership so their group invariants cannot be
+## partially mutated. Equal-or-greater issuance meta succeeds; a lower meta is
+## a normal avoided result and leaves the target unchanged.
+func intervene_reservation(event_id: int, intervener: Dictionary) -> bool:
+	var res: EQReservation = _by_event.get(event_id, null)
+	if res == null:
+		return _reject_reservation_intervention(
+			event_id, &"missing", "intervention target reservation does not exist"
+		)
+	if not reaction_fire_context_for_event(event_id).is_empty():
+		return _reject_reservation_intervention(
+			event_id, &"reaction_fire", "reaction FIRE intervention is outside the v1 scope"
+		)
+	if _bundle_of.has(event_id):
+		return _reject_reservation_intervention(
+			event_id, &"bundle", "bundle-member intervention is outside the v1 scope"
+		)
+	var race_group := StringName(_race_of.get(res.get_instance_id(), &""))
+	if race_group != &"":
+		return _reject_reservation_intervention(
+			event_id, &"race", "race-member intervention is outside the v1 scope"
+		)
+	if res.definition == null or res.definition.kind != EQActionDefinition.Kind.PREPARED:
+		return _reject_reservation_intervention(
+			event_id, &"wrong_kind", "intervention target must be PREPARED"
+		)
+	if res.status != EQReservation.Status.PENDING:
+		return _reject_reservation_intervention(
+			event_id, &"not_pending", "intervention target must still be pending"
+		)
+	var scheduler_has_event := false
+	for entry in runtime.scheduler.peek(runtime.scheduler.size()):
+		if entry.event_id == event_id:
+			scheduler_has_event = true
+			break
+	if not scheduler_has_event:
+		return _reject_reservation_intervention(
+			event_id, &"scheduler_missing", "intervention target is absent from the scheduler"
+		)
+
+	var reservation_meta := res._issued_meta_level_value()
+	var intervener_meta := int(intervener.get("meta_level", 0))
+	var intervener_event_id := int(intervener.get("event_id", -1))
+	if intervener_meta < reservation_meta:
+		var avoided := {
+			"kind": "intervention_avoided",
+			"event_id": event_id,
+			"actor": String(res.actor_id),
+			"reservation_meta": reservation_meta,
+			"intervener_meta": intervener_meta,
+		}
+		if intervener_event_id > 0:
+			avoided["intervener_event_id"] = intervener_event_id
+		runtime.trace().record(avoided)
+		return false
+
+	if not runtime.scheduler.cancel(event_id):
+		return _reject_reservation_intervention(
+			event_id, &"scheduler_cancel", "intervention target could not be cancelled"
+		)
+	_by_event.erase(event_id)
+	_reaction_fire_context_by_event.erase(event_id)
+	_window_of_event.erase(event_id)
+	_bound_inv.erase(event_id)
+	_clear_bundle_event_link(event_id)
+	res.status = EQReservation.Status.INVALIDATED
+	var details := {
+		"reservation_meta": reservation_meta,
+		"intervener_meta": intervener_meta,
+	}
+	if intervener_event_id > 0:
+		details["intervener_event_id"] = intervener_event_id
+	_trace_invalidated(event_id, res.actor_id, &"intervention", &"", details)
+	return true
+
+
+func _reject_reservation_intervention(
+	event_id: int, reason: StringName, message: String
+) -> bool:
+	runtime._fault(
+		EQError.RESERVATION_INTERVENTION_INVALID,
+		message,
+		{"event_id": event_id, "reason": String(reason)},
+		true
+	)
+	return false
+
+
 ## Closes the TOP explicit window. commit=true promotes its draft to the live
 ## scheduler — only legal while live is unchanged since open (a drifted commit
 ## would clobber live state, WINDOW_COMMIT_CONFLICT -> rollback instead).
@@ -894,6 +984,34 @@ func verify_state(data: Dictionary) -> bool:
 			reservation_dicts.append(expiry.get("reservation", {}))
 	for rd in reservation_dicts:
 		var def: Dictionary = rd.get("definition", {})
+		var definition_meta := int(def.get("meta_level", 0))
+		var raw_issued_meta = rd.get("issued_meta_level", null)
+		if save_schema_version >= 7:
+			if not rd.has("issued_meta_level") or typeof(raw_issued_meta) != TYPE_INT:
+				runtime._fault(
+					EQError.RESERVATION_ISSUED_META_LEVEL_INVALID,
+					"schema 7 reservation is missing a valid issued meta level",
+					{
+						"schema_version": save_schema_version,
+						"reason": "missing_or_invalid_field",
+					},
+					true
+				)
+				return false
+		elif rd.has("issued_meta_level"):
+			if typeof(raw_issued_meta) != TYPE_INT or int(raw_issued_meta) != definition_meta:
+				runtime._fault(
+					EQError.RESERVATION_ISSUED_META_LEVEL_INVALID,
+					"historical schema cannot represent an issued meta different from its definition",
+					{
+						"schema_version": save_schema_version,
+						"definition_meta": definition_meta,
+						"issued_meta": raw_issued_meta,
+						"reason": "field_not_supported_by_schema",
+					},
+					true
+				)
+				return false
 		for binding in [
 			{
 				"slot": "main",
@@ -1283,6 +1401,7 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 			return -1
 	if not _bind_effect_commit_versions(res, &"submit"):
 		return -1
+	res._bind_issued_meta_level()
 	match kind:
 		EQActionDefinition.Kind.WAIT:
 			# ending the turn schedules the actor's next turn as a READY reservation
@@ -1410,13 +1529,16 @@ func submit_bundle(reservations: Array, delay: int = 0) -> StringName:
 					return &""
 		var original_main_version := res.effect_commit_result_version
 		var original_expiry_version := res.expiry_effect_commit_result_version
+		var original_issued_meta_level = res._issued_meta_level
 		if not _bind_effect_commit_versions(res, &"bundle_submit"):
 			_rollback_bundle_plan(planned)
 			return &""
+		res._bind_issued_meta_level()
 		var id := _schedule(res, delay)
 		if id <= 0:
 			res.effect_commit_result_version = original_main_version
 			res.expiry_effect_commit_result_version = original_expiry_version
+			res._issued_meta_level = original_issued_meta_level
 			runtime._fault(EQError.CONDITION_LINE_UNKNOWN, "submit_bundle failed to schedule a member", {"actor_id": String(res.actor_id)}, true)
 			_rollback_bundle_plan(planned)
 			return &""
@@ -1425,6 +1547,7 @@ func submit_bundle(reservations: Array, delay: int = 0) -> StringName:
 		plan_append_bundle_member(planned, id, res)
 		planned.back()["original_main_version"] = original_main_version
 		planned.back()["original_expiry_version"] = original_expiry_version
+		planned.back()["original_issued_meta_level"] = original_issued_meta_level
 	var bundle_id := StringName("eqm.bundle.%d" % (_bundle_seq + 1))
 	_bundle_seq += 1
 	var members: Array = []
@@ -1449,6 +1572,9 @@ func _rollback_bundle_plan(planned: Array) -> void:
 			)
 			res.expiry_effect_commit_result_version = int(
 				p.get("original_expiry_version", res.expiry_effect_commit_result_version)
+			)
+			res._issued_meta_level = p.get(
+				"original_issued_meta_level", res._issued_meta_level
 			)
 		if event_id > 0 and runtime.scheduler.cancel(event_id):
 			_by_event.erase(event_id)
@@ -2573,7 +2699,7 @@ func _view_of(res: EQReservation) -> Dictionary:
 		"tags": res.definition.tags if res.definition != null else [],
 	}
 	if res.definition != null:
-		out["meta_level"] = int(res.definition.meta_level)
+		out["meta_level"] = res._issued_meta_level_value()
 		if String(res.definition.state_name) != "":
 			out["state"] = res.definition.state_name
 	if not res.provenance.is_empty():
@@ -2589,7 +2715,13 @@ func _view_of(res: EQReservation) -> Dictionary:
 	return out
 
 
-func _trace_invalidated(event_id: int, actor_id: StringName, closed_by: StringName, race_group: StringName = &"") -> void:
+func _trace_invalidated(
+	event_id: int,
+	actor_id: StringName,
+	closed_by: StringName,
+	race_group: StringName = &"",
+	details: Dictionary = {}
+) -> void:
 	var fields := {
 		"kind": "event_invalidated",
 		"actor": String(actor_id),
@@ -2599,6 +2731,9 @@ func _trace_invalidated(event_id: int, actor_id: StringName, closed_by: StringNa
 		fields["event_id"] = event_id
 	if race_group != &"":
 		fields["race_group"] = String(race_group)
+	for key in details:
+		if not fields.has(key):
+			fields[key] = details[key]
 	runtime.trace().record(fields)
 
 
@@ -2620,7 +2755,7 @@ func _cause_target_reservation(op_res: EQReservation) -> void:
 	caused.provenance.append({
 		"actor": op_res.actor_id,
 		"event_id": op_res.event_id,
-		"meta_level": int(op_res.definition.meta_level if op_res.definition != null else 0),
+		"meta_level": op_res._issued_meta_level_value(),
 	})
 	submit(caused)
 

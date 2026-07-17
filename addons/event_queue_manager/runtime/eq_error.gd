@@ -64,6 +64,8 @@ const EFFECT_COMMIT_RESULT_BINDING_MISMATCH := &"eqm.effect.commit_result_bindin
 const REACTION_FIRE_CONTEXT_INVALID := &"eqm.reaction.fire_context_invalid"
 const REACTION_FIRE_CONTEXT_MISSING := &"eqm.reaction.fire_context_missing"
 const REACTION_EXPIRY_STATE_INVALID := &"eqm.reaction.expiry_state_invalid"
+const RESERVATION_INTERVENTION_INVALID := &"eqm.reservation.intervention_invalid"
+const RESERVATION_ISSUED_META_LEVEL_INVALID := &"eqm.reservation.issued_meta_level_invalid"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -232,6 +234,18 @@ const _META := {
 		"surface": ["editor", "game"]
 	},
 	REACTION_EXPIRY_STATE_INVALID:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	RESERVATION_INTERVENTION_INVALID:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	RESERVATION_ISSUED_META_LEVEL_INVALID:
 	{
 		"rec": Recoverability.CONTRACT_VIOLATION,
 		"sev": Severity.ERROR,

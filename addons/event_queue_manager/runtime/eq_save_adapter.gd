@@ -10,6 +10,10 @@ const EQSnapshot := preload("eq_snapshot.gd")
 ## is rebound to a live node via the `rebind` map (actor_id -> node). The node
 ## bridge (EQNodeBridge) is the usual source of that map.
 
+## v7: every serialized reservation carries `issued_meta_level`, sampled once
+## when submit is accepted. v1-v6 migrate it from the inline definition meta;
+## historical payloads cannot express a differing issued value.
+##
 ## v6: `reaction_expiries` owns every live reaction-expiry event independently
 ## from armed membership. This preserves the stale expiry which must later emit
 ## `closed_by: already_closed` after reaction-count exhaustion. v1-v5 armed
@@ -38,7 +42,7 @@ const EQSnapshot := preload("eq_snapshot.gd")
 # `event_lines` carries line modifiers and modifiers-only fields; line-level
 # provenance is serialized inside the reservation dicts. The phase-checkpoint
 # table that EQM-122 reserves remains boundary-gated to empty in this contract.
-const SCHEMA_VERSION := 6
+const SCHEMA_VERSION := 7
 
 
 ## A plain, node-free save bundle. With a pipeline (EQReservationRuntime), the
@@ -91,7 +95,8 @@ static func save(runtime, pipeline = null) -> Dictionary:
 ## v1-v3 reservation dictionaries migrate missing effect-result bindings to 0
 ## but reject explicit nonzero bindings; schema v4+ requires both fields;
 ## schema v5 requires the scheduled-row reaction context field; schema v6
-## additionally requires the independent reaction-expiry table.
+## requires the independent reaction-expiry table; schema v7 requires every
+## serialized reservation's issuance-time meta sample.
 static func load(into_runtime, data: Dictionary, rebind: Dictionary = {}, pipeline = null) -> bool:
 	var version := int(data.get("schema_version", -1))
 	if version < 1 or version > SCHEMA_VERSION:

@@ -33,6 +33,7 @@ The Godot binary is discovered via the `GODOT` environment variable, else `godot
 |---|---|---|---|
 | `godot --headless --path test_project --script res://tests/run_all.gd` | Core / Policy / Trigger / Transaction / Presentation | scheduler ordering, policy contracts, reactions, rollback, flush | EQM-010 以降 |
 | `test_project/tests/trigger/test_eq_reaction_fire_context.gd` (上記 runner が自動収集) | Trigger / Transaction | 独立 FIRE occurrence、cause の immutable projection、schema-v5 migration、schema-v6 exhausted-expiry checkpoint、exact 1-event解決境界 | EQM-132, EQM-133 |
+| `test_project/tests/transaction/test_eq_reservation_intervention.gd` | Transaction / Snapshot / Trace | PREPARED singletonへの発行時meta介入、同値成功、回避不変、effect未実行、schema-v7 roundtrip、group/context fail-closed | EQM-135 |
 | `test_project/tests/performance/test_eq_state_relation_work_scale.gd` | State / Relation / Trigger / Performance | 64 state tokens×8 actors、1,024 relation edges、200 actual armed triggersの決定性・round-trip・粗い時間guard。GAME上限ではない | EQM-134 |
 | Godot golden-trace tests under `tests/golden/` | Determinism trace | same-seed replay byte-identical, permutation/prediction purity | EQM-013 以降 |
 | Godot UI-headless tests under `tests/ui_headless/` | UI / metric | layout metric P0, state matrix, interaction contract, projection integrity | EQM-090 以降 |

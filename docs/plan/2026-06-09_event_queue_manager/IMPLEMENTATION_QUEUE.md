@@ -175,6 +175,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 |---|---|---|---|---|---|
 | EQM-132 | COMPLETE | EQM-131 | Amberground reaction counter runtime profile | FIRE ごとの独立 occurrence + versioned cause transport + schema-v5 checkpoint | armed と pending FIRE の instance 分離、context deep-copy、2回発火、expiry、save/load continuation、stable rejection を `test_eq_reaction_fire_context.gd` と full gate で証明。 |
 | EQM-133 | COMPLETE | EQM-132 | Amberground reaction checkpoint audit | schema-v6 reaction-expiry ownership + exact one-event resolution boundary | count終了後のexpiryをsave/loadしFIRE/FIRE/`already_closed` continuation一致、v5 armed migration／orphan rejection、table tamper、後続reservationを消費しない1-event boundaryをfull gateで証明。 |
+| EQM-135 | COMPLETE | EQM-134 | Amberground interception tranche | 発行済みPREPARED単独予約へのmeta介入primitive | 発行時metaを予約instanceへ固定し、同値以上の介入でeffect未実行のまま`event_invalidated(closed_by: intervention)`、不足時は`intervention_avoided`、非対応contextはstable rejection。snapshot/pending消失とtrace順を専用test + full gateで証明。 |
 
 ## Current pointer
 
@@ -182,7 +183,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: none — **EQM-133 reaction-expiry checkpoint COMPLETE** (2026-07-15)。EQM-132後のAmberground checkpoint監査で、count終了後もliveなexpiryがschema v5ではarmed row消失により復元不能になるseamを検出した。schema v6の独立`reaction_expiries` ownership、strict verify-before-mutate、v1-v5 migration境界、exact one-scheduler-event APIで修復した。`resolve_next()`の互換挙動、回数・duration・ゲーム側 AP/costの独立性、`closed_by: already_closed`の凍結意味を維持する。Phase 12 (v1.2 EBS 拡張ラウンド) は引き続き COMPLETE。**意図監査 (2026-07-05, `docs/review/EQM_V12_INTENT_AUDIT_2026-07-05.md`)**: 依頼意図に対する縮小 重大 2・中 3・acceptance 2 を検出。
+Current: none — **EQM-135 reservation meta intervention COMPLETE** (2026-07-18)。通常PREPARED singletonをstable event idで対象にし、submit受理時metaの同値以上でeffect未実行のまま無効化する。schema v7が発行時metaを保存し、bundle／race／reaction FIREはfail-closed。Phase 12の既存window介入とtick意味は不変。
 
 Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
@@ -1530,3 +1531,20 @@ review: docs/review/autopilot/EQM-134_SELF_REVIEW_2026-07-16.md
 ```
 
 Current pointer → none。EQM-134 COMPLETE; gameplay state capacity remains consumer-owned。
+
+### EQM-135 — COMPLETE (2026-07-18) — reservation meta intervention
+
+```text
+source: Amberground interception tranche / game-planner API confirmation 4ee78ee
+acceptance:
+  - accepted submit samples reservation meta exactly once; schema v7 persists it
+  - equal-or-greater intervention invalidates one ordinary PREPARED singleton without effect execution
+  - lower meta records intervention_avoided and leaves scheduler/save state unchanged
+  - unknown, wrong-kind, bundle, race, and reaction FIRE targets reject without mutation
+  - success trace reuses event_invalidated + closed_by: intervention with both metas and optional intervener id
+plan: docs/plan/2026-06-09_event_queue_manager/EQM-135_reservation_intervention/
+tests: ./tools/test.sh PASS (files=74, checks=1682, failures=0; run 20260718-040730-15535)
+review: docs/review/autopilot/EQM-135_SELF_REVIEW_2026-07-18.md
+```
+
+Current pointer → none。EQM-135 COMPLETE; group intervention generalization and game-side damage/range/presentation remain consumer-owned or demand-gated。

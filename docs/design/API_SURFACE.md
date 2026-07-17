@@ -31,7 +31,9 @@ EQM-132 reaction occurrence surface note: `EQReactionFireContext` validates and 
 
 EQM-133 reaction-expiry checkpoint surface note: save-bundle schema v6 adds `reaction_expiries`, an event-id-keyed value table independent of armed membership. `EQReservationRuntime.ScheduledEventOutcome` and `resolve_one_scheduled_event()` expose one exact scheduler-pop boundary as `{advanced, event_id, event_kind, outcome, reservation}`; this makes an expiry observable without consuming the following reservation. Existing `resolve_next()` behavior is unchanged (SEM §6.3, §10.4).
 
-EQM-127 historical schema note: save-bundle schema_version 3 introduced the additive `relations` / `state_algebra` tables via optional `EQReservationRuntime.state_algebra` attachment; current schema v6 retains those tables unchanged (SEM v1.2 §10.1)。
+EQM-135 reservation-intervention surface note: `EQReservationRuntime.intervene_reservation(event_id, intervener)` targets one ordinary scheduled PREPARED singleton. Reservation meta is sampled at accepted submission, persisted as `issued_meta_level` by save-bundle schema v7, and compared with tie-success semantics. Success invalidates without executing the effect; avoid keeps the target; unsupported group/context targets fail closed (SEM §8.3.1, §10.5).
+
+EQM-127 historical schema note: save-bundle schema_version 3 introduced the additive `relations` / `state_algebra` tables via optional `EQReservationRuntime.state_algebra` attachment; current schema v7 retains those tables unchanged (SEM v1.2 §10.1)。
 
 EQM-126 surface note: `EQReservationRuntime.open_phase` / `close_phase` / `current_window` (操作フェーズ sub-checkpoint, SEM v1.2 §8.4)。
 
