@@ -20,6 +20,7 @@ static func run(t) -> void:
 	_test_base_instance_rejected(t)
 	_test_tie_break_ambiguous(t)
 	_test_tie_break_unknown(t)
+	_test_scheduler_backend_values(t)
 	_test_tres_roundtrip(t)
 
 
@@ -65,12 +66,25 @@ static func _test_tie_break_unknown(t) -> void:
 	t.ok(v.has_code(EQError.TIE_BREAK_UNKNOWN), "unknown tie_break -> TIE_BREAK_UNKNOWN")
 
 
+static func _test_scheduler_backend_values(t) -> void:
+	var cfg := EQConfig.new()
+	cfg.policy = StubPolicy.new()
+	t.eq(cfg.scheduler_backend, EQConfig.SchedulerBackend.SORTED_ARRAY, "sorted-array backend is the compatibility default")
+	cfg.scheduler_backend = EQConfig.SchedulerBackend.BINARY_HEAP
+	t.ok(cfg.validate().is_valid(), "binary heap backend is a valid explicit opt-in")
+	cfg.scheduler_backend = 99
+	var v := cfg.validate()
+	t.ok(not v.is_valid(), "unknown scheduler backend is invalid")
+	t.ok(v.has_code(EQError.CONFIG_SCHEDULER_BACKEND_UNKNOWN), "unknown scheduler backend -> stable config code")
+
+
 static func _test_tres_roundtrip(t) -> void:
 	var cfg := EQConfig.new()
 	var pol := EQPolicy.new()
 	pol.policy_name = &"demo"
 	cfg.policy = pol
 	cfg.tie_break = &"actor_id"
+	cfg.scheduler_backend = EQConfig.SchedulerBackend.BINARY_HEAP
 	cfg.schema_version = 1
 	var path := "user://eqm_test_config_roundtrip.tres"
 	var save_err := ResourceSaver.save(cfg, path)
@@ -78,6 +92,7 @@ static func _test_tres_roundtrip(t) -> void:
 	var loaded := ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 	t.ok(loaded != null, "EQConfig loads back")
 	t.eq(loaded.tie_break, &"actor_id", "tie_break survives roundtrip")
+	t.eq(loaded.scheduler_backend, EQConfig.SchedulerBackend.BINARY_HEAP, "scheduler_backend survives roundtrip")
 	t.eq(loaded.schema_version, 1, "schema_version survives roundtrip")
 	t.ok(loaded.policy != null, "policy sub-resource survives roundtrip")
 	t.eq(loaded.policy.policy_name, &"demo", "policy_name survives roundtrip")

@@ -427,7 +427,9 @@
       "consts": [
         "TIE_BREAKS"
       ],
-      "enums": [],
+      "enums": [
+        "SchedulerBackend"
+      ],
       "methods": [
         {
           "name": "validate",
@@ -438,6 +440,7 @@
       "signals": [],
       "vars": [
         "policy",
+        "scheduler_backend",
         "schema_version",
         "tie_break"
       ]
@@ -1741,6 +1744,7 @@
         "CONDITION_LINE_UNKNOWN",
         "CONDITION_PREDICATE_NAME_EMPTY",
         "CONDITION_PREDICATE_UNREGISTERED",
+        "CONFIG_SCHEDULER_BACKEND_UNKNOWN",
         "EFFECT_COMMIT_RESULT_BINDING_MISMATCH",
         "EFFECT_COMMIT_RESULT_CONTEXT_UNSUPPORTED",
         "EFFECT_COMMIT_RESULT_INVALID",
@@ -1766,6 +1770,7 @@
         "RESERVATION_OPERATION_NEEDS_TARGET",
         "RESERVATION_PREPARED_ZERO_DELAY",
         "RESERVATION_REACTION_NEEDS_DURATION",
+        "RUNTIME_SCHEDULER_BACKEND_RECONFIGURE_NONEMPTY",
         "RUNTIME_SCHEDULE_UNREGISTERED_ACTOR",
         "RUNTIME_UNREGISTERED_ACTOR_EVENT",
         "SAVE_BLOCKED",

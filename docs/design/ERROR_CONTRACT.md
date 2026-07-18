@@ -37,6 +37,7 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.config.policy_base_instance` | CONTRACT_VIOLATION | ERROR | editor, game | policy is a raw `EQPolicy` base instance (need a concrete subclass) |
 | `eqm.config.tie_break_ambiguous` | RESOURCE_INVALID | ERROR | editor, game | `tie_break` is unset (no deterministic total tie-break chosen) |
 | `eqm.config.tie_break_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | `tie_break` names an unrecognised rule |
+| `eqm.config.scheduler_backend_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | `scheduler_backend` is not a known `EQConfig.SchedulerBackend` enum value |
 | `eqm.policy.name_empty` | RESOURCE_INVALID | WARNING | editor | `policy_name` is empty (authoring hint) |
 | `eqm.actor.duplicate_id` | CONTRACT_VIOLATION | ERROR | editor, game | registering an already-active actor_id |
 | `eqm.actor.id_reused` | CONTRACT_VIOLATION | ERROR | editor, game | re-registering a retired actor_id (reuse forbidden, §13) |
@@ -45,6 +46,7 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.action.negative_cost` | RESOURCE_INVALID | ERROR | editor, game | `EQActionResult.cost < 0` without `allow_negative_cost` (§12 policy-declared) |
 | `eqm.runtime.unregistered_actor_event` | CONTRACT_VIOLATION | ERROR | editor, game | advancing an event whose actor was removed (dev halts; shipped skips + `invalid_event_skipped`) |
 | `eqm.runtime.schedule_unregistered_actor` | CONTRACT_VIOLATION | ERROR | editor, game | schedule / finish_action for an unregistered actor |
+| `eqm.runtime.scheduler_backend_reconfigure_nonempty` | CONTRACT_VIOLATION | ERROR | editor, game | backend selection was applied after live events already exist; the existing scheduler is kept |
 | `eqm.reservation.negative_delay` | CONTRACT_VIOLATION | ERROR | editor, game | `EQActionDefinition.delay < 0` |
 | `eqm.reservation.immediate_nonzero_delay` | RESOURCE_INVALID | ERROR | editor, game | IMMEDIATE kind with non-zero delay |
 | `eqm.reservation.prepared_zero_delay` | RESOURCE_INVALID | ERROR | editor, game | PREPARED kind with delay <= 0 |

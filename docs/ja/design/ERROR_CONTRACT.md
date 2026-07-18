@@ -39,6 +39,7 @@ determinism は両 mode で維持されます。skip/degrade は trace に現れ
 | `eqm.config.policy_base_instance` | CONTRACT_VIOLATION | ERROR | editor, game | policy が raw `EQPolicy` base instance (concrete subclass が必要) |
 | `eqm.config.tie_break_ambiguous` | RESOURCE_INVALID | ERROR | editor, game | `tie_break` が unset (deterministic total tie-break が選ばれていない) |
 | `eqm.config.tie_break_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | `tie_break` が認識されない rule を指している |
+| `eqm.config.scheduler_backend_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | `scheduler_backend` が既知の `EQConfig.SchedulerBackend` enum value ではない |
 | `eqm.policy.name_empty` | RESOURCE_INVALID | WARNING | editor | `policy_name` が empty (authoring hint) |
 | `eqm.actor.duplicate_id` | CONTRACT_VIOLATION | ERROR | editor, game | すでに active な actor_id を register しようとした |
 | `eqm.actor.id_reused` | CONTRACT_VIOLATION | ERROR | editor, game | retired actor_id の再登録 (reuse forbidden, §13) |
@@ -47,6 +48,7 @@ determinism は両 mode で維持されます。skip/degrade は trace に現れ
 | `eqm.action.negative_cost` | RESOURCE_INVALID | ERROR | editor, game | `allow_negative_cost` なしで `EQActionResult.cost < 0` (§12 policy-declared) |
 | `eqm.runtime.unregistered_actor_event` | CONTRACT_VIOLATION | ERROR | editor, game | removed actor の event を advance しようとした (dev は halt、shipped は skip + `invalid_event_skipped`) |
 | `eqm.runtime.schedule_unregistered_actor` | CONTRACT_VIOLATION | ERROR | editor, game | unregistered actor に対する schedule / finish_action |
+| `eqm.runtime.scheduler_backend_reconfigure_nonempty` | CONTRACT_VIOLATION | ERROR | editor, game | live event が存在する状態で backend 選択を適用しようとした; 既存 scheduler を保持する |
 | `eqm.reservation.negative_delay` | CONTRACT_VIOLATION | ERROR | editor, game | `EQActionDefinition.delay < 0` |
 | `eqm.reservation.immediate_nonzero_delay` | RESOURCE_INVALID | ERROR | editor, game | IMMEDIATE kind に non-zero delay がある |
 | `eqm.reservation.prepared_zero_delay` | RESOURCE_INVALID | ERROR | editor, game | PREPARED kind で delay <= 0 |

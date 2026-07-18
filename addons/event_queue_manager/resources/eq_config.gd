@@ -15,8 +15,18 @@ const _EQPolicyScript := preload("policies/eq_policy.gd")
 ## actor_id is total when ids are unique (the registry guarantees this, EQM-021).
 const TIE_BREAKS: Array[StringName] = [&"sequence", &"actor_id"]
 
+## Scheduler storage backend (EQM-145). SORTED_ARRAY is the compatibility default
+## and the value old .tres files load as (a missing field defaults to 0). Both
+## backends honour EQBackend and produce an identical pop sequence/trace because
+## EQOrdering is total; BINARY_HEAP trades O(n) insert/pop for O(log n) on large
+## queues. Only opt into the heap after EQM-142 live-peek (avoids a per-resolution
+## full sort). Backend is chosen at scheduler setup, not serialized in the
+## scheduler snapshot, so a save is portable across backends.
+enum SchedulerBackend { SORTED_ARRAY = 0, BINARY_HEAP = 1 }
+
 @export var policy: EQPolicy
 @export var tie_break: StringName = &"sequence"
+@export var scheduler_backend: SchedulerBackend = SchedulerBackend.SORTED_ARRAY
 @export var schema_version: int = 1
 
 
@@ -31,4 +41,6 @@ func validate() -> EQValidation:
 		v.add(EQError.TIE_BREAK_AMBIGUOUS, "tie_break is unset; choose a deterministic total tie-break")
 	elif not TIE_BREAKS.has(tie_break):
 		v.add(EQError.TIE_BREAK_UNKNOWN, "unknown tie_break: %s" % String(tie_break))
+	if scheduler_backend != SchedulerBackend.SORTED_ARRAY and scheduler_backend != SchedulerBackend.BINARY_HEAP:
+		v.add(EQError.CONFIG_SCHEDULER_BACKEND_UNKNOWN, "unknown scheduler_backend: %d" % int(scheduler_backend))
 	return v

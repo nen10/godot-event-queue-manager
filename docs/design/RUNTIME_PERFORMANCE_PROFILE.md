@@ -1,6 +1,6 @@
 # Runtime Performance Profile
 
-Status: **EQM-143 measured and verified (2026-07-19)**.
+Status: **EQM-145 measured and verified (2026-07-19)**.
 
 This document records reproducible, EQM-local runtime performance evidence.
 It is deliberately separate from correctness, determinism, lifecycle, and
@@ -106,6 +106,38 @@ metadata preservation, and existing scheduler/snapshot/trace behavior.
 The portable claim is the O(1) live-entry lookup and zero backend copies/sorts
 for reschedule target lookup. Backend insertion cost remains backend-owned
 (`O(log n)` heap, `O(n)` sorted array).
+
+## EQM-145 consumer-facing backend selection
+
+EQM-145 exposes scheduler backend choice through `EQConfig.scheduler_backend`:
+`SORTED_ARRAY = 0` remains the default and legacy `.tres` value, while
+`BINARY_HEAP = 1` is an explicit large-queue opt-in. `EQRuntime` constructs the
+configured backend at setup, and `EQManager.configure()` applies backend choice
+only while no live events exist. Backend choice is config, not snapshot state.
+
+### Workload and hard gates
+
+Regression proves:
+
+- config validation accepts both known enum values and rejects unknown values
+  with `eqm.config.scheduler_backend_unknown`;
+- `EQManager.configure()` applies the heap before seeding;
+- non-empty backend reconfiguration records
+  `eqm.runtime.scheduler_backend_reconfigure_nonempty`, keeps the existing
+  scheduler instance/backend, and leaves live events scheduled;
+- sorted-array and binary-heap managers produce identical trace JSONL for the
+  same fixed-round scenario.
+
+The independent performance fixture constructs `EQRuntime` from a heap config,
+pushes 1,024 timer events directly into the configured scheduler, and drains it
+through `advance()`. Hard gates assert the backend is the binary heap, exactly
+1,024 events resolve, and exactly 1,024 trace records are written. The elapsed
+guard is coarse and advisory; it exists to catch accidental reintroduction of
+the pre-EQM-142 per-resolution heap sort through the consumer-facing path.
+
+| run id | backend path | workload | elapsed | coarse guard |
+|---|---|---:|---:|---:|
+| `20260719-043732-48583` | `EQConfig.scheduler_backend = BINARY_HEAP` | drain 1,024 events | 14 ms | < 500 ms |
 
 ## EQM-140 watched-only polling and effective-rate cache
 
@@ -355,7 +387,7 @@ add result rows here when a task changes those paths.
 
 ## Residual hot-path ledger
 
-| path | status after EQM-144 | evidence / next condition |
+| path | status after EQM-145 | evidence / next condition |
 |---|---|---|
 | production trigger target matching | resolved by EQM-136 | 1,000 arms → 75 candidates / 75 full-match calls in the declared fixture |
 | target + wildcard candidate assembly | resolved by EQM-138 | exact stable merge; 4.43–4.65x sparse and 9.93–10.24x wildcard-heavy advisory A/B |
@@ -369,9 +401,9 @@ add result rows here when a task changes those paths.
 | default sorted-array scheduler / live peek | resolved for ordinary live-min peeks by EQM-142 | heap drain trace peeks: 511 `ordered()` calls / 130,816 copied+sorted entries → 0; stale-front fallback retained |
 | scheduler `reschedule()` live-entry lookup | resolved by EQM-143 | heap reschedule lookup: 256 `ordered()` calls / 98,176 copied+sorted entries → 0 |
 | scheduler membership scans (`peek(size())` existence checks) | resolved by EQM-144 | new O(1) `EQScheduler.has_event()`; reservation intervention and snapshot-restore reconciliation no longer full-copy the queue; remaining `peek(size())` is `invalidate_actor` actor-filter (intentional full scan) |
-| consumer backend selection | queued as EQM-145 | expose heap only after EQM-142 prevents trace-peek O(n² log n) regression |
+| consumer backend selection | resolved by EQM-145 | `EQConfig.scheduler_backend` default sorted-array / opt-in binary heap; configured heap drain 1,024 events in 14 ms advisory with trace/workload sentinels |
 | trace retention / allocation | unmeasured | define an EQM-local fixture before making a claim |
 
-EQM-136/138/139/140/142/143/144 completion evidence is recorded in their self-reviews under
+EQM-136/138/139/140/142/143/144/145 completion evidence is recorded in their self-reviews under
 `docs/review/autopilot/`. The fixture values are engineering evidence, not
 gameplay caps or Amberground support claims.

@@ -27,6 +27,7 @@ const POLICY_MISSING := &"eqm.config.policy_missing"
 const POLICY_BASE_INSTANCE := &"eqm.config.policy_base_instance"
 const TIE_BREAK_AMBIGUOUS := &"eqm.config.tie_break_ambiguous"
 const TIE_BREAK_UNKNOWN := &"eqm.config.tie_break_unknown"
+const CONFIG_SCHEDULER_BACKEND_UNKNOWN := &"eqm.config.scheduler_backend_unknown"
 const POLICY_NAME_EMPTY := &"eqm.policy.name_empty"
 const ACTOR_DUPLICATE_ID := &"eqm.actor.duplicate_id"
 const ACTOR_ID_REUSED := &"eqm.actor.id_reused"
@@ -35,6 +36,7 @@ const ACTION_NEGATIVE_DELAY := &"eqm.action.negative_delay"
 const ACTION_NEGATIVE_COST := &"eqm.action.negative_cost"
 const RUNTIME_UNREGISTERED_ACTOR_EVENT := &"eqm.runtime.unregistered_actor_event"
 const RUNTIME_SCHEDULE_UNREGISTERED_ACTOR := &"eqm.runtime.schedule_unregistered_actor"
+const RUNTIME_SCHEDULER_BACKEND_RECONFIGURE_NONEMPTY := &"eqm.runtime.scheduler_backend_reconfigure_nonempty"
 const RESERVATION_NEGATIVE_DELAY := &"eqm.reservation.negative_delay"
 const RESERVATION_IMMEDIATE_NONZERO_DELAY := &"eqm.reservation.immediate_nonzero_delay"
 const RESERVATION_PREPARED_ZERO_DELAY := &"eqm.reservation.prepared_zero_delay"
@@ -88,6 +90,12 @@ const _META := {
 		"sev": Severity.ERROR,
 		"surface": ["editor", "game"]
 	},
+	CONFIG_SCHEDULER_BACKEND_UNKNOWN:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
 	POLICY_NAME_EMPTY:
 	{"rec": Recoverability.RESOURCE_INVALID, "sev": Severity.WARNING, "surface": ["editor"]},
 	ACTOR_DUPLICATE_ID:
@@ -119,6 +127,12 @@ const _META := {
 		"surface": ["editor", "game"]
 	},
 	RUNTIME_SCHEDULE_UNREGISTERED_ACTOR:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	RUNTIME_SCHEDULER_BACKEND_RECONFIGURE_NONEMPTY:
 	{
 		"rec": Recoverability.CONTRACT_VIOLATION,
 		"sev": Severity.ERROR,

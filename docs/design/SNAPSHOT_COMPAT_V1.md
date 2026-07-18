@@ -143,3 +143,14 @@ game shipping on v1.0 knows what survives an addon upgrade.
   migration history is recorded above).
 - Cross-engine-version snapshot portability beyond what Godot's own Variant
   serialization guarantees.
+
+> **Scheduler backend selection (EQM-145, 2026-07-19): no snapshot schema change.**
+> `EQConfig.scheduler_backend` is Resource/API configuration, not scheduler
+> state. Scheduler snapshots continue to store only live entries, counters, and
+> the clock; they do not serialize whether the runtime used the sorted-array or
+> binary-heap backend. A loaded snapshot is therefore portable across backends:
+> choose the backend in `EQConfig` before restore/seed, and the restored pop
+> order remains identical because `EQOrdering` is total. Attempting to apply a
+> backend config after live events exist records
+> `eqm.runtime.scheduler_backend_reconfigure_nonempty` and keeps the existing
+> scheduler rather than migrating it implicitly.

@@ -37,11 +37,11 @@ EQM-135 reservation介入公開面: `EQReservationRuntime.intervene_reservation(
 
 EQM-141 reaction gate公開面: `EQTriggerEngine.preview_event_resolved_occurrences()`は期限切れcandidateも閉じずにfilterする非mutationのopaque tokenを返し、`commit_occurrence()`／`invalidate_occurrence()`はcurrent tokenだけを一度受理します。`armed_entries()`は`{reservation, condition, owner, armed_at, duration, authored_ruminations, remaining_ruminations, slot_id}`を公開し、`slot_id`はそのarm中に安定するexactなengine slot identity、3つのlifecycle値はarm-time／continuation snapshotです。既存`on_event_resolved_occurrences()`はstandalone expiryを適用して全候補commitする互換wrapperです。save schema v8はarm-bound solve/invalidationとgenerated-counter provenanceを保存します。`EQError.CONDITION_COUNTER_SOLVE_UNSUPPORTED`がCOUNTERのinvalidation-only authoring ruleを明示します。
 
-EQM-142/143/144 scheduler hot-path公開面 (Phase 15, 2026-07-19):
+EQM-142/143/144/145 scheduler hot-path公開面 (Phase 15, 2026-07-19):
 
 - **利用側の対応 — EQM-142/143では不要。** `EQScheduler.peek_next()` (live-peek fast path, EQM-142) と `reschedule()` (O(1) live-entry lookup, EQM-143) は内部性能改善のみです。返り値、順序、trace `decided_by`、snapshot挙動は同一で、Amberground側のコード変更は不要です。goldenも同一であるべきです。
 - **新API — EQM-144。** `EQScheduler.has_event(event_id: int) -> bool` はscheduler上でevent idが現在liveかを O(1) で返します (cancel/rescheduleで残るstale backend artifactはfalse)。これまで「event idがまだscheduleされているか」を `peek(size())` 走査で調べていた利用側コードは `has_event()` へ移行してください。`peek(n)` はordered preview用として維持します。これは `core`/L0-visible のadditive methodで、layer leakはありません。API surface goldenは明示手順でre-baselineします。
-- **次のEQM-145予定。** `EQConfig.scheduler_backend` (既定sorted-array / opt-in binary heap) を追加予定です。大規模queueでheapを使いたいconsumerはこの注記を待ってください。EQM-142によりper-resolution full sortが除去されたため、heap公開が安全になります。
+- **新config — EQM-145。** `EQConfig.SchedulerBackend` とexported `scheduler_backend` により setup-time のbackend選択を追加します。`SORTED_ARRAY = 0` が既定 / 旧 .tres の読み込み値、`BINARY_HEAP = 1` が大規模queue向けopt-inです。Ambergroundなどの利用側でheapを使う場合は、project configで `scheduler_backend = EQConfig.SchedulerBackend.BINARY_HEAP` を設定し、**live eventをseedする前** に `EQManager.configure()` してください。live eventがある状態でbackendを再設定しようとすると `eqm.runtime.scheduler_backend_reconfigure_nonempty` を記録し、既存schedulerを保持します。未知enum値は `eqm.config.scheduler_backend_unknown` です。backend選択はscheduler snapshotには含めず、save fileはbackend間でportableです。
 
 ownership境界: 上記mutation methodはstandalone `EQTriggerEngine`向けです。
 `EQReservationRuntime.engine`として得たinstanceはconsumerに対してinspection-onlyで、

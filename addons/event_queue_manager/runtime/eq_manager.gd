@@ -50,6 +50,7 @@ func set_mode(mode: int) -> void:
 ## Sets a config (and its policy) and validates it, surfacing faults per mode.
 func configure(config) -> EQValidation:
 	_rt.config = config
+	_rt._apply_config_scheduler_backend(config)
 	policy = config.policy if config != null else null
 	return _rt.start()
 

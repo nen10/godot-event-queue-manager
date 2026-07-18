@@ -19,6 +19,8 @@ const EQActorRegistry := preload("eq_actor_registry.gd")
 const EQActionResult := preload("eq_action_result.gd")
 const EQTrace := preload("eq_trace.gd")
 const EQEffectCommitResult := preload("eq_effect_commit_result.gd")
+const _EQSortedArrayBackend := preload("backends/eq_sorted_array_backend.gd")
+const _EQBinaryHeapBackend := preload("backends/eq_binary_heap_backend.gd")
 
 enum Mode { DEV, SHIPPED }
 
@@ -44,13 +46,51 @@ var _trace: EQTrace
 func _init(p_config = null, p_mode: int = Mode.DEV) -> void:
 	config = p_config
 	mode = p_mode
-	scheduler = EQScheduler.new()
+	scheduler = EQScheduler.new(_backend_for_config(p_config))
 	registry = EQActorRegistry.new()
 	_trace = EQTrace.new()
 
 
 func set_mode(m: int) -> void:
 	mode = m
+
+
+## Applies the scheduler backend requested by the current (or supplied) config.
+## This is a setup-time operation: replacing backend storage while live events
+## exist would be a destructive migration, so it is rejected with a stable fault.
+## The scheduler snapshot does not serialize backend choice; config owns it.
+func _apply_config_scheduler_backend(p_config = null) -> bool:
+	var c = config if p_config == null else p_config
+	if scheduler != null and not scheduler.is_empty():
+		_fault(
+			EQError.RUNTIME_SCHEDULER_BACKEND_RECONFIGURE_NONEMPTY,
+			"scheduler backend can only be configured before live events are scheduled",
+			{"live_events": scheduler.size()},
+			false
+		)
+		return false
+	var backend = _backend_for_config(c)
+	if backend == null:
+		_fault(
+			EQError.CONFIG_SCHEDULER_BACKEND_UNKNOWN,
+			"unknown scheduler_backend",
+			{"scheduler_backend": -1 if c == null else int(c.scheduler_backend)},
+			false
+		)
+		return false
+	scheduler = EQScheduler.new(backend)
+	return true
+
+
+func _backend_for_config(c):
+	if c == null:
+		return _EQSortedArrayBackend.new()
+	var selected := int(c.scheduler_backend)
+	if selected == 0:
+		return _EQSortedArrayBackend.new()
+	if selected == 1:
+		return _EQBinaryHeapBackend.new()
+	return null
 
 
 # --- named predicate registry (SEM §5.5, EQM-111) -------------------------
