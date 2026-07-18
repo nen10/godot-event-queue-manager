@@ -35,7 +35,12 @@ EQM-133 reaction-expiry checkpoint公開面: save-bundle schema v6はarmed membe
 
 EQM-135 reservation介入公開面: `EQReservationRuntime.intervene_reservation(event_id, intervener)`は通常のscheduled PREPARED singleton 1件を対象にします。予約metaはaccepted submit時に固定し、save-bundle schema v7の`issued_meta_level`で保存します。同値以上でeffect未実行のまま無効化し、不足時は対象を維持、group／context非対応対象はfail-closedです (`EVENT_MODEL_SEMANTICS.md` §8.3.1、§10.5)。
 
-EQM-141 reaction gate公開面: `EQTriggerEngine.preview_event_resolved_occurrences()`は期限切れcandidateも閉じずにfilterする非mutationのopaque tokenを返し、`commit_occurrence()`／`invalidate_occurrence()`はcurrent tokenだけを一度受理します。既存`on_event_resolved_occurrences()`はstandalone expiryを適用して全候補commitする互換wrapperです。save schema v8はarm-bound solve/invalidationとgenerated-counter provenanceを保存します。`EQError.CONDITION_COUNTER_SOLVE_UNSUPPORTED`がCOUNTERのinvalidation-only authoring ruleを明示します。
+EQM-141 reaction gate公開面: `EQTriggerEngine.preview_event_resolved_occurrences()`は期限切れcandidateも閉じずにfilterする非mutationのopaque tokenを返し、`commit_occurrence()`／`invalidate_occurrence()`はcurrent tokenだけを一度受理します。`armed_entries()`は`{reservation, condition, owner, armed_at, duration, authored_ruminations, remaining_ruminations, slot_id}`を公開し、`slot_id`はそのarm中に安定するexactなengine slot identity、3つのlifecycle値はarm-time／continuation snapshotです。既存`on_event_resolved_occurrences()`はstandalone expiryを適用して全候補commitする互換wrapperです。save schema v8はarm-bound solve/invalidationとgenerated-counter provenanceを保存します。`EQError.CONDITION_COUNTER_SOLVE_UNSUPPORTED`がCOUNTERのinvalidation-only authoring ruleを明示します。
+
+ownership境界: 上記mutation methodはstandalone `EQTriggerEngine`向けです。
+`EQReservationRuntime.engine`として得たinstanceはconsumerに対してinspection-onlyで、
+commit／invalidate／disarmはruntime pipelineへ任せます。gate、declared counter、watch、
+expiry ownershipを同一transactionで更新するためです。
 
 EQM-127のhistorical schema note: save-bundle schema_version 3でoptionalな`EQReservationRuntime.state_algebra`接続とadditiveな`relations` / `state_algebra` tableを導入しました。current schema v8もこれらを変更せず保持します (`EVENT_MODEL_SEMANTICS.md` §10.1)。
 

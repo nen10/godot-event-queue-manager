@@ -47,5 +47,6 @@ consumer proofまで閉じる。elapsed性能は意味論修理の合否へ混�
 | WAIT | arm/status/rumination/counterを不変にする | false green/使用回数消費 | repeated false then true |
 | INVALIDATE | invalidation-winsでarmを閉じ、FIREなし | solve同時成立で誤発火 | tie test + closed_by |
 | RESOLVE commit | exactly one rumination/counter progression | duplicate/stale preview | multi-view + stale token test |
-| snapshot | v8 rowにbound terms/counter idsを保存 | load時rebind drift | save-load-save + future continuation |
-
+| duplicate slot | duration/authored/remaining useはexact slot所有 | shared reservationのstatus/count混線 | slot別FIRE index + finite roundtrip |
+| multi-view fault | faulted slotの先行accepted viewも破棄 | SHIPPEDだけpartial FIRE | DEV/SHIPPED parity |
+| snapshot | v8 rowにbound terms/counter ids/slot lifecycleを保存 | load時rebind drift | save-load-save + future continuation + tamper |

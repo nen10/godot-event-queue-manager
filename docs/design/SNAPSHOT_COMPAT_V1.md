@@ -82,8 +82,10 @@
 > rejects before mutation because those formats cannot recover its relative
 > threshold anchor or counter-line identity. Schema v8 verifies exact term shape,
 > the arm-time authored spec snapshot, saved line identity, predicate registration,
-> and unique generated-counter provenance. Post-arm definition edits therefore do
-> not rewrite the gate or make a writer-produced bundle unloadable. A v7
+> and unique generated-counter provenance. The same row projects each exact
+> slot's arm-time duration, authored rumination, and remaining rumination; duplicate
+> slots do not share this state. Post-arm definition edits therefore do not rewrite
+> the gate/lifecycle snapshot or make a writer-produced bundle unloadable. A v7
 > reader rejects v8 at the top-level boundary.
 
 The serialized scheduler snapshot (`EQSnapshot`, `SCHEMA_VERSION = 1`) and the
@@ -95,7 +97,7 @@ game shipping on v1.0 knows what survives an addon upgrade.
 
 | option | chosen? | meaning here |
 |---|---|---|
-| **preserve** | ✅ within v1.x | The original `schema_version = 1` remains readable by later v1.x readers. No field is removed or repurposed within one schema; when a new field must not be ignored by an older reader, the bundle version is bumped and the later reader supplies an explicit migration. |
+| **preserve** | ✅ within v1.x | Historical schemas remain readable when their payload contains enough state for deterministic migration. No field is removed or repurposed within one schema; when a new field must not be ignored by an older reader, the bundle version is bumped and the later reader supplies an explicit migration. The documented fail-closed exception is a v1-v7 conditioned armed reaction: those schemas never stored its bound anchor/counter identity, so a v8 reader rejects that ambiguous state instead of guessing. |
 | **migrate** | ✅ on a breaking change | a breaking schema change bumps `SCHEMA_VERSION` (and the addon minor/major) and ships an explicit migrator + a changelog entry. A save is never silently reinterpreted under a new schema. |
 | **replace** | ❌ | the addon does not silently discard or overwrite an incompatible snapshot. Loading an unsupported version fails safe (below), leaving the consumer to decide. |
 | **defer** | ✅ cross-major tooling | a v1→v2 migration tool is deferred until a v2 schema actually exists; building it now would be speculative. The seam (`schema_version` + `is_supported_version`) is in place so it can be added without redesign. |
@@ -117,11 +119,18 @@ game shipping on v1.0 knows what survives an addon upgrade.
   `issued_meta_level` on every reservation; v1-v6 migrate it from the inline
   definition and reject an explicit differing value. Schema v8 additionally
   requires exact bound state for every armed reaction FIRE gate; v1-v7 migrate
-  only empty-gate arms. All reject malformed bundles before applying any state.
+  only empty-gate arms, and preserves exact slot-local duration/use continuation.
+  All reject malformed bundles before applying any state.
 
 ## What a consumer can rely on at v1.0
 
-1. A save written by any v1.x release loads in any later v1.x release.
+1. A save written by a v1.x release loads in a later v1.x release when its
+   historical payload contains all state required for deterministic migration.
+   The explicit fail-closed exception is a v1-v7 save with a conditioned armed
+   reaction: it is rejected because the historical payload cannot reconstruct
+   the arm-time relative anchor or generated-counter identity. Empty-gate arms
+   from those versions continue to migrate, and schema v8 conditioned arms are
+   fully preserved.
 2. A save written by a *newer* schema is rejected cleanly on an older reader,
    never partially applied. In particular, a v7 reader rejects a v8 bundle at
    the top-level version boundary.

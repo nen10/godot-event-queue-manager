@@ -213,7 +213,7 @@ Consumer implementation points are exactly: the named effect handlers, (optional
 
 A reaction that fires during the sweep is **pushed onto the master timeline** (`due_tick = current`, `priority =` its declared value, fresh sequence) and resolves through the normal pipeline (§6.1) on a subsequent pop — it is never resolved in place inside the sweep. This preserves the three-plane invariant (*only timeline events resolve*) and makes reaction order explainable by the §3 comparator; no reaction-specific ordering rule exists (priority + sequence suffice, e.g. "counter before the follow-up" = higher priority at the same tick).
 
-The armed slot and a scheduled FIRE are different runtime instances. The armed reservation alone owns remaining uses and expiry; each match creates a fresh FIRE reservation and binds its event id to `reaction_fire_context_version: 1`. The context is deterministic value data: FIRE event id/index plus the triggering scheduler event id, tick, ordered view index, source/target/nullable cell summary, and an open consumer-owned event-view copy. It is captured before condition evaluation can mutate its input, injected into the effect-handler view only after target expansion/transforms, and never implicitly forwarded into the FIRE's later sweep. A typed handler publishes its own committed event views when the FIRE should cause another reaction.
+The armed slot and a scheduled FIRE are different runtime instances. Each exact armed slot owns its arm-time duration, authored use count, remaining uses, and expiry; even duplicate slots that reference one `EQReservation` do not share those lifecycle facts. The reservation's public status/count are only a compatibility projection while any duplicate slot remains live. Each match creates a fresh FIRE reservation and binds its event id to `reaction_fire_context_version: 1`. The context is deterministic value data: FIRE event id/index plus the triggering scheduler event id, tick, ordered view index, source/target/nullable cell summary, and an open consumer-owned event-view copy. It is captured before condition evaluation can mutate its input, injected into the effect-handler view only after target expansion/transforms, and never implicitly forwarded into the FIRE's later sweep. A typed handler publishes its own committed event views when the FIRE should cause another reaction.
 
 The context is game-vocabulary-neutral. EQM transports the value; a consumer decides whether its `source` means `TRIGGER_SOURCE`, whether the source is defeated, or whether a cost/refund applies. Reaction use count/duration/priority remain independent of consumer cost policy.
 
@@ -226,6 +226,10 @@ status, rumination, and declared counters. Invalidation is OR/invalidation-wins;
 it closes the armed reservation without creating a FIRE. Only RESOLVE commits one
 rumination/use and creates a scheduled FIRE. An unexpected gate fault closes the
 arm fail-safe as `condition_fault` without consuming a use.
+If one slot sees multiple committed views in a sweep, its plan is atomic: a later
+condition fault discards earlier accepted views for that slot in both resilience
+modes. SHIPPED may continue planning other slots, but never publishes a partial
+FIRE for the faulted slot.
 
 Authored gate terms bind exactly once when the reaction arms. Relative line
 thresholds therefore retain their arm-time anchor, and each declared COUNTER owns
@@ -432,8 +436,10 @@ and the counter sequence remain owned by the existing `event_lines` table, which
 also records the exact generated-counter ids. Load verifies exact term shape,
 the arm-time authored condition snapshot, named predicate registration, generated
 counter provenance/uniqueness, and line identity before mutating scheduler,
-actors, or pipeline. Later edits to the caller-owned definition do not rewrite
-the armed gate or make the writer produce an unloadable bundle.
+actors, or pipeline. Later edits to the caller-owned definition's conditions,
+duration, or rumination do not rewrite the exact slot snapshot or make the writer
+produce an unloadable bundle. Duplicate slots serialize their own remaining use
+counts and restore with identical FIRE indices.
 
 Versions 1–7 migrate an armed reaction only when its authored solve/invalidation
 sets are empty. A historical conditioned arm is rejected with
@@ -570,7 +576,13 @@ contract is narrower and exact: the game adapter projects the spatial fact into
 a normalized event tag and `EQCondition` selects that resolved event. Applying
 definition solve/invalidation before consuming the armed slot requires a
 preview/commit reaction contract, condition-bind lifetime, and snapshot rules;
-that frozen remainder is re-reserved to EQM-141 in the coverage matrix.
+at the time of that audit, the frozen remainder was re-reserved to EQM-141 in
+the coverage matrix. **EQM-141 completion (2026-07-19)** closes that reservation:
+`EQCondition` still selects resolved-event candidates, while definition
+`solve_conditions` / `invalidation_conditions` now gate FIRE from an arm-time
+bound snapshot before the exact armed slot is consumed. A false solve keeps the
+slot armed, invalidation wins over solve, and schema v8 preserves the bound gate
+and generated-counter provenance (§6.2, §10.6).
 
 Consumer-side responsibilities recorded at handover (not EQM contracts): spatial predicates via NAMED_PREDICATE (game), defense-stack substance (game), transform application-structure validation (EBS), per-skill meta-level assignment (EBS — drafted as the two-tier meta-class/meta-level injection model, `godot-editable-battleskill-system/docs/design/META_LEVEL_ASSIGNMENT.md`; the EQM contract still sees only a single issuance-time int). All v1.2 machinery is L2/L3 opt-in; the L0/L1 surface is unchanged (EQM-023 gate).
 

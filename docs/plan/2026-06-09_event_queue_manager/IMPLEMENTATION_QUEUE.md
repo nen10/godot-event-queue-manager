@@ -183,7 +183,7 @@ task として線形に実装・検証する。
 
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
-| EQM-137 | COMPLETE_WITH_BACKLOG | EQM-136 | `docs/plan/2026-06-09_event_queue_manager/EQM-137_reaction_condition_contract/` | Reaction-condition type contract hardening + consumer false-green repair proof. | `runtime/{eq_error,eq_reservation_runtime,eq_trigger_engine,eq_trigger_index}.gd`, error/API docs, trigger/runtime tests; EBS integration/tests/docs are consumer-owned proof | `reaction_condition` is `EQCondition|null`; wrong types produce a stable contract fault/rejection trace before any reservation/index/scheduler mutation in dev and shipped modes。direct engine/index calls reject explicitly without ghost state。valid reaction behavior and normal goldens remain unchanged。EBS current-head regression detects the former bad input as rejection, corrects the R04 standard form, and its runner fails on `SCRIPT ERROR`; EQM `./tools/test.sh` and `./tools/test.sh --performance` both PASS。 |
+| EQM-137 | COMPLETE | EQM-136 | `docs/plan/2026-06-09_event_queue_manager/EQM-137_reaction_condition_contract/` | Reaction-condition type contract hardening + consumer false-green repair proof. | `runtime/{eq_error,eq_reservation_runtime,eq_trigger_engine,eq_trigger_index}.gd`, error/API docs, trigger/runtime tests; EBS integration/tests/docs are consumer-owned proof | `reaction_condition` is `EQCondition|null`; wrong types produce a stable contract fault/rejection trace before any reservation/index/scheduler mutation in dev and shipped modes。direct engine/index calls reject explicitly without ghost state。valid reaction behavior and normal goldens remain unchanged。EBS current-head regression detects the former bad input as rejection, corrects the R04 standard form, and its runner fails on `SCRIPT ERROR`; EQM `./tools/test.sh` and `./tools/test.sh --performance` both PASS。 |
 | EQM-138 | COMPLETE | EQM-137 | `docs/plan/2026-06-09_event_queue_manager/EQM-138_trigger_candidate_merge/` | Stable linear merge for target + wildcard trigger candidates. | `runtime/eq_trigger_index.gd`, trigger regression/performance tests, runtime performance profile | Candidate order/fired occurrences remain exactly equivalent to arm order across target-only/wildcard-only/mixed/mutated conditions。candidate assembly performs no full candidate sort; independent lane records sparse and wildcard-heavy work/elapsed, while regression and performance discovery remain exclusive。 |
 | EQM-139 | COMPLETE | EQM-138 | `docs/plan/2026-06-09_event_queue_manager/EQM-139_relation_adjacency_runtime/` | Production relation queries/expansion/invalidation use the existing actor adjacency. | `runtime/eq_relation_graph.gd`, core/performance tests, runtime performance profile | `relations_of`/`expand`/actor invalidation inspect only incident relation ids while preserving relation-id ordering, TREE/GRAPH semantics, maintenance, trace, snapshot roundtrip。regression + independent performance lane PASS with deterministic workload evidence。 |
 | EQM-140 | COMPLETE | EQM-139 | `docs/plan/2026-06-09_event_queue_manager/EQM-140_sparse_event_line_polling/` | Watched-only event-line polling and derived effective-rate cache. | `runtime/eq_event_lines.gd`, core/performance tests, runtime performance profile | polling work is bounded by watched existing lines rather than all lines; modifier add/remove/re-rate and restore rebuild cache deterministically。progression trace/order/snapshot semantics unchanged; regression + independent performance lane PASS。 |
@@ -198,7 +198,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 | EQM-133 | COMPLETE | EQM-132 | Amberground reaction checkpoint audit | schema-v6 reaction-expiry ownership + exact one-event resolution boundary | count終了後のexpiryをsave/loadしFIRE/FIRE/`already_closed` continuation一致、v5 armed migration／orphan rejection、table tamper、後続reservationを消費しない1-event boundaryをfull gateで証明。 |
 | EQM-134 | COMPLETE | EQM-133 | Amberground state/passive/perception implementation audit | State/relation engineering work-scale rung + one-shot inversion hot-path repair | 64 tokens×8 actors、1,024 relations、200 actual triggersのround-trip/resolve、work-scale profile、full gate。 |
 | EQM-135 | COMPLETE | EQM-134 | Amberground interception tranche | 発行済みPREPARED単独予約へのmeta介入primitive | 発行時metaを予約instanceへ固定し、同値以上の介入でeffect未実行のまま`event_invalidated(closed_by: intervention)`、不足時は`intervention_avoided`、非対応contextはstable rejection。snapshot/pending消失とtrace順を専用test + full gateで証明。 |
-| EQM-141 | RUNNING | EQM-140 | EQM-137 / historical R04 false-green audit | Reaction FIRE condition semantics (preview/commit + condition bind/save contract). | trigger match後・rumination消費前にsolve/invalidationを評価する二相契約、WAIT時のlifetime、trigger/reaction view、COUNTER bind、snapshotをtask packetで決定し、false/true/invalidation-wins/save-loadを厳密test。EQM-137へは混ぜない。 |
+| EQM-141 | COMPLETE | EQM-140 | EQM-137 / historical R04 false-green audit | Reaction FIRE condition semantics (preview/commit + condition bind/save contract). | `EQCondition` candidate match後・rumination mutation前にdefinition solve/invalidationを二層評価。WAITはarm-time bindしたexact slotのduration／rumination／gateを保持し、invalidation/faultはFIRE前にclose、RESOLVEは全preflight後にscheduleしてbatch commit。schema v8はbound terms／counter provenance／slot lifecycleをexact type／range／identityでverify-before-mutate。EBS R04はsame movement effectのentry edgeからsame-sweep FIRE/effectまで証明し、regression/performance laneは分離。 |
 
 ## Current pointer
 
@@ -206,12 +206,11 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: **EQM-141 RUNNING**。user-approved autonomous hardening
-round (2026-07-18)のEQM-137→140は完了。EQM-137はtrace schema、SHIPPED continuation、
-consumer R04 false-greenを修理し、addon `754f905`をEBS DEPS/logへ記録してconsumer 3 gateも
-同revisionで再検証済み。EQM-138→140は通常回帰と独立performance laneの両方を完了証拠に
-した。EQM-141はtask packetでsolve/invalidationの評価view・WAIT lifetime・bind/saveを
-確定し、historical R04 false-greenを二層のFIRE gateとして修理中。performance roundへは混ぜない。
+Current: **none**。user-approved autonomous hardening round (2026-07-18–19)のEQM-137→141は
+すべてCOMPLETE。EQM-141がEQM-137のnamed solve backlogとhistorical R04 false-greenを
+candidate matcher／definition FIRE gateの二層契約として閉じ、exact slot lifecycleとschema v8
+continuationまで検証した。通常回帰と独立performance laneは分離を保ったまま両方PASS。
+queueにREADY/BACKLOG taskなし。
 
 Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
@@ -1700,3 +1699,33 @@ profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
 Dependency sweep: EQM-140 COMPLETE → EQM-141 READY。Current pointer → EQM-141
 (solve/invalidation view、WAIT lifetime、bind/saveを同時に決めるgenuine semantic design fork;
 performance roundの完了とは分離)。
+
+### EQM-141 — COMPLETE (2026-07-19) — reaction FIRE conditions
+
+```text
+acceptance:
+  - EQCondition|null selects resolved-event candidates; definition solve/invalidation gates FIRE after match and before mutation
+  - solve=false preserves the exact ARMED slot without consuming rumination/counters; invalidation wins and faults close before FIRE
+  - RESOLVE schedules every independent FIRE only after cascade/context/actor/schedule preflight, then batch-commits exact-slot state
+  - arm-time bind freezes deep-copied trigger/reaction terms, counter provenance, duration, and rumination; scheduled FIRE does not re-evaluate the gate
+  - schema v8 verifies bound terms, counter provenance, and slot lifecycle with exact type/range/identity before applying any state
+  - EBS R04 emits an entry edge from the typed movement effect and observes same-occurrence named solve, same-sweep FIRE, handler call, and trap_damage record
+plan: docs/plan/2026-06-09_event_queue_manager/EQM-141_reaction_fire_conditions/
+tests:
+  - ./tools/test.sh -> PASS (regression only; files=76 checks=2066 failures=0; run 20260719-014725-74509; API/coverage/golden/package gates PASS)
+  - ./tools/test.sh --performance -> PASS (performance only; files=5 checks=49 failures=0; run 20260719-014410-69780)
+  - ./tools/test.sh --update-golden focus_cost_counter_stop -> PASS (explicit rebaseline; run 20260719-012638-40405)
+  - EBS ./tools/test.sh -> PASS (169 tests / 623 asserts)
+  - EBS ./tools/test_performance.sh -> PASS (5 tests / 16 asserts)
+  - EBS ./tools/package_addon.sh --check -> PASS
+performance (operation-local; advisory elapsed):
+  - EQM event-line 188.69x / effective-rate 18.69x / relation 514.12x, 648.65x, 1007.21x / trigger merge 4.54x, 9.95x
+  - EBS formula 2.27x / bridge 1.34x / validator 3.81x / Action plan 1.38x (prepare 6 usec, break-even 2) / compiled issue 1.13x
+review: docs/review/autopilot/EQM-141_SELF_REVIEW_2026-07-19.md
+golden:
+  - focus_cost_counter_stop removes the old fifth reaction_fired and records direct focus_exhausted condition closure with trigger_event_id
+  - API surface golden explicitly adds preview/commit and append-only stable errors; other deterministic trace fixtures remain unchanged
+```
+
+Dependency sweep: EQM-141 COMPLETE → queueにREADY/BACKLOG taskなし。Current pointer → none。
+EQM-137 COMPLETE_WITH_BACKLOGのhistorical named solve backlogはEQM-141で閉じ、現在statusはCOMPLETE。

@@ -82,6 +82,9 @@ an independent scheduled FIRE reservation. Its handler view contains
 open consumer event-view copy. Read a pending copy with
 `reaction_fire_context_for_event(event_id)`. The armed slot remains separate so
 remaining uses and expiry survive a pending FIRE and a save/load boundary.
+Duration and rumination are captured per exact slot when it arms. Editing the
+definition later does not move that slot's expiry or renumber its FIREs; duplicate
+slots referencing one reservation retain independent use counts.
 
 ## 4. Worked example
 

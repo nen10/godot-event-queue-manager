@@ -6,7 +6,9 @@ const EQReservationRuntime := preload("res://addons/event_queue_manager/runtime/
 const EQReservation := preload("res://addons/event_queue_manager/runtime/eq_reservation.gd")
 const EQActionDefinition = preload("res://addons/event_queue_manager/resources/eq_action_definition.gd")
 const EQEffectRecord = preload("res://addons/event_queue_manager/runtime/eq_effect_record.gd")
+const EQEffectCommitResult = preload("res://addons/event_queue_manager/runtime/eq_effect_commit_result.gd")
 const EQCondition = preload("res://addons/event_queue_manager/resources/eq_condition.gd")
+const EQConditionSpec = preload("res://addons/event_queue_manager/resources/eq_condition_spec.gd")
 const EQActionResolutionPolicy = preload("res://addons/event_queue_manager/resources/policies/eq_action_resolution_policy.gd")
 
 const GOLDEN_CASE = "mutual_counter_stop"
@@ -16,7 +18,7 @@ const GOLDEN_FOCUS_PATH = "res://tests/golden/focus_cost_counter_stop.trace.json
 
 
 static func run(t) -> void:
-	_test_r04_normalized_event_trigger(t)
+	_test_r04_entry_event_named_gate(t)
 	_test_r06_mutual_counter_stop(t)
 	_test_r06_focus_cost_stop(t)
 	_test_r08_defensive_stack_order_hook(t)
@@ -91,39 +93,97 @@ static func _count_kind(trace: String, kind: String) -> int:
 	return _kind_lines(trace, kind).size()
 
 
-## R04: game-side空間事実をnormalized event tagへ投影し、EQConditionで選ぶ。
-## Reaction definitionのsolve/invalidation gateは独立follow-upで意味論を固定する。
-static func _test_r04_normalized_event_trigger(t) -> void:
+## R04: EQCondition selects movement candidates; an arm-bound named solve
+## reads the entry edge projected by that same committed movement occurrence.
+## Current in-region state is deliberately insufficient: inside-to-inside waits.
+static func _test_r04_entry_event_named_gate(t) -> void:
 	var rr := _rr([&"attacker", &"defender"])
+	var predicate_observation := {"calls": 0}
+	rr.runtime.register_predicate(
+		&"space.entered.trap0",
+		func(view: Dictionary) -> bool:
+			predicate_observation["calls"] += 1
+			return view.get("trigger", {}).get("entered_regions", []).has("trap0")
+	)
+	var effect_observation := {"calls": 0, "contexts": []}
+	rr.runtime.register_effect(
+		&"trap_effect",
+		func(view: Dictionary) -> Array:
+			effect_observation["calls"] += 1
+			effect_observation["contexts"].append(
+				view.get("reaction_fire_context", {}).duplicate(true))
+			return [_record(&"trap_damage", &"attacker", &"defender")]
+	)
 
 	var prep := _def(EQActionDefinition.Kind.REACTION_PREPARATION)
 	prep.duration = EQActionDefinition.DURATION_UNLIMITED
+	prep.effect_name = &"trap_effect"
+	var entry_gate := EQConditionSpec.new()
+	entry_gate.type = EQConditionSpec.Type.NAMED_PREDICATE
+	entry_gate.predicate_name = &"space.entered.trap0"
+	entry_gate.condition_id = &"trap0.entry"
+	prep.solve_conditions = [entry_gate]
 	var prep_condition := EQCondition.new()
+	prep_condition.match_source = &"attacker"
 	prep_condition.match_target = &"defender"
-	prep_condition.require_tags = [&"intrusion.trap0"]
+	prep_condition.require_tags = [&"movement.step"]
 	rr.submit(EQReservation.new(&"defender", prep), prep_condition)
 
+	var movement_state := {"entered": false}
+	rr.runtime.register_effect_commit(
+		&"movement_effect",
+		func(_view: Dictionary):
+			var entered_regions: Array = [&"trap0"] if movement_state["entered"] else []
+			return EQEffectCommitResult.make_success([], [{
+				"kind": &"movement_step",
+				"source": &"attacker",
+				"target": &"defender",
+				"tags": [&"movement.step"],
+				"entered_regions": entered_regions,
+			}])
+	)
 	var movement := _def(EQActionDefinition.Kind.IMMEDIATE)
 	movement.tags = [&"movement"]
+	movement.effect_name = &"movement_effect"
 	var outside := EQReservation.new(&"attacker", movement)
 	outside.target_id = &"defender"
 	rr.submit(outside)
 	rr.resolve_next()
-	t.eq(_count_kind(rr.runtime.trace_jsonl(), "reaction_fired"), 0, "non-intrusion movement does not fire the trap")
-	t.eq(rr.armed_for(&"defender").size(), 1, "nonmatching movement leaves the trap armed")
+	t.eq(_count_kind(rr.runtime.trace_jsonl(), "reaction_fired"), 0, "outside movement matches but its false entry gate waits")
+	t.eq(rr.armed_for(&"defender").size(), 1, "false named solve retains the same trap arm")
+	t.eq(effect_observation["calls"], 0, "WAIT does not execute the trap effect")
 
-	var intrusion := _def(EQActionDefinition.Kind.IMMEDIATE)
-	intrusion.tags = [&"movement", &"intrusion.trap0"]
-	var inside := EQReservation.new(&"attacker", intrusion)
-	inside.target_id = &"defender"
-	rr.submit(inside)
-	t.eq(rr.resolve_next(), inside, "normalized intrusion event resolves through the pipeline")
-	t.eq(_count_kind(rr.runtime.trace_jsonl(), "reaction_fired"), 1, "matching intrusion schedules exactly one FIRE")
-	t.eq(rr.armed_for(&"defender").size(), 0, "one-shot trap is consumed only by the matching event")
+	movement_state["entered"] = true
+	var entry := EQReservation.new(&"attacker", movement)
+	entry.target_id = &"defender"
+	rr.submit(entry)
+	t.eq(rr.resolve_next(), entry, "the entry movement publishes its fact during resolution")
+	t.eq(_count_kind(rr.runtime.trace_jsonl(), "reaction_fired"), 1, "the same entry occurrence schedules exactly one FIRE")
+	t.eq(rr.armed_for(&"defender").size(), 0, "one-shot trap commits only after the true named solve")
 	var fired := rr.resolve_next()
 	t.ok(fired != null, "scheduled trap FIRE resolves on its own timeline pop")
 	if fired != null:
 		t.eq(fired.actor_id, &"defender", "trap FIRE belongs to the defender-side preparation")
+	t.eq(effect_observation["calls"], 1, "the independent FIRE executes its effect exactly once")
+	t.eq(rr.last_drained.size(), 1, "the trap effect contributes observable effect truth")
+	t.eq(rr.last_drained[0].kind, &"trap_damage", "the drained record comes from the trap handler")
+	t.eq(
+		effect_observation["contexts"][0]["event_view"]["entered_regions"],
+		["trap0"],
+		"the effect retains the entry occurrence that opened the gate"
+	)
+
+	# A fresh arm proves that merely remaining inside is not the entry edge.
+	rr.submit(EQReservation.new(&"defender", prep), prep_condition)
+	movement_state["entered"] = false
+	var inside_motion := EQReservation.new(&"attacker", movement)
+	inside_motion.target_id = &"defender"
+	rr.submit(inside_motion)
+	t.eq(rr.resolve_next(), inside_motion, "inside-to-inside movement still resolves")
+	t.eq(rr.pending().size(), 0, "inside-to-inside movement schedules no FIRE")
+	t.eq(rr.armed_for(&"defender").size(), 1, "non-entry WAIT retains the fresh arm")
+	t.eq(effect_observation["calls"], 1, "non-entry movement executes no second trap effect")
+	t.eq(predicate_observation["calls"], 3, "the named gate evaluates once per movement occurrence")
 
 
 ## R06: hero/orc 互いの損害に対する反撃を rumination で停止し、完全 trace を golden 化する

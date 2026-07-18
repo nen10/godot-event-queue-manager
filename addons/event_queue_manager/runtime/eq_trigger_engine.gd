@@ -24,6 +24,7 @@ const _EQCondition := preload("../resources/eq_condition.gd")
 # `_armed` is the sole canonical table. Private sequence/expiry keys support the
 # non-serialized derived index and are never exposed by armed_entries().
 # Each entry: { reservation, condition, owner, armed_at, duration,
+#               authored_ruminations, remaining_ruminations,
 #               _index_sequence, _commit_revision, _expiry_end_tick? }.
 var _armed: Array[Dictionary] = []
 var _index := _EQTriggerIndex.new()
@@ -49,25 +50,53 @@ func arm(reservation: EQReservation, condition, current_tick: int) -> bool:
 
 ## Runtime-internal slot form. The public bool arm() contract stays unchanged,
 ## while the reservation pipeline keys arm-bound state by this exact slot.
-func _arm_slot(reservation: EQReservation, condition, current_tick: int) -> int:
+func _arm_slot(
+	reservation: EQReservation,
+	condition,
+	current_tick: int,
+	restored_remaining = null,
+	restored_authored = null,
+	restored_duration = null
+) -> int:
 	if condition != null and not is_instance_of(condition, _EQCondition):
 		return -1
 	var sequence := _index.add(reservation, condition)
 	if sequence < 0:
 		return -1
+	var authored_ruminations := int(
+		restored_authored
+		if typeof(restored_authored) == TYPE_INT
+		else (reservation.definition.rumination if reservation.definition != null else 0)
+	)
+	var remaining_ruminations := int(
+		restored_remaining
+		if typeof(restored_remaining) == TYPE_INT
+		else authored_ruminations
+	)
+	var duration := int(
+		restored_duration
+		if typeof(restored_duration) == TYPE_INT
+		else (
+			reservation.definition.duration
+			if reservation.definition != null
+			else EQActionDefinition.DURATION_UNLIMITED
+		)
+	)
 	var armed := {
 		"reservation": reservation,
 		"condition": condition,
 		"owner": reservation.actor_id,
 		"armed_at": current_tick,
-		"duration": reservation.definition.duration if reservation.definition != null else EQActionDefinition.DURATION_UNLIMITED,
+		"duration": duration,
+		"authored_ruminations": authored_ruminations,
+		"remaining_ruminations": remaining_ruminations,
 		"_index_sequence": sequence,
 		"_commit_revision": 0,
 	}
 	_note_expiry(armed)
 	_armed.append(armed)
 	_armed_by_sequence[sequence] = armed
-	reservation.status = EQReservation.Status.ARMED
+	_sync_reservation_projection(reservation, EQReservation.Status.ARMED, remaining_ruminations)
 	return sequence
 
 
@@ -88,16 +117,18 @@ func preview_event_resolved_occurrences(view: Dictionary, current_tick: int) -> 
 		var cond = armed["condition"]
 		if cond != null and cond.matches(view):
 			var res: EQReservation = armed["reservation"]
-			var authored_ruminations := (
-				res.definition.rumination if res.definition != null else 0
-			)
-			var closes_arm := res.remaining_ruminations <= 0
+			var authored_ruminations := int(armed["authored_ruminations"])
+			var remaining_ruminations := int(armed["remaining_ruminations"])
+			var closes_arm := remaining_ruminations <= 0
 			previews.append(
 				{
 					"reservation": res,
-					"fire_index": authored_ruminations - res.remaining_ruminations + 1,
+					"fire_index": authored_ruminations - remaining_ruminations + 1,
 					"closes_arm": closes_arm,
 					"slot_id": sequence,
+					"duration": int(armed["duration"]),
+					"authored_ruminations": authored_ruminations,
+					"remaining_ruminations": remaining_ruminations,
 					"_arm_revision": int(armed["_commit_revision"]),
 				}
 			)
@@ -159,10 +190,15 @@ func disarm(reservation: EQReservation) -> bool:
 ## Removes one exact arm slot. Runtime expiry/gate ownership uses this instead
 ## of reservation identity, because the direct engine explicitly permits the
 ## same reservation object to occupy more than one slot.
-func _disarm_slot(slot_id: int) -> bool:
+func _disarm_slot(slot_id: int, close_status: int = -1) -> bool:
 	if not _armed_by_sequence.has(slot_id):
 		return false
-	_remove_armed_entry(_armed_by_sequence[slot_id])
+	var armed: Dictionary = _armed_by_sequence[slot_id]
+	var reservation: EQReservation = armed["reservation"]
+	var remaining := int(armed["remaining_ruminations"])
+	_remove_armed_entry(armed)
+	if close_status != -1:
+		_sync_reservation_projection(reservation, close_status, remaining)
 	return true
 
 
@@ -195,6 +231,7 @@ func _expire(current_tick: int) -> void:
 	if not _has_finite_expiry or current_tick <= _next_expiry_end_tick:
 		return
 	var survivors: Array[Dictionary] = []
+	var expired_entries: Array[Dictionary] = []
 	var has_next_expiry := false
 	var next_expiry := 0
 	for armed in _armed:
@@ -207,10 +244,16 @@ func _expire(current_tick: int) -> void:
 					has_next_expiry = true
 					next_expiry = end_tick
 		else:
-			(armed["reservation"] as EQReservation).status = EQReservation.Status.INVALIDATED
 			expired.append({"reservation": armed["reservation"], "expired_at": current_tick})
+			expired_entries.append(armed)
 			_unindex_slot(armed)
 	_armed = survivors
+	for armed in expired_entries:
+		_sync_reservation_projection(
+			armed["reservation"] as EQReservation,
+			EQReservation.Status.INVALIDATED,
+			int(armed["remaining_ruminations"])
+		)
 	_has_finite_expiry = has_next_expiry
 	_next_expiry_end_tick = next_expiry
 
@@ -220,7 +263,9 @@ func armed_count() -> int:
 
 
 ## Read-only view of the armed entries ({reservation, condition, owner,
-## armed_at, duration}) for serialization (EQM-117).
+## armed_at, duration, authored_ruminations, remaining_ruminations, slot_id})
+## for serialization (EQM-117). `slot_id` is the
+## exact engine-slot identity and remains stable for that slot's armed lifetime.
 func armed_entries() -> Array:
 	var entries: Array = []
 	for armed in _armed:
@@ -281,7 +326,6 @@ func _live_preview_entry(preview: Dictionary) -> Dictionary:
 ## -1, RESOLVED (declared counter), or INVALIDATED (gate/fault).
 func _validate_occurrence_batch(plans: Array) -> bool:
 	var seen_slots := {}
-	var simulated_remaining := {}
 	for plan_value in plans:
 		if typeof(plan_value) != TYPE_DICTIONARY:
 			return false
@@ -303,16 +347,9 @@ func _validate_occurrence_batch(plans: Array) -> bool:
 			return false
 		if count == 0 and close_status == -1:
 			return false
-		var res: EQReservation = armed["reservation"]
-		var reservation_id := res.get_instance_id()
-		var remaining := int(
-			simulated_remaining.get(reservation_id, res.remaining_ruminations)
-		)
+		var remaining := int(armed["remaining_ruminations"])
 		if count > remaining + 1:
 			return false
-		if count > 0:
-			remaining = maxi(remaining - count, 0)
-		simulated_remaining[reservation_id] = remaining
 	return true
 
 
@@ -326,18 +363,28 @@ func _commit_occurrence_batch(plans: Array) -> bool:
 		var res: EQReservation = armed["reservation"]
 		var count := int(plan["count"])
 		var close_status := int(plan["close_status"])
+		var remaining := int(armed["remaining_ruminations"])
+		var final_status := -1
 		armed["_commit_revision"] = int(armed["_commit_revision"]) + maxi(count, 1)
 		if count > 0:
-			if count <= res.remaining_ruminations:
-				res.remaining_ruminations -= count
-				res.status = EQReservation.Status.ARMED
+			if count <= remaining:
+				remaining -= count
+				armed["remaining_ruminations"] = remaining
 			else:
-				res.remaining_ruminations = 0
-				res.status = EQReservation.Status.RESOLVED
+				remaining = 0
+				final_status = EQReservation.Status.RESOLVED
 				_remove_armed_entry(armed)
 		if close_status != -1 and _armed_by_sequence.has(int(preview["slot_id"])):
-			res.status = close_status
+			final_status = close_status
 			_remove_armed_entry(armed)
+		if _armed_by_sequence.has(int(preview["slot_id"])):
+			_sync_reservation_projection(res, EQReservation.Status.ARMED, remaining)
+		else:
+			_sync_reservation_projection(
+				res,
+				final_status if final_status != -1 else EQReservation.Status.RESOLVED,
+				remaining
+			)
 	return true
 
 
@@ -356,5 +403,29 @@ func _public_entry(armed: Dictionary) -> Dictionary:
 		"owner": armed["owner"],
 		"armed_at": armed["armed_at"],
 		"duration": armed["duration"],
+		"authored_ruminations": int(armed["authored_ruminations"]),
+		"remaining_ruminations": int(armed["remaining_ruminations"]),
 		"slot_id": int(armed["_index_sequence"]),
 	}
+
+
+## EQReservation predates duplicate arm slots and therefore remains only a
+## compatibility projection. Exact lifecycle/counter state lives on each slot.
+func _sync_reservation_projection(
+	reservation: EQReservation, closed_status: int, closed_remaining: int
+) -> void:
+	var has_live_slot := false
+	var projected_remaining := 0
+	for armed in _armed:
+		if armed["reservation"] != reservation:
+			continue
+		has_live_slot = true
+		projected_remaining = maxi(
+			projected_remaining, int(armed["remaining_ruminations"])
+		)
+	if has_live_slot:
+		reservation.status = EQReservation.Status.ARMED
+		reservation.remaining_ruminations = projected_remaining
+	else:
+		reservation.status = closed_status
+		reservation.remaining_ruminations = closed_remaining

@@ -54,6 +54,10 @@ enum ScheduledEventOutcome {
 var runtime: EQRuntime
 var lines: EQEventLines
 var chunk: EQEffectChunk
+## Public for lifecycle inspection. When attached here, mutation is owned by
+## this runtime's sweep/expiry/departure pipeline; callers must not invoke the
+## engine's standalone commit/invalidate/disarm methods directly because gate,
+## declared-counter, and expiry ownership are committed atomically here.
 var engine: EQTriggerEngine
 ## Optional relation graph (EQRelationGraph, L3 — SEM §13.1). When attached,
 ## actor departure dissolves its incident relations through the declared
@@ -767,6 +771,10 @@ func is_save_boundary() -> bool:
 # save — losers still close by their own invalidation conditions).
 
 func save_state() -> Dictionary:
+	var engine_entries := engine.armed_entries()
+	var engine_entry_by_slot := {}
+	for entry in engine_entries:
+		engine_entry_by_slot[int(entry["slot_id"])] = entry
 	var expiry_of := {}
 	var expiry_event_ids: Array = _expiry_by_event.keys()
 	expiry_event_ids.sort()
@@ -778,15 +786,17 @@ func save_state() -> Dictionary:
 		reaction_expiries.append({
 			"event_id": int(event_id),
 			"reservation": _armed_reservation_dict(
-				expiry["reservation"] as EQReservation, expiry_slot_id
+				expiry["reservation"] as EQReservation,
+				expiry_slot_id,
+				engine_entry_by_slot.get(expiry_slot_id, expiry)
 			),
 		})
 	var armed: Array = []
-	for entry in engine.armed_entries():
+	for entry in engine_entries:
 		var res: EQReservation = entry["reservation"]
 		var slot_id := int(entry["slot_id"])
 		var gate: Dictionary = _reaction_gate_for_slot(slot_id)
-		var reservation_dict := _armed_reservation_dict(res, slot_id)
+		var reservation_dict := _armed_reservation_dict(res, slot_id, entry)
 		armed.append({
 			"reservation": reservation_dict,
 			"condition": entry["condition"].to_dict() if entry["condition"] != null else {},
@@ -830,18 +840,31 @@ func save_state() -> Dictionary:
 	}
 
 
-func _armed_reservation_dict(res: EQReservation, slot_id: int) -> Dictionary:
+func _armed_reservation_dict(
+	res: EQReservation, slot_id: int, slot_state: Dictionary = {}
+) -> Dictionary:
 	var reservation_dict := res.to_dict()
 	var gate := _reaction_gate_for_slot(slot_id)
-	if gate.is_empty():
-		return reservation_dict
 	var definition_dict: Dictionary = reservation_dict.get("definition", {})
-	definition_dict["solve_conditions"] = (
-		gate.get("authored_solve", []) as Array
-	).duplicate(true)
-	definition_dict["invalidation_conditions"] = (
-		gate.get("authored_inv", []) as Array
-	).duplicate(true)
+	var authored_solve = gate.get(
+		"authored_solve", slot_state.get("authored_solve", null)
+	)
+	var authored_inv = gate.get("authored_inv", slot_state.get("authored_inv", null))
+	if typeof(authored_solve) == TYPE_ARRAY:
+		definition_dict["solve_conditions"] = (authored_solve as Array).duplicate(true)
+	if typeof(authored_inv) == TYPE_ARRAY:
+		definition_dict["invalidation_conditions"] = (authored_inv as Array).duplicate(true)
+	if slot_state.has("duration"):
+		definition_dict["duration"] = int(slot_state["duration"])
+	if slot_state.has("authored_ruminations"):
+		definition_dict["rumination"] = int(slot_state["authored_ruminations"])
+		reservation_dict["remaining_ruminations"] = int(
+			slot_state.get("remaining_ruminations", slot_state["authored_ruminations"])
+		)
+	if slot_state.has("status"):
+		reservation_dict["status"] = int(slot_state["status"])
+	elif not slot_state.is_empty():
+		reservation_dict["status"] = EQReservation.Status.ARMED
 	reservation_dict["definition"] = definition_dict
 	return reservation_dict
 
@@ -1154,7 +1177,13 @@ func _verify_reaction_fire_gate_state(
 				"schema 8 event lines are missing counter provenance",
 				{"reason": "counter_provenance_type"}
 			)
-		var counter_seq := int(lines_d.get("counter_seq", -1))
+		var counter_seq_value = lines_d.get("counter_seq", null)
+		if typeof(counter_seq_value) != TYPE_INT or int(counter_seq_value) < 0:
+			return _reaction_fire_gate_state_fault(
+				"schema 8 event-line counter sequence must be a non-negative int",
+				{"reason": "counter_sequence"}
+			)
+		var counter_seq := int(counter_seq_value)
 		for counter_id_value in counter_ids_value as Array:
 			if (
 				typeof(counter_id_value) != TYPE_STRING
@@ -1216,6 +1245,60 @@ func _verify_reaction_fire_gate_state(
 				{"reason": "definition_type"}
 			)
 		var definition: Dictionary = definition_value
+		if save_schema_version >= 8:
+			var saved_status = (reservation_value as Dictionary).get("status", null)
+			if (
+				typeof(saved_status) != TYPE_INT
+				or int(saved_status) != EQReservation.Status.ARMED
+			):
+				return _reaction_fire_gate_state_fault(
+					"schema 8 armed trigger reservation must have ARMED status",
+					{"reason": "armed_reservation_status"}
+				)
+			var saved_kind = definition.get("kind", null)
+			if (
+				typeof(saved_kind) != TYPE_INT
+				or int(saved_kind) != EQActionDefinition.Kind.REACTION_PREPARATION
+			):
+				return _reaction_fire_gate_state_fault(
+					"schema 8 armed trigger must contain a reaction preparation",
+					{"reason": "armed_definition_kind"}
+				)
+			var duration_value = definition.get("duration", null)
+			var rumination_value = definition.get("rumination", null)
+			var remaining_value = (reservation_value as Dictionary).get(
+				"remaining_ruminations", null
+			)
+			if (
+				typeof(duration_value) != TYPE_INT
+				or typeof(rumination_value) != TYPE_INT
+				or typeof(remaining_value) != TYPE_INT
+			):
+				return _reaction_fire_gate_state_fault(
+					"schema 8 armed reaction counters and duration must be ints",
+					{"reason": "armed_reaction_scalar_type"}
+				)
+			var duration := int(duration_value)
+			var authored_ruminations := int(rumination_value)
+			var remaining_ruminations := int(remaining_value)
+			if duration != EQActionDefinition.DURATION_UNLIMITED and duration <= 0:
+				return _reaction_fire_gate_state_fault(
+					"armed reaction duration must be unlimited or positive",
+					{"duration": duration, "reason": "armed_reaction_duration"}
+				)
+			if (
+				authored_ruminations < 0
+				or remaining_ruminations < 0
+				or remaining_ruminations > authored_ruminations
+			):
+				return _reaction_fire_gate_state_fault(
+					"armed reaction remaining count must be within its authored range",
+					{
+						"authored_ruminations": authored_ruminations,
+						"remaining_ruminations": remaining_ruminations,
+						"reason": "armed_reaction_rumination",
+					}
+				)
 		var authored_solve = definition.get("solve_conditions", [])
 		var authored_inv = definition.get("invalidation_conditions", [])
 		if typeof(authored_solve) != TYPE_ARRAY or typeof(authored_inv) != TYPE_ARRAY:
@@ -1281,6 +1364,15 @@ func _verify_reaction_fire_gate_state(
 						"authored reaction condition has an inexact shape",
 						{"group": group["name"], "index": i, "reason": "spec_shape"}
 					)
+				if not _verify_authored_reaction_condition_spec(
+					spec, String(group["name"]), i
+				):
+					return false
+				var spec_type := int(spec["type"])
+				if not _verify_bound_reaction_condition_term(
+					term, spec_type, String(group["name"]), i
+				):
+					return false
 				var condition_id := String(spec.get("condition_id", ""))
 				if condition_id == "":
 					condition_id = "%s:%d" % [group["name"], i]
@@ -1289,18 +1381,9 @@ func _verify_reaction_fire_gate_state(
 						"bound reaction condition id differs from its definition",
 						{"group": group["name"], "index": i, "reason": "condition_id"}
 					)
-				var spec_type := int(spec.get("type", -1))
 				if spec_type == EQConditionSpec.Type.NAMED_PREDICATE:
-					if not _dictionary_has_exact_keys(
-						term, ["type", "predicate_name", "condition_id"]
-					):
-						return _reaction_fire_gate_state_fault(
-							"bound reaction predicate has an inexact shape",
-							{"group": group["name"], "index": i, "reason": "term_shape"}
-						)
 					if (
-						int(term.get("type", -1)) != EQConditionSpec.Type.NAMED_PREDICATE
-						or String(term.get("predicate_name", ""))
+						String(term.get("predicate_name", ""))
 						!= String(spec.get("predicate_name", ""))
 					):
 						return _reaction_fire_gate_state_fault(
@@ -1308,18 +1391,6 @@ func _verify_reaction_fire_gate_state(
 							{"group": group["name"], "index": i, "reason": "predicate"}
 						)
 					continue
-				if int(term.get("type", -1)) != EQConditionSpec.Type.LINE_THRESHOLD:
-					return _reaction_fire_gate_state_fault(
-						"bound reaction line term has an invalid type",
-						{"group": group["name"], "index": i, "reason": "bound_type"}
-					)
-				if not _dictionary_has_exact_keys(
-					term, ["type", "line_id", "threshold", "comparison", "condition_id"]
-				):
-					return _reaction_fire_gate_state_fault(
-						"bound reaction line term has an inexact shape",
-						{"group": group["name"], "index": i, "reason": "term_shape"}
-					)
 				var line_id := String(term.get("line_id", ""))
 				if line_id == "" or not saved_line_ids.has(line_id):
 					return _reaction_fire_gate_state_fault(
@@ -1336,6 +1407,22 @@ func _verify_reaction_fire_gate_state(
 							{"line_id": line_id, "reason": "counter_alias"}
 						)
 					used_gate_counter_ids[line_id] = true
+					var counter_line: Dictionary = saved_lines_by_id[line_id]
+					var saved_counter_value = counter_line.get("value", null)
+					if (
+						typeof(saved_counter_value) != TYPE_INT
+						or int(saved_counter_value) < 1
+						or int(saved_counter_value) > int(spec["counter_start"])
+					):
+						return _reaction_fire_gate_state_fault(
+							"armed reaction counter value is outside its authored range",
+							{
+								"group": group["name"],
+								"index": i,
+								"line_id": line_id,
+								"reason": "counter_value",
+							}
+						)
 					if (
 						int(term.get("threshold", 1)) != 0
 						or int(term.get("comparison", -1)) != EQConditionSpec.Comparison.LE
@@ -1382,15 +1469,143 @@ func _verify_reaction_fire_gate_state(
 					"reaction counter entry has an inexact shape",
 					{"index": i, "reason": "counter_shape"}
 				)
+			var counter_entry := counters[i] as Dictionary
+			for field in ["line_id", "condition_id"]:
+				if not _is_saved_identity(counter_entry[field]) or String(counter_entry[field]) == "":
+					return _reaction_fire_gate_state_fault(
+						"reaction counter entry identity must be a non-empty string",
+						{"index": i, "field": field, "reason": "counter_field_type"}
+					)
 			if (
-				String((counters[i] as Dictionary).get("line_id", ""))
+				String(counter_entry.get("line_id", ""))
 				!= expected_counters[i]["line_id"]
-				or String((counters[i] as Dictionary).get("condition_id", ""))
+				or String(counter_entry.get("condition_id", ""))
 				!= expected_counters[i]["condition_id"]
 			):
 				return _reaction_fire_gate_state_fault(
 					"reaction counter entry differs from its bound term",
 					{"index": i, "reason": "counter_identity"}
+				)
+	return true
+
+
+func _verify_bound_reaction_condition_term(
+	term: Dictionary, authored_type: int, group_name: String, index: int
+) -> bool:
+	if authored_type == EQConditionSpec.Type.NAMED_PREDICATE:
+		if not _dictionary_has_exact_keys(
+			term, ["type", "predicate_name", "condition_id"]
+		):
+			return _reaction_fire_gate_state_fault(
+				"bound reaction predicate has an inexact shape",
+				{"group": group_name, "index": index, "reason": "term_shape"}
+			)
+		if typeof(term["type"]) != TYPE_INT:
+			return _bound_reaction_term_type_fault(group_name, index, "type")
+		for field in ["predicate_name", "condition_id"]:
+			if not _is_saved_identity(term[field]) or String(term[field]) == "":
+				return _bound_reaction_term_type_fault(group_name, index, field)
+		if int(term["type"]) != EQConditionSpec.Type.NAMED_PREDICATE:
+			return _reaction_fire_gate_state_fault(
+				"bound reaction predicate has an invalid type",
+				{"group": group_name, "index": index, "reason": "bound_type"}
+			)
+		return true
+	if not _dictionary_has_exact_keys(
+		term, ["type", "line_id", "threshold", "comparison", "condition_id"]
+	):
+		return _reaction_fire_gate_state_fault(
+			"bound reaction line term has an inexact shape",
+			{"group": group_name, "index": index, "reason": "term_shape"}
+		)
+	for field in ["type", "threshold", "comparison"]:
+		if typeof(term[field]) != TYPE_INT:
+			return _bound_reaction_term_type_fault(group_name, index, field)
+	for field in ["line_id", "condition_id"]:
+		if not _is_saved_identity(term[field]) or String(term[field]) == "":
+			return _bound_reaction_term_type_fault(group_name, index, field)
+	if int(term["type"]) != EQConditionSpec.Type.LINE_THRESHOLD:
+		return _reaction_fire_gate_state_fault(
+			"bound reaction line term has an invalid type",
+			{"group": group_name, "index": index, "reason": "bound_type"}
+		)
+	var comparison := int(term["comparison"])
+	if comparison < EQConditionSpec.Comparison.GE or comparison > EQConditionSpec.Comparison.LT:
+		return _reaction_fire_gate_state_fault(
+			"bound reaction line term has an invalid comparison",
+			{"group": group_name, "index": index, "reason": "bound_comparison"}
+		)
+	return true
+
+
+func _bound_reaction_term_type_fault(
+	group_name: String, index: int, field: String
+) -> bool:
+	return _reaction_fire_gate_state_fault(
+		"bound reaction condition has an invalid scalar field",
+		{"group": group_name, "index": index, "field": field, "reason": "term_field_type"}
+	)
+
+
+func _is_saved_identity(value) -> bool:
+	return typeof(value) == TYPE_STRING or typeof(value) == TYPE_STRING_NAME
+
+
+func _verify_authored_reaction_condition_spec(
+	spec: Dictionary, group_name: String, index: int
+) -> bool:
+	for field in ["type", "threshold", "comparison", "counter_start"]:
+		if typeof(spec[field]) != TYPE_INT:
+			return _reaction_fire_gate_state_fault(
+				"authored reaction condition has a non-integer numeric field",
+				{"group": group_name, "index": index, "field": field, "reason": "spec_field_type"}
+			)
+	for field in ["line_id", "predicate_name", "condition_id"]:
+		if typeof(spec[field]) != TYPE_STRING:
+			return _reaction_fire_gate_state_fault(
+				"authored reaction condition has a non-string identity field",
+				{"group": group_name, "index": index, "field": field, "reason": "spec_field_type"}
+			)
+	if typeof(spec["relative"]) != TYPE_BOOL:
+		return _reaction_fire_gate_state_fault(
+			"authored reaction condition relative flag must be a bool",
+			{"group": group_name, "index": index, "field": "relative", "reason": "spec_field_type"}
+		)
+	var spec_type := int(spec["type"])
+	if spec_type < EQConditionSpec.Type.LINE_THRESHOLD or spec_type > EQConditionSpec.Type.NAMED_PREDICATE:
+		return _reaction_fire_gate_state_fault(
+			"authored reaction condition has an invalid type",
+			{"group": group_name, "index": index, "reason": "spec_type"}
+		)
+	var comparison := int(spec["comparison"])
+	if comparison < EQConditionSpec.Comparison.GE or comparison > EQConditionSpec.Comparison.LT:
+		return _reaction_fire_gate_state_fault(
+			"authored reaction condition has an invalid comparison",
+			{"group": group_name, "index": index, "reason": "spec_comparison"}
+		)
+	match spec_type:
+		EQConditionSpec.Type.LINE_THRESHOLD:
+			if String(spec["line_id"]) == "":
+				return _reaction_fire_gate_state_fault(
+					"authored reaction line condition requires a line id",
+					{"group": group_name, "index": index, "reason": "spec_line_id"}
+				)
+		EQConditionSpec.Type.COUNTER:
+			if int(spec["counter_start"]) < 1:
+				return _reaction_fire_gate_state_fault(
+					"authored reaction counter requires a positive start value",
+					{"group": group_name, "index": index, "reason": "spec_counter_start"}
+				)
+			if group_name == "solve":
+				return _reaction_fire_gate_state_fault(
+					"authored reaction solve conditions cannot contain COUNTER",
+					{"group": group_name, "index": index, "reason": "spec_counter_solve"}
+				)
+		EQConditionSpec.Type.NAMED_PREDICATE:
+			if String(spec["predicate_name"]) == "":
+				return _reaction_fire_gate_state_fault(
+					"authored reaction predicate requires a registry name",
+					{"group": group_name, "index": index, "reason": "spec_predicate_name"}
 				)
 	return true
 
@@ -1631,9 +1846,30 @@ func apply_state(data: Dictionary) -> void:
 			var expiry_event_id := int(expiry["event_id"])
 			var expiry_reservation := EQReservation.from_dict(expiry["reservation"])
 			restored_expiries[expiry_event_id] = expiry_reservation
+			var expiry_definition := expiry_reservation.definition
 			_expiry_by_event[expiry_event_id] = {
 				"reservation": expiry_reservation,
 				"slot_id": -1,
+				"duration": (
+					expiry_definition.duration
+					if expiry_definition != null
+					else EQActionDefinition.DURATION_UNLIMITED
+				),
+				"authored_ruminations": (
+					expiry_definition.rumination if expiry_definition != null else 0
+				),
+				"remaining_ruminations": expiry_reservation.remaining_ruminations,
+				"status": expiry_reservation.status,
+				"authored_solve": (
+					expiry_definition.solve_conditions.map(func(spec): return spec.to_dict())
+					if expiry_definition != null
+					else []
+				),
+				"authored_inv": (
+					expiry_definition.invalidation_conditions.map(func(spec): return spec.to_dict())
+					if expiry_definition != null
+					else []
+				),
 			}
 	for a in data.get("armed_triggers", []):
 		var expiry_id := int(a.get("expiry_event_id", -1))
@@ -1647,7 +1883,16 @@ func apply_state(data: Dictionary) -> void:
 		if not cd.is_empty():
 			cond = EQCondition.from_dict(cd)
 		res.status = EQReservation.Status.ARMED
-		var slot_id := engine._arm_slot(res, cond, int(a.get("armed_at", 0)))
+		var slot_id := engine._arm_slot(
+			res,
+			cond,
+			int(a.get("armed_at", 0)),
+			res.remaining_ruminations,
+			res.definition.rumination if res.definition != null else 0,
+			res.definition.duration
+			if res.definition != null
+			else EQActionDefinition.DURATION_UNLIMITED
+		)
 		var counter_lines: Array = []
 		for counter_value in a.get("counter_lines", []):
 			var counter: Dictionary = counter_value
@@ -1673,7 +1918,16 @@ func apply_state(data: Dictionary) -> void:
 		if expiry_id > 0 and _expiry_by_event.has(expiry_id):
 			(_expiry_by_event[expiry_id] as Dictionary)["slot_id"] = slot_id
 		if expiry_id > 0 and save_schema_version < 6:
-			_expiry_by_event[expiry_id] = {"reservation": res, "slot_id": slot_id}
+			_expiry_by_event[expiry_id] = {
+				"reservation": res,
+				"slot_id": slot_id,
+				"duration": res.definition.duration,
+				"authored_ruminations": res.definition.rumination,
+				"remaining_ruminations": res.remaining_ruminations,
+				"status": EQReservation.Status.ARMED,
+				"authored_solve": [],
+				"authored_inv": [],
+			}
 	for c in data.get("pending_conditional", []):
 		_pending_conditional.append({
 			"res": EQReservation.from_dict(c.get("reservation", {})),
@@ -1794,13 +2048,20 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 			if slot_id < 0:
 				_reject_reaction_condition_type(res, &"engine_rejected")
 				return -1
-			_store_reaction_gate(slot_id, _bind_reaction_gate(res))
+			var gate := _bind_reaction_gate(res)
+			_store_reaction_gate(slot_id, gate)
 			if res.definition.duration > 0:
 				var expiry_id := runtime.schedule(res.actor_id, runtime.scheduler.current_tick + res.definition.duration, 0, &"expiry")
 				if expiry_id > 0:
 					_expiry_by_event[expiry_id] = {
 						"reservation": res,
 						"slot_id": slot_id,
+						"duration": res.definition.duration,
+						"authored_ruminations": res.definition.rumination,
+						"remaining_ruminations": res.definition.rumination,
+						"status": EQReservation.Status.ARMED,
+						"authored_solve": (gate["authored_solve"] as Array).duplicate(true),
+						"authored_inv": (gate["authored_inv"] as Array).duplicate(true),
 					}
 			return -1
 		_:
@@ -2147,6 +2408,18 @@ func _erase_reaction_gate_slot(slot_id: int) -> void:
 			else:
 				_armed_gate_watched_counts[line_id] = remaining
 	_armed_reaction_gates.erase(slot_id)
+
+
+func _update_reaction_expiry_slot_state(
+	slot_id: int, remaining_ruminations: int, status: int
+) -> void:
+	for event_id in _expiry_by_event.keys():
+		var expiry: Dictionary = _expiry_by_event[event_id]
+		if int(expiry.get("slot_id", -1)) != slot_id:
+			continue
+		expiry["remaining_ruminations"] = remaining_ruminations
+		expiry["status"] = status
+		return
 
 
 ## Advances every declared use counter after an accepted FIRE. Returns the
@@ -2801,8 +3074,12 @@ func _event_view_occurrences(views: Array, trigger_event_id: int) -> Array:
 	return out
 
 
-func _reaction_fire_reservation(armed: EQReservation) -> EQReservation:
-	var occurrence := EQReservation.from_dict(armed.to_dict())
+func _reaction_fire_reservation(
+	armed: EQReservation, slot_id: int, slot_state: Dictionary
+) -> EQReservation:
+	var occurrence := EQReservation.from_dict(
+		_armed_reservation_dict(armed, slot_id, slot_state)
+	)
 	occurrence.event_id = -1
 	occurrence.status = EQReservation.Status.PENDING
 	return occurrence
@@ -2883,6 +3160,14 @@ func _sweep_bundle(trigger_occurrences: Array) -> void:
 					var fault: Dictionary = (
 						inv["fault"] if inv["fault"] != null else solve["fault"]
 					)
+					# A slot plan is atomic across all committed views in this
+					# sweep. A later fault cancels any earlier accepted view for
+					# this exact slot in both resilience modes; SHIPPED may keep
+					# processing other slots, but it cannot publish a partial FIRE.
+					plan["accepted"] = 0
+					for planned_index in range(fired.size() - 1, -1, -1):
+						if int((fired[planned_index] as Dictionary)["slot_id"]) == slot_id:
+							fired.remove_at(planned_index)
 					_close_reaction_slot_plan(
 						plan,
 						EQReservation.Status.INVALIDATED,
@@ -2916,6 +3201,7 @@ func _sweep_bundle(trigger_occurrences: Array) -> void:
 				{
 					"reservation": armed,
 					"slot_id": slot_id,
+					"slot_state": fire,
 					"fire_index": int(plan["first_fire_index"]) + accepted_index,
 					"closes_arm": closes_arm,
 					"closed_by": plan["limit_closed_by"] if closes_arm else &"",
@@ -2980,7 +3266,9 @@ func _sweep_bundle(trigger_occurrences: Array) -> void:
 	var scheduled_fires: Array = []
 	for fire in ordered_fires:
 		var armed: EQReservation = fire["reservation"]
-		var occurrence := _reaction_fire_reservation(armed)
+		var occurrence := _reaction_fire_reservation(
+			armed, int(fire["slot_id"]), fire["slot_state"]
+		)
 		var id := _schedule(occurrence, 0)
 		if id <= 0:
 			_cancel_planned_reaction_fires(scheduled_fires)
@@ -3049,7 +3337,7 @@ func _sweep_bundle(trigger_occurrences: Array) -> void:
 
 func _new_reaction_slot_plan(preview: Dictionary, gate: Dictionary) -> Dictionary:
 	var armed: EQReservation = preview["reservation"]
-	var rumination_limit := armed.remaining_ruminations + 1
+	var rumination_limit := int(preview["remaining_ruminations"]) + 1
 	var counter_limit := -1
 	var counter_closed_by: StringName = &""
 	for counter_value in gate.get("counter_lines", []):
@@ -3065,16 +3353,16 @@ func _new_reaction_slot_plan(preview: Dictionary, gate: Dictionary) -> Dictionar
 		max_fires = counter_limit
 		limit_closed_by = counter_closed_by
 		counter_limited = true
-	var authored_ruminations := (
-		armed.definition.rumination if armed.definition != null else 0
-	)
+	var authored_ruminations := int(preview["authored_ruminations"])
 	return {
 		"preview": preview,
 		"reservation": armed,
 		"gate": gate,
 		"accepted": 0,
 		"max_fires": max_fires,
-		"first_fire_index": authored_ruminations - armed.remaining_ruminations + 1,
+		"first_fire_index": (
+			authored_ruminations - int(preview["remaining_ruminations"]) + 1
+		),
 		"counter_limited": counter_limited,
 		"limit_closed_by": limit_closed_by,
 		"closed": false,
@@ -3123,6 +3411,17 @@ func _commit_reaction_slot_plans(
 		return false
 	for slot_id in slot_order:
 		var plan: Dictionary = slot_plans[slot_id]
+		var remaining := maxi(
+			int((plan["preview"] as Dictionary)["remaining_ruminations"])
+			- int(plan["accepted"]),
+			0
+		)
+		var slot_status := EQReservation.Status.ARMED
+		if bool(plan["closed"]):
+			slot_status = int(plan["close_status"])
+			if slot_status == -1:
+				slot_status = EQReservation.Status.RESOLVED
+		_update_reaction_expiry_slot_state(slot_id, remaining, slot_status)
 		if advance_counters:
 			for _i in range(int(plan["accepted"])):
 				_advance_reaction_counters(plan["gate"])
@@ -3288,9 +3587,8 @@ func _resolve_expiry(e) -> void:
 	# Armed membership is authoritative. A scheduled FIRE occurrence is a
 	# distinct reservation instance, so its status can never mask this slot;
 	# this membership check also repairs historical status drift safely.
-	if engine._disarm_slot(slot_id):
+	if engine._disarm_slot(slot_id, EQReservation.Status.INVALIDATED):
 		_erase_reaction_gate_slot(slot_id)
-		res.status = EQReservation.Status.INVALIDATED
 		_trace_invalidated(e.event_id, res.actor_id, &"duration")
 		if not _verify_effect_commit_versions(res, &"expiry_resolution"):
 			_last_effect_commit_outcome = EQEffectCommitResult.make_failure(

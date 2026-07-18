@@ -30,20 +30,20 @@ preview/commit境界を追加し、arm-time bindとschema-v8 continuationを完�
 | dependency / area | risk | proof / test |
 |---|---|---|
 | trigger index | previewで候補順drift | arm-order/mixed target parity |
-| rumination | WAIT/tie/schedule faultで先行消費 | exact remaining/status/cardinality + cascade/context/actor failure |
+| rumination | WAIT/tie/schedule fault/duplicate slotで先行・共有消費 | exact slot remaining/status/cardinality + cascade/context/actor failure |
 | named predicate | wrong view/transient Callable | composite deep-copy view + registration/load |
 | COUNTER | reissue/alias/double decrement/solve deadlock | provenance/namespace/id/count/tamper + solve rejection |
-| expiry/actor departure | private gate leak | duration/invalidate_actor cleanup + watched set |
+| expiry/actor departure | private gate leak / post-arm duration drift | duration/invalidate_actor/condition/count cleanup + stale expiry roundtrip + watched set |
 | scheduled FIRE | duplicate gate evaluation | predicate call count and pending occurrence |
-| snapshot v8 | bind anchor/definition edit/counter provenance drift | exact roundtrip + post-arm edit + shape/alias tamper + historical cases |
+| snapshot v8 | bind anchor/definition edit/counter provenance/slot lifecycle drift | exact roundtrip + post-arm condition/duration/rumination edit + shape/range/alias tamper + historical cases |
 | API surface | accidental public drift | explicit golden update for preview/commit only |
 | EBS consumer | ARM-only false green | false produces no FIRE; later true produces exactly one |
 | lane separation | performance fixture in regression | both commands/discovery counts |
 
 ## Completion checklist
 
-- [ ] preview/commit gate is atomic and deterministic
-- [ ] arm-time bound gate covers named predicates, lines, counters
-- [ ] schema v8 continuation is exact and verified before mutation
-- [ ] EQM full gates and EBS consumer gates pass
-- [ ] self-review/queue/proof/docs/commit complete
+- [x] preview/commit gate is atomic and deterministic
+- [x] arm-time bound gate covers named predicates, lines, counters
+- [x] schema v8 continuation is exact and verified before mutation
+- [x] EQM full gates and EBS consumer gates pass
+- [x] self-review/queue/proof/docs/commit complete

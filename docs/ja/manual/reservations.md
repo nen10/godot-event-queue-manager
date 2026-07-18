@@ -66,7 +66,7 @@ for fired in trigger.on_event_resolved(view, current_tick):
 
 `rumination` は同じ armed reaction が消費されるまでに何回 fire できるかを制御します。`duration` (`DURATION_UNLIMITED` を含む) は tick 上でどれだけ armed のまま残るかを制御します。
 
-reservation pipelineではmatchをその場で解決しません。matchごとに独立したFIRE reservationをscheduleし、handler viewへversion 1の`reaction_fire_context`を渡します。ここには`fire_event_id`、1始まりの`fire_index`、trigger event id/tick/view/source/target/cellとconsumer-owned event view copyが入ります。pending copyは`reaction_fire_context_for_event(event_id)`で取得できます。armed slotは別instanceなので、残り回数とexpiryはpending FIREやsave/loadを跨いでも保たれます。
+reservation pipelineではmatchをその場で解決しません。matchごとに独立したFIRE reservationをscheduleし、handler viewへversion 1の`reaction_fire_context`を渡します。ここには`fire_event_id`、1始まりの`fire_index`、trigger event id/tick/view/source/target/cellとconsumer-owned event view copyが入ります。pending copyは`reaction_fire_context_for_event(event_id)`で取得できます。armed slotは別instanceなので、残り回数とexpiryはpending FIREやsave/loadを跨いでも保たれます。durationとruminationはexact slotごとにarm時固定され、後からdefinitionを編集してもexpiry tickやFIRE indexは変わりません。同じreservationを参照するduplicate slotも使用回数を共有しません。
 
 ## 4. Worked example
 
