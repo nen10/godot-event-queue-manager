@@ -1,6 +1,6 @@
 # Runtime Performance Profile
 
-Status: **EQM-139 measured and verified (2026-07-18)**.
+Status: **EQM-140 measured and verified (2026-07-18)**.
 
 This document records reproducible, EQM-local runtime performance evidence.
 It is deliberately separate from correctness, determinism, lifecycle, and
@@ -22,6 +22,66 @@ Wall-clock values are not portable SLAs and are never the sole acceptance
 proof. Existing EQM-102/112 coarse guards remain isolated in this lane and run
 with exact workload sentinels; EQM-136's newly reported raw elapsed is advisory.
 A faster or slower host does not change the algorithmic work-count contract.
+
+## EQM-140 watched-only polling and effective-rate cache
+
+`EQEventLines.poll_tick()` previously sorted every canonical line id and then
+tested watched membership. Each selected line also recomputed its effective rate
+by scanning the complete modifier Array. EQM-140 instead filters the watched keys
+to live canonical ids, content-sorts that sparse set, and reads a private derived
+effective-rate cache. Canonical value/base-rate/modifier data and serialized form
+are unchanged.
+
+### Workloads and hard gates
+
+| path | fixture | legacy source work | current source work | hard parity |
+|---|---|---:|---:|---|
+| poll selection | 4,096 issued lines + primary; 36 watched keys, 32 live | 4,097 line ids | 36 watched keys | exact 32 live ids in String content order |
+| effective-rate lookup | base 7 + 32 additive modifiers | 32 modifier visits | 0 modifier visits + 1 cache read | exact derived value and canonical modifier depth |
+
+Selection therefore removes **113.8x** key inspections at the declared sparse
+scale. The effective-rate read path performs no modifier traversal; cache
+construction/refresh remains mutation-owned. Regression proves:
+
+- watched and line insertion order do not affect poll trace order;
+- watched values are ignored, unknown keys are silent, and input is not mutated;
+- base re-rate, additive modifiers, latest override, zero/negative rate, and all
+  removal orders refresh the cache exactly;
+- invalid operations change neither cache nor modifier sequence;
+- in-place restore removes old cache keys, rebuilds from final canonical payload,
+  preserves trace/sweep rules, and does not serialize the cache;
+- existing snapshot-v3 continuation, event-line trace, and step pipeline remain green.
+
+The read optimization moves one cost boundary: re-rate of a deeply modified line
+refreshes its derived value in O(modifier depth), while subsequent reads/polls are
+O(1). Modifier add/remove already traverse their canonical Array. Mutation costs
+are not included in the lookup-only elapsed claim.
+
+### Advisory A/B method
+
+- Godot 4.7 stable (`5b4e0cb0f`), Darwin arm64, local headless process.
+- Test-only legacy helpers are counter-free copies of the removed selector and
+  effective-rate function, using the same live objects as production.
+- Each value is the average of the central pair from 6 sorted samples after 5
+  warmups. Order alternates legacy→current / current→legacy three times each.
+- Each selection sample performs 80 assemblies; each rate sample performs 5,000
+  lookups. Three complete runs bound ordinary noise.
+- These are selection-only and lookup-only ratios, not full poll, `step_tick`,
+  frame, consumer, rendering, or effect-handler speedups.
+
+| run id | path | legacy µs / batch | current µs / batch | speedup |
+|---|---|---:|---:|---:|
+| `20260718-232551-25295` | poll selection ×80 | 371,322 | 1,999 | 185.75x |
+| `20260718-232551-25295` | effective-rate ×5,000 | 31,475 | 1,698 | 18.54x |
+| `20260718-232613-25681` | poll selection ×80 | 385,718 | 2,083 | 185.17x |
+| `20260718-232613-25681` | effective-rate ×5,000 | 31,429 | 1,694 | 18.55x |
+| `20260718-232638-27568` | poll selection ×80 | 384,756 | 2,023 | 190.19x |
+| `20260718-232638-27568` | effective-rate ×5,000 | 32,111 | 1,757 | 18.28x |
+
+Observed operation-local ranges are **185.17–190.19x** for sparse watched-id
+selection and **18.28–18.55x** for depth-32 effective-rate lookup. The portable
+evidence is exact semantic parity plus bounded selection/modifier work; elapsed
+ratios remain advisory.
 
 ## EQM-139 actor-adjacency relation paths
 
@@ -211,17 +271,20 @@ add result rows here when a task changes those paths.
 
 ## Residual hot-path ledger
 
-| path | status after EQM-139 | evidence / next condition |
+| path | status after EQM-140 | evidence / next condition |
 |---|---|---|
 | production trigger target matching | resolved by EQM-136 | 1,000 arms → 75 candidates / 75 full-match calls in the declared fixture |
 | target + wildcard candidate assembly | resolved by EQM-138 | exact stable merge; 4.43–4.65x sparse and 9.93–10.24x wildcard-heavy advisory A/B |
 | finite-duration expiry inspection | resolved for pre-boundary sweeps by EQM-136 | cached minimum finite end tick makes ordinary pre-boundary checks O(1); crossing a boundary scans canonical arm order once and recomputes the minimum |
-| event-line full-set sort before watched selection | queued as EQM-140 | preserve watched-set and progression-order semantics; measure in independent lane |
+| event-line full-set sort before watched selection | resolved by EQM-140 | 4,097 canonical ids → 36 watched keys / 32 live; exact content order |
+| effective-rate lookup modifier scan | resolved by EQM-140 | depth 32 read → derived cache lookup; mutation refresh remains O(depth) |
+| event-line `ctx_lines()` full copy | unmeasured | separate from poll selection; profile before queueing |
+| relation-maintenance-only watched lines | correctness audit candidate | current watched input set intentionally unchanged; needs separate semantic proof |
 | actor-local relation query/expansion/invalidation | resolved by EQM-139 | 2,048 total / 9 incident; exact parity; 227.6–391.2x fewer inspected ids |
 | relation maintenance global scan | retained by design | every relation is an evaluation target; profile separately before changing |
 | default sorted-array scheduler / live peek | deferred | queue only if an EQM-local profile shows it dominates |
 | trace retention / allocation | unmeasured | define an EQM-local fixture before making a claim |
 
-EQM-136/138/139 completion evidence is recorded in their self-reviews under
+EQM-136/138/139/140 completion evidence is recorded in their self-reviews under
 `docs/review/autopilot/`. The fixture values are engineering evidence, not
 gameplay caps or Amberground support claims.

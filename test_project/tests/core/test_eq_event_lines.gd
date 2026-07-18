@@ -18,6 +18,7 @@ static func run(t) -> void:
 	_test_advance_and_faults(t)
 	_test_sparse_poll(t)
 	_test_rate_modifier_effective_rate(t)
+	_test_effective_rate_cache_transitions(t)
 	_test_modifier_freeze_recover(t)
 	_test_rate_modifier_faults(t)
 	_test_scan_order_deterministic(t)
@@ -27,6 +28,7 @@ static func run(t) -> void:
 	_test_modifier_trace_records(t)
 	_test_dict_roundtrip(t)
 	_test_dict_roundtrip_with_modifiers(t)
+	_test_restore_rebuilds_effective_rate_cache(t)
 	_test_sweep_rules(t)
 	_test_condition_integration(t)
 
@@ -64,12 +66,22 @@ static func _test_sparse_poll(t) -> void:
 	var el := EQEventLines.new()
 	el.issue(&"watched_moving", 0, 5)
 	el.issue(&"watched_frozen", 0, 0)
+	el.issue(&"watched_negative", 0, -2)
 	el.issue(&"unwatched_moving", 0, 7)
-	var watched := {&"watched_moving": true, &"watched_frozen": true}
+	var watched := {
+		&"watched_moving": true,
+		&"watched_frozen": true,
+		&"watched_negative": false,
+		&"unknown_watched": true,
+	}
+	var watched_before := watched.duplicate(true)
 	el.poll_tick(watched)
 	t.eq(el.value_of(&"watched_moving"), 5, "watched non-frozen line advances by rate")
 	t.eq(el.value_of(&"watched_frozen"), 0, "frozen (rate 0) line does not advance even when watched")
+	t.eq(el.value_of(&"watched_negative"), -2, "negative effective rate advances a watched line")
 	t.eq(el.value_of(&"unwatched_moving"), 0, "unwatched line does not advance (sparse polling)")
+	t.eq(watched, watched_before, "poll treats watched as membership-only input without mutation")
+	t.eq(el.faults.size(), 0, "unknown watched keys remain a silent poll no-op")
 
 	el.re_rate(&"watched_moving", 3)
 	el.poll_tick(watched)
@@ -91,6 +103,38 @@ static func _test_rate_modifier_effective_rate(t) -> void:
 	t.eq(el.effective_rate_of(&"ct"), 3, "removing non-last override keeps the later override")
 	el.remove_rate_modifier(&"ct", second_override)
 	t.eq(el.effective_rate_of(&"ct"), 9, "removing all overrides restores base+adds")
+
+
+static func _test_effective_rate_cache_transitions(t) -> void:
+	var el := EQEventLines.new()
+	el.issue(&"ct", 0, 2)
+	var add := el.add_rate_modifier(&"ct", "add", 3)
+	t.eq(el.effective_rate_of(&"ct"), 5, "cache refreshes after additive modifier")
+	el.re_rate(&"ct", 7)
+	t.eq(el.effective_rate_of(&"ct"), 10, "cache refreshes after base re-rate")
+	var frozen := el.add_rate_modifier(&"ct", "override", 0)
+	t.eq(el.effective_rate_of(&"ct"), 0, "override zero is cached as a valid effective rate")
+	el.re_rate(&"ct", 9)
+	t.eq(el.effective_rate_of(&"ct"), 0, "re-rate under override keeps the latest override effective")
+	el.remove_rate_modifier(&"ct", frozen)
+	t.eq(el.effective_rate_of(&"ct"), 12, "removing override reveals the updated base plus add stack")
+
+	var first_override := el.add_rate_modifier(&"ct", "override", 4)
+	var latest_override := el.add_rate_modifier(&"ct", "override", 6)
+	el.remove_rate_modifier(&"ct", first_override)
+	t.eq(el.effective_rate_of(&"ct"), 6, "removing non-latest override keeps latest Array-order winner")
+	el.remove_rate_modifier(&"ct", latest_override)
+	t.eq(el.effective_rate_of(&"ct"), 12, "removing latest override restores base plus adds")
+
+	var cancel := el.add_rate_modifier(&"ct", "add", -12)
+	el.poll_tick({&"ct": true})
+	t.eq(el.value_of(&"ct"), 0, "base plus add equal to zero skips polling")
+	el.re_rate(&"ct", 8)
+	el.poll_tick({&"ct": true})
+	t.eq(el.value_of(&"ct"), -1, "negative cached base-plus-add rate still polls")
+	t.ok(el.remove_rate_modifier(&"ct", cancel), "canceling add modifier remains removable")
+	t.ok(el.remove_rate_modifier(&"ct", add), "original add modifier remains removable")
+	t.eq(el.effective_rate_of(&"ct"), 8, "all modifier removals leave the latest base rate cached")
 
 
 static func _test_modifier_freeze_recover(t) -> void:
@@ -116,6 +160,9 @@ static func _test_rate_modifier_faults(t) -> void:
 	t.eq(el.faults.size(), 3, "unknown line and modifier are both recorded as faults")
 	t.eq(el.add_rate_modifier(&"ct", "bad_kind", 1), &"", "invalid kind returns empty id")
 	t.eq(el.faults.size(), 4, "invalid kind is recorded as a fault")
+	t.eq(el.effective_rate_of(&"ct"), 1, "invalid modifier operations leave effective cache unchanged")
+	t.eq(el.add_rate_modifier(&"ct", "add", 1), &"eqm.mod.1", "invalid operations do not consume modifier sequence")
+	t.eq(el.effective_rate_of(&"ct"), 2, "next valid modifier refreshes cache normally")
 
 
 static func _test_modifier_trace_records(t) -> void:
@@ -146,6 +193,67 @@ static func _test_dict_roundtrip_with_modifiers(t) -> void:
 	t.eq(back.add_rate_modifier(&"ct", "add", 1), &"eqm.mod.3", "modifier_seq continues after restore")
 
 
+static func _test_restore_rebuilds_effective_rate_cache(t) -> void:
+	var el := EQEventLines.new()
+	el.issue(&"old", 99, 99)
+	el.register_sweep_rule(&"kept", func(_actor, _data, _lines): pass)
+	var trace := EQTrace.new()
+	el.set_trace(trace)
+	el.restore_values({
+		"lines": [
+			{"id": "ct", "value": 99, "rate": 99},
+			{"id": "negative", "value": 1, "rate": -2},
+			{
+				"id": "ct",
+				"value": 7,
+				"rate": 2,
+				"modifiers": [
+					{"id": "eqm.mod.1", "kind": "add", "value": 3},
+					{"id": "eqm.mod.2", "kind": "override", "value": 0},
+				],
+			},
+		],
+		"counter_seq": 0,
+		"modifier_seq": 2,
+	})
+
+	t.eq(trace.size(), 0, "in-place restore rebuilds effective cache without trace records")
+	t.ok(not el.has_line(&"old"), "in-place restore removes old canonical line")
+	t.eq(el.effective_rate_of(&"old"), 0, "in-place restore removes old derived cache key")
+	t.ok(el.has_line(EQEventLines.PRIMARY_LINE_ID), "restore without primary payload recreates canonical primary")
+	t.eq(el.effective_rate_of(EQEventLines.PRIMARY_LINE_ID), 0, "missing primary payload rebuilds default zero cache")
+	t.eq(el.sweep_rule_names(), [&"kept"], "in-place restore preserves registered sweep callables")
+	t.eq(el.value_of(&"ct"), 7, "duplicate line payload keeps the final canonical value")
+	t.eq(el.rate_of(&"ct"), 2, "duplicate line payload keeps the final canonical base rate")
+	t.eq(el.effective_rate_of(&"ct"), 0, "restore rebuild honors latest override Array order")
+	t.eq(el.effective_rate_of(&"negative"), -2, "restore rebuild includes modifier-free negative rate")
+	t.eq(el._effective_rates.size(), el.line_ids().size(), "every restored existing line has one cache entry")
+	t.ok(not ("effective" in JSON.stringify(el.to_dict())), "derived effective cache is not serialized")
+
+	el.poll_tick({&"missing": true, &"ct": true, &"negative": true})
+	t.eq(el.value_of(&"ct"), 7, "restored override zero skips immediate poll")
+	t.eq(el.value_of(&"negative"), -1, "restored negative cache drives immediate poll")
+	t.ok(el.remove_rate_modifier(&"ct", &"eqm.mod.2"), "restored override remains removable")
+	t.eq(el.effective_rate_of(&"ct"), 5, "override removal refreshes restored base plus adds")
+	el.re_rate(&"ct", 7)
+	t.eq(el.effective_rate_of(&"ct"), 10, "re-rate refreshes restored cache")
+	t.eq(el.add_rate_modifier(&"ct", "add", 1), &"eqm.mod.3", "restored modifier sequence continues")
+	t.eq(el.effective_rate_of(&"ct"), 11, "post-restore modifier add refreshes cache")
+
+	var primary_payload := EQEventLines.new()
+	primary_payload.restore_values({
+		"lines": [{
+			"id": String(EQEventLines.PRIMARY_LINE_ID),
+			"value": 11,
+			"rate": 4,
+			"modifiers": [{"id": "eqm.mod.1", "kind": "add", "value": 1}],
+		}],
+		"modifier_seq": 1,
+	})
+	t.eq(primary_payload.value_of(EQEventLines.PRIMARY_LINE_ID), 11, "primary payload overwrites default canonical value")
+	t.eq(primary_payload.effective_rate_of(EQEventLines.PRIMARY_LINE_ID), 5, "primary payload rebuilds cache from final base and modifiers")
+
+
 static func _test_scan_order_deterministic(t) -> void:
 	# same lines inserted in different orders -> identical poll trace order
 	var a := EQEventLines.new(EQTrace.new())
@@ -154,14 +262,21 @@ static func _test_scan_order_deterministic(t) -> void:
 	var b := EQEventLines.new(EQTrace.new())
 	b.issue(&"a_line", 0, 1)
 	b.issue(&"b_line", 0, 1)
-	var watched := {&"a_line": true, &"b_line": true}
+	var watched_a := {}
+	watched_a[&"b_line"] = true
+	watched_a[&"unknown"] = true
+	watched_a[&"a_line"] = false
+	var watched_b := {}
+	watched_b["a_line"] = true
+	watched_b["unknown"] = false
+	watched_b[&"b_line"] = false
 	var trace_a := EQTrace.new()
 	var trace_b := EQTrace.new()
 	a.set_trace(trace_a)
 	b.set_trace(trace_b)
-	a.poll_tick(watched)
-	b.poll_tick(watched)
-	t.eq(trace_a.to_jsonl(), trace_b.to_jsonl(), "poll order is line-id ascending regardless of insertion order")
+	a.poll_tick(watched_a)
+	b.poll_tick(watched_b)
+	t.eq(trace_a.to_jsonl(), trace_b.to_jsonl(), "poll order ignores line/watched insertion and set values")
 
 
 static func _test_counter_issuance(t) -> void:

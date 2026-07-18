@@ -186,7 +186,7 @@ task として線形に実装・検証する。
 | EQM-137 | COMPLETE_WITH_BACKLOG | EQM-136 | `docs/plan/2026-06-09_event_queue_manager/EQM-137_reaction_condition_contract/` | Reaction-condition type contract hardening + consumer false-green repair proof. | `runtime/{eq_error,eq_reservation_runtime,eq_trigger_engine,eq_trigger_index}.gd`, error/API docs, trigger/runtime tests; EBS integration/tests/docs are consumer-owned proof | `reaction_condition` is `EQCondition|null`; wrong types produce a stable contract fault/rejection trace before any reservation/index/scheduler mutation in dev and shipped modes。direct engine/index calls reject explicitly without ghost state。valid reaction behavior and normal goldens remain unchanged。EBS current-head regression detects the former bad input as rejection, corrects the R04 standard form, and its runner fails on `SCRIPT ERROR`; EQM `./tools/test.sh` and `./tools/test.sh --performance` both PASS。 |
 | EQM-138 | COMPLETE | EQM-137 | `docs/plan/2026-06-09_event_queue_manager/EQM-138_trigger_candidate_merge/` | Stable linear merge for target + wildcard trigger candidates. | `runtime/eq_trigger_index.gd`, trigger regression/performance tests, runtime performance profile | Candidate order/fired occurrences remain exactly equivalent to arm order across target-only/wildcard-only/mixed/mutated conditions。candidate assembly performs no full candidate sort; independent lane records sparse and wildcard-heavy work/elapsed, while regression and performance discovery remain exclusive。 |
 | EQM-139 | COMPLETE | EQM-138 | `docs/plan/2026-06-09_event_queue_manager/EQM-139_relation_adjacency_runtime/` | Production relation queries/expansion/invalidation use the existing actor adjacency. | `runtime/eq_relation_graph.gd`, core/performance tests, runtime performance profile | `relations_of`/`expand`/actor invalidation inspect only incident relation ids while preserving relation-id ordering, TREE/GRAPH semantics, maintenance, trace, snapshot roundtrip。regression + independent performance lane PASS with deterministic workload evidence。 |
-| EQM-140 | READY | EQM-139 | `docs/plan/2026-06-09_event_queue_manager/EQM-140_sparse_event_line_polling/` | Watched-only event-line polling and derived effective-rate cache. | `runtime/eq_event_lines.gd`, core/performance tests, runtime performance profile | polling work is bounded by watched existing lines rather than all lines; modifier add/remove/re-rate and restore rebuild cache deterministically。progression trace/order/snapshot semantics unchanged; regression + independent performance lane PASS。 |
+| EQM-140 | COMPLETE | EQM-139 | `docs/plan/2026-06-09_event_queue_manager/EQM-140_sparse_event_line_polling/` | Watched-only event-line polling and derived effective-rate cache. | `runtime/eq_event_lines.gd`, core/performance tests, runtime performance profile | polling work is bounded by watched existing lines rather than all lines; modifier add/remove/re-rate and restore rebuild cache deterministically。progression trace/order/snapshot semantics unchanged; regression + independent performance lane PASS。 |
 
 ## Dynamic follow-up area
 
@@ -198,7 +198,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 | EQM-133 | COMPLETE | EQM-132 | Amberground reaction checkpoint audit | schema-v6 reaction-expiry ownership + exact one-event resolution boundary | count終了後のexpiryをsave/loadしFIRE/FIRE/`already_closed` continuation一致、v5 armed migration／orphan rejection、table tamper、後続reservationを消費しない1-event boundaryをfull gateで証明。 |
 | EQM-134 | COMPLETE | EQM-133 | Amberground state/passive/perception implementation audit | State/relation engineering work-scale rung + one-shot inversion hot-path repair | 64 tokens×8 actors、1,024 relations、200 actual triggersのround-trip/resolve、work-scale profile、full gate。 |
 | EQM-135 | COMPLETE | EQM-134 | Amberground interception tranche | 発行済みPREPARED単独予約へのmeta介入primitive | 発行時metaを予約instanceへ固定し、同値以上の介入でeffect未実行のまま`event_invalidated(closed_by: intervention)`、不足時は`intervention_avoided`、非対応contextはstable rejection。snapshot/pending消失とtrace順を専用test + full gateで証明。 |
-| EQM-141 | BACKLOG | EQM-140 | EQM-137 / historical R04 false-green audit | Reaction FIRE condition semantics (preview/commit + condition bind/save contract). | trigger match後・rumination消費前にsolve/invalidationを評価する二相契約、WAIT時のlifetime、trigger/reaction view、COUNTER bind、snapshotをtask packetで決定し、false/true/invalidation-wins/save-loadを厳密test。EQM-137へは混ぜない。 |
+| EQM-141 | READY | EQM-140 | EQM-137 / historical R04 false-green audit | Reaction FIRE condition semantics (preview/commit + condition bind/save contract). | trigger match後・rumination消費前にsolve/invalidationを評価する二相契約、WAIT時のlifetime、trigger/reaction view、COUNTER bind、snapshotをtask packetで決定し、false/true/invalidation-wins/save-loadを厳密test。EQM-137へは混ぜない。 |
 
 ## Current pointer
 
@@ -206,12 +206,12 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: **EQM-140 READY** — EQM-137はtrace schema、SHIPPED continuation、consumer
-R04 false-greenを修理してCOMPLETE_WITH_BACKLOG。addon `754f905`をEBS DEPS/logへ記録し、
-同revisionでconsumer 3 gateも再検証済み。user-approved autonomous hardening round
-(2026-07-18)として
-EQM-138→140を線形実行し、各performance taskは通常回帰と独立performance laneの
-両方を完了証拠にする。
+Current: **EQM-141 READY — genuine semantic design fork**。user-approved autonomous hardening
+round (2026-07-18)のEQM-137→140は完了。EQM-137はtrace schema、SHIPPED continuation、
+consumer R04 false-greenを修理し、addon `754f905`をEBS DEPS/logへ記録してconsumer 3 gateも
+同revisionで再検証済み。EQM-138→140は通常回帰と独立performance laneの両方を完了証拠に
+した。EQM-141はsolve/invalidationの評価view・WAIT lifetime・bind/saveを同時に決める
+意味論forkのため、performance roundへ混ぜずtask packetで契約を確定してから実装する。
 
 Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
@@ -1674,3 +1674,29 @@ profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
 ```
 
 Dependency sweep: EQM-139 COMPLETE → EQM-140 READY。Current pointer → EQM-140。
+
+### EQM-140 — COMPLETE (2026-07-18) — sparse event-line polling
+
+```text
+acceptance:
+  - poll_tick selects sorted live ids from watched keys instead of sorting every canonical line
+  - effective rate is a private derived cache refreshed by issue/re-rate/modifier mutation and rebuilt on restore
+  - watched values remain membership-only; unknown ids are silent; zero skips and negative rates progress exactly
+  - canonical payload, public API, snapshot schema, sweep rules, trace bytes/order, and step_tick order are unchanged
+tests:
+  - ./tools/test.sh -> PASS (regression only; files=74 checks=1831 failures=0;
+    run 20260718-232538-24404; API/coverage/golden/package gates PASS)
+  - ./tools/test.sh --performance -> PASS x3 (performance only; files=5 checks=49 failures=0;
+    runs 20260718-232551-25295, 20260718-232613-25681, 20260718-232638-27568)
+performance (operation-local; advisory elapsed, deterministic work hard gate):
+  - sparse selection: 4097 canonical ids -> 36 watched keys (113.8x source-key reduction);
+    185.17–190.19x elapsed A/B
+  - effective-rate lookup: 32 modifier inspections -> 0 inspections + 1 cache read;
+    18.28–18.55x elapsed A/B
+review: docs/review/autopilot/EQM-140_SELF_REVIEW_2026-07-18.md
+profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
+```
+
+Dependency sweep: EQM-140 COMPLETE → EQM-141 READY。Current pointer → EQM-141
+(solve/invalidation view、WAIT lifetime、bind/saveを同時に決めるgenuine semantic design fork;
+performance roundの完了とは分離)。

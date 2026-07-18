@@ -30,6 +30,7 @@ const PRIMARY_LINE_ID := &"eqm.line.primary"
 var faults: Array[Dictionary] = []
 
 var _lines: Dictionary = {}          # id -> {"value": int, "rate": int, "modifiers": Array[Dictionary]}
+var _effective_rates: Dictionary = {}  # id -> derived effective rate (never serialized)
 var _counter_seq: int = 0
 var _modifier_seq: int = 0
 var _sweep_rules: Array[Dictionary] = []  # [{"name": StringName, "callable": Callable}] in registration order
@@ -39,6 +40,7 @@ var _trace = null                    # EQTrace or null (observation only)
 func _init(trace = null) -> void:
 	_trace = trace
 	_lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0, "modifiers": []}
+	_effective_rates[PRIMARY_LINE_ID] = 0
 
 
 func set_trace(trace) -> void:
@@ -53,6 +55,7 @@ func issue(id: StringName, value: int = 0, rate: int = 0) -> bool:
 	if id == &"" or _lines.has(id):
 		return false
 	_lines[id] = {"value": value, "rate": rate, "modifiers": []}
+	_refresh_effective_rate(id)
 	_record({"kind": "event_line_progressed", "cause": "issued", "line": String(id), "to": value, "rate": rate})
 	return true
 
@@ -83,21 +86,7 @@ func rate_of(id: StringName) -> int:
 func effective_rate_of(id: StringName) -> int:
 	if not _lines.has(id):
 		return 0
-	var line: Dictionary = _lines[id]
-	var override_value: int = int(0)
-	var has_override: bool = false
-	var add_value: int = 0
-	var modifiers: Array = line.get("modifiers", [])
-	for i in range(modifiers.size()):
-		var m: Dictionary = modifiers[i]
-		var kind := String(m["kind"])
-		if kind == "override":
-			override_value = int(m["value"])
-			has_override = true
-		elif kind == "add":
-			add_value += int(m["value"])
-	var base_rate := int(line["rate"])
-	return override_value if has_override else base_rate + add_value
+	return int(_effective_rates[id])
 
 
 func line_ids() -> Array:
@@ -127,6 +116,7 @@ func re_rate(id: StringName, new_rate: int) -> bool:
 		return false
 	var from := int(_lines[id]["rate"])
 	_lines[id]["rate"] = new_rate
+	_refresh_effective_rate(id)
 	_record({"kind": "event_line_progressed", "cause": "re_rated", "line": String(id), "rate_from": from, "rate_to": new_rate})
 	return true
 
@@ -145,6 +135,7 @@ func add_rate_modifier(line_id: StringName, kind: String, value: int) -> StringN
 	var modifier_id := StringName("eqm.mod.%d" % _modifier_seq)
 	var modifier := {"id": modifier_id, "kind": kind, "value": int(value)}
 	_lines[line_id]["modifiers"].append(modifier)
+	_refresh_effective_rate(line_id)
 	var effective_to := effective_rate_of(line_id)
 	_record({"kind": "event_line_progressed", "cause": "modifier_added", "line": String(line_id), "modifier_id": String(modifier_id), "effective_from": effective_from, "effective_to": effective_to})
 	return modifier_id
@@ -168,6 +159,7 @@ func remove_rate_modifier(line_id: StringName, modifier_id: StringName) -> bool:
 	var effective_from := effective_rate_of(line_id)
 	modifiers.remove_at(removed_idx)
 	_lines[line_id]["modifiers"] = modifiers
+	_refresh_effective_rate(line_id)
 	var effective_to := effective_rate_of(line_id)
 	_record({"kind": "event_line_progressed", "cause": "modifier_removed", "line": String(line_id), "modifier_id": String(modifier_id), "effective_from": effective_from, "effective_to": effective_to})
 	return true
@@ -177,9 +169,7 @@ func remove_rate_modifier(line_id: StringName, modifier_id: StringName) -> bool:
 ## non-frozen (rate != 0) advance, in line-id ascending order (determinism).
 ## `watched` is a set-shaped Dictionary (id -> true), e.g. from derive_watched().
 func poll_tick(watched: Dictionary) -> void:
-	for id in line_ids():
-		if not watched.has(id):
-			continue
+	for id in _live_watched_ids(watched):
 		var rate := effective_rate_of(id)
 		if rate == 0:
 			continue
@@ -289,6 +279,7 @@ static func from_dict(d: Dictionary, trace = null) -> EQEventLines:
 ## instance before loading; only the data is replaced).
 func restore_values(d: Dictionary) -> void:
 	_lines.clear()
+	_effective_rates.clear()
 	_lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0, "modifiers": []}
 	for i in range(d.get("lines", []).size()):
 		var line_payload: Dictionary = d.get("lines", [])[i]
@@ -304,6 +295,50 @@ func restore_values(d: Dictionary) -> void:
 		_lines[StringName(line_payload["id"])] = {"value": int(line_payload["value"]), "rate": int(line_payload["rate"]), "modifiers": modifiers}
 	_counter_seq = int(d.get("counter_seq", 0))
 	_modifier_seq = int(d.get("modifier_seq", 0))
+	_rebuild_effective_rates()
+
+
+func _live_watched_ids(watched: Dictionary) -> Array:
+	var ids: Array = []
+	var seen := {}
+	for raw_id in watched:
+		if typeof(raw_id) != TYPE_STRING and typeof(raw_id) != TYPE_STRING_NAME:
+			continue
+		var id := StringName(raw_id)
+		if not _lines.has(id):
+			continue
+		var content := String(id)
+		if seen.has(content):
+			continue
+		seen[content] = true
+		ids.append(id)
+	ids.sort_custom(func(a, b): return String(a) < String(b))
+	return ids
+
+
+func _calculate_effective_rate(line: Dictionary) -> int:
+	var override_value := 0
+	var has_override := false
+	var add_value := 0
+	var modifiers: Array = line.get("modifiers", [])
+	for modifier in modifiers:
+		var kind := String((modifier as Dictionary).get("kind", ""))
+		if kind == "override":
+			override_value = int((modifier as Dictionary).get("value", 0))
+			has_override = true
+		elif kind == "add":
+			add_value += int((modifier as Dictionary).get("value", 0))
+	return override_value if has_override else int(line.get("rate", 0)) + add_value
+
+
+func _refresh_effective_rate(id: StringName) -> void:
+	_effective_rates[id] = _calculate_effective_rate(_lines[id])
+
+
+func _rebuild_effective_rates() -> void:
+	_effective_rates.clear()
+	for id in _lines:
+		_refresh_effective_rate(StringName(id))
 
 
 func _record(fields: Dictionary) -> void:
