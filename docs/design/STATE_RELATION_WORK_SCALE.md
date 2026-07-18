@@ -1,6 +1,6 @@
 # State / Relation Engineering Work Scale
 
-Status: **version 1 / regression-tested engineering profile** (2026-07-16).
+Status: **version 1 / engineering correctness and scale profile** (2026-07-16).
 
 This profile records a reproducible scale at which EQM state algebra,
 relations, triggers, and serialization must remain correct.  These numbers are
@@ -14,20 +14,25 @@ owns those meanings independently.
 | algebraic state tokens | 64 per actor × 8 actors | 32 inverse pairs, signed CANCEL axes, grant, exact line/algebra round-trip |
 | state wrappers | 16 per actor × 8 actors | serializable wrapper stacks and exact restore |
 | relation graph | 1,024 directed GRAPH edges over 200 actor IDs | bind, one-hop bounded expand, exact graph restore |
-| armed reactions | 200 simultaneously matching declarations | actual linear `EQTriggerEngine` arm and resolution |
-| watched event-lines | 300 | existing sparse-poll regression profile |
-| actor sweep | 200 | existing registered-sweep regression profile |
-| scheduler backend | 10,000 insertions and removals | existing binary-heap parity and throughput profile |
+| armed reactions | 200 simultaneously matching declarations | production `EQTriggerEngine` arm and resolution semantics; indexing is internal |
+| watched event-lines | 300 | existing sparse-poll performance fixture |
+| actor sweep | 200 | existing registered-sweep performance fixture |
+| scheduler backend | 10,000 insertions and removals | existing binary-heap parity and throughput fixtures |
 
-The executable proof is
-`test_project/tests/performance/test_eq_state_relation_work_scale.gd`, together
-with the pre-existing event-line, trigger-index, and scheduler performance
-tests.  `./tools/test.sh` runs all of them.
+Semantic correctness, lifecycle, and serialization remain owned by the standard
+regression command, `./tools/test.sh`. Scale work and elapsed observations are
+owned by the disjoint `./tools/test.sh --performance` lane. The two suites do
+not collect each other's files, and a performance result never substitutes for
+the regression proof.
+
+Runtime measurements and their environment are recorded separately in
+`docs/design/RUNTIME_PERFORMANCE_PROFILE.md`.
 
 ## Meaning of the numbers
 
-- Passing a rung records deterministic correctness, serialization continuity,
-  and a coarse regression budget on the current CI-class environment.
+- Passing a rung records a reproducible EQM-local engineering scale. Exact
+  correctness and serialization claims come from regression tests; deterministic
+  work counts and elapsed observations come from the performance lane.
 - It does not authorize silent truncation above the rung.  A caller that needs
   a defensive work cap declares its own versioned realization profile and must
   return a deterministic fault on overflow.
@@ -40,12 +45,14 @@ tests.  `./tools/test.sh` runs all of them.
   reactions, expiry reservations, and event-lines are separate axes.  A game
   must not derive one capacity from another.
 
-## Known hot paths and next ladder
+## Performance ownership and next ladder
 
-The current profile deliberately exposes, rather than hides, these scaling
-risks:
+This file does not define wall-clock pass/fail thresholds. The runtime profile
+tracks optimization status and measured work without converting these counts
+into gameplay limits. After EQM-136, the scaling ledger is:
 
-- the production trigger engine still scans every armed reaction;
+- production trigger matching is indexed by target + wildcard, and finite
+  expiry inspection is O(1) before the cached next boundary (`EQM-136`);
 - event-line polling sorts the complete line set before selecting watched IDs;
 - relation expansion and maintenance scan the relation table;
 - the default scheduler remains the sorted-array backend.
@@ -54,6 +61,12 @@ The next evidence ladder is 128 state tokens per actor across 16 actors, 2,048
 relation edges, 400 armed reactions, expiry churn, and full save-adapter round-trip.  It is a
 future engineering task, not an implicit promise or a reason to cap gameplay at
 the v1 rung.
+
+Consumer projects, including Amberground, may inform which axes deserve an EQM
+fixture. Their repositories, tests, scenes, content, or measured times are not
+used as comparison baselines or acceptance oracles. EQM verifies only its own
+headless scheduler, trigger, state/relation, event-line, lifecycle, and
+serialization work.
 
 ## Inversion safety
 

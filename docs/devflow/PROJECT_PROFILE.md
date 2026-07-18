@@ -11,6 +11,7 @@ This file specializes the reusable addon devflow for the Event Queue Manager God
 | primary workflow | add a turn-order system, swap policies, model reservations/reactions, debug ordering |
 | main runtime / framework | Godot 4.x (GDScript; core behind a backend-portable contract) |
 | standard test command | `./tools/test.sh` |
+| independent performance command | `./tools/test.sh --performance` |
 | review output directory | `docs/review/autopilot/` |
 | development role | the addon is the deliverable; the gameplay-unproven Action Resolution Turn-Based system is a demanding test case, not a product to ship (roadmap §1.1) |
 
@@ -45,6 +46,7 @@ This file specializes the reusable addon devflow for the Event Queue Manager God
 - Autoload は任意。標準導線は scene-local `EQManager` node。
 - 旧互換は新規 addon では原則扱わない。必要時のみ roadmap source で明示する。
 - 負の価値を生む UX 経路 (hack path) は fallback として温存せず削除する。
+- Performance evidence separation: correctness / determinism の回帰と速度測定を同時収集しない。algorithmic work-count は portable hard gate、EQM-136 の生elapsedは環境付き advisory とする。既存の明示budget guardはdeterministic workload sentinelと組にしてperformance lane内だけで実行する。
 
 ### Referenced policies
 
@@ -87,15 +89,26 @@ This file specializes the reusable addon devflow for the Event Queue Manager God
 | Runtime / integration | node bridge、save/load rebind、dev/shipped resilience 二相。 |
 | Debug scene | sample battle / wait-turn / action-resolution scene の状態切替。 |
 | Package | addon-only manifest、clean project load、sample asset isolation。 |
+| Performance (independent) | EQM 内の scale fixture、candidate / full-match 回数、elapsed の観測。通常回帰の correctness proof を所有しない。 |
 
 ## Verification
 
-- Standard verification command: `./tools/test.sh`。
+- Standard regression command: `./tools/test.sh`。`tests/performance/` を収集せず、correctness / determinism / lifecycle / serialization / UI / package gate を所有する。
+- Independent performance command: `./tools/test.sh --performance`。performance suite のみ収集し、通常回帰、UI/Python static audit、golden、package gate は実行しない。
+- Performance task の完了には両 command の証拠が必要。performance run は standard regression の代替ではない。
 - Test docs: `docs/devflow/TEST.md`。
 - Test output は run 固有の ignored directory (`.godot_user/test-runs/<run-id>/`) へ。
 - 必須環境 (Godot 等) が無い場合、product implementation を完了扱いにせず `BLOCKED_BY_TEST_ENV` と正確な command/error を記録する。`tools/test.sh` は env 欠如を専用 exit code (3) で示す。
 
 ## Test Design Policy
+
+### Regression / performance suite separation
+
+- `./tools/test.sh` と `./tools/test.sh --performance` の discovery 集合は排他。同一 run で混ぜない。unknown suite や selected suite 0 files は green にせず fail-closed する。
+- Regression は「正しいか」を証明する。performance は「EQM 内でどれだけ仕事をしたか」を測る。performance 側の結果だけで API / trace / snapshot / lifecycle の完了を主張しない。
+- Deterministic work-count (candidate 数、`condition.matches()` 呼出数、fired 数など) は portable な hard gate。新しい生elapsedは Godot version/build、OS、CPU、run id と一緒に advisory 記録し、単独の pass/fail や機種横断 SLA にしない。EQM-102/112由来の粗いbudget guardは、宣言済みworkloadの完全実行assertと組にし、独立performance laneから通常回帰へ戻さない。
+- Consumer 情報は fixture の軸・規模を選ぶ入力にのみ使う。Amberground の repository、test、scene、実測値を EQM の比較対象、baseline、oracle にしない。
+- EQM が検証できる範囲は headless runtime 内の scheduling / trigger candidate filtering / condition evaluation / lifecycle / serialization に限る。consumer 側の rendering、AI、pathfinding、effect handler、asset I/O、frame pacing は EQM performance claim に含めない。
 
 ### Parallel execution
 

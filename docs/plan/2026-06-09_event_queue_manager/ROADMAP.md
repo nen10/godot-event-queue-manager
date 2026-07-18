@@ -408,6 +408,35 @@ Why now: v1.1 の凍結契約が全て実装済みで、queue が空 (需要待�
 
 Layer note: 本 phase は全て L2/L3 拡張であり、L0/L1 surface への非漏出 (§3.1) を維持する。メタレベル・関係グラフ・変換フックはいずれも opt-in。
 
+### Phase 14 — Consumer-driven runtime performance evidence *(additive, 2026-07-18)*
+
+Purpose: Amberground から得た実行規模の情報を、GAME 上限や意味論変更へ変換せず、EQM 内で再現可能な runtime 改善へ落とす。
+
+Produces:
+
+- correctness / serialization の回帰証拠と排他的に実行される performance test lane。
+- `EQTriggerIndex` の production `EQTriggerEngine` への透明な統合。
+- wall-clock だけに依存しない deterministic work-count gate と、環境情報付きの時間測定。
+- arm / fire / rumination / expiry / disarm / actor invalidation / save-load を跨ぐ parity proof。
+- 残存 hot path を測定結果とともに記録し、次の最適化は evidence がある場合だけ queue 化する規律。
+
+Adopted principles:
+
+- 通常回帰は correctness / order / lifecycle / serialization を所有し、速度閾値を所有しない。
+- performance lane は通常回帰と同時収集せず、独立 command で明示実行する。
+- index は候補 filter であり、最終判定は従来どおり `condition.matches()` が所有する。
+- index / expiry cache は armed table から再構築可能な派生状態であり、snapshot の第二の真実にしない。
+
+Rejected / deferred:
+
+- consumer が index を別管理する API。
+- engineering rung を gameplay cap として扱うこと。
+- event-line、relation、scheduler、native backend を同じ task で一括最適化すること。各 hot path は計測後に個別判断する。
+
+Why now: EQM-134 が consumer-informed work scale と既知 hot path を確立し、EQM-102 の target index は parity proof 済みだが production engine に未接続で、queue が空になっているため。
+
+Layer note: L2 内部最適化。既存 caller API、snapshot schema、trace semantics、L0/L1 surface は変更しない。
+
 ## 8. Milestones
 
 | Milestone | Main value | Included phases |
@@ -422,6 +451,7 @@ Layer note: 本 phase は全て L2/L3 拡張であり、L0/L1 surface への非�
 | v0.9 Demo & Docs | Multiple genre demos and manual coverage. | Phase 11 |
 | v1.0 Release Candidate | Performance, packaging, release proof. | Phase 12 |
 | v1.2 EBS Extension | 状態・関係サブシステム、メタレベル介入、変換フック (queue Phase 12 として実行予定)。 | Phase 13 |
+| Consumer Runtime Performance | Production trigger sweep has measured work reduction with unchanged order, trace, API, and save continuation. | Phase 14 |
 
 ## 9. Success criteria
 
@@ -441,6 +471,8 @@ The roadmap succeeds when:
 - The L0/L1 simple turn-order path is usable without touching reservations or event-lines, and the API surface gate proves no L3 leakage into it (§3.1).
 - Prediction can evaluate hypothetical branches (act-now vs wait) without mutating live state, supporting AI and player planning.
 - In shipped resilient mode, injected runtime anomalies skip-and-log instead of crashing, while normal-input traces stay byte-identical across modes (`RUNTIME_RESILIENCE_POLICY.md`).
+- Production trigger matching evaluates only target-bucket + wildcard candidates while preserving exact occurrence order, lifecycle state, trace, and save/load continuation.
+- Runtime performance evidence separates deterministic work-count gates from environment-sensitive wall-clock measurements and never turns an engineering rung into a gameplay cap.
 
 ## 10. First queue-designed scope
 

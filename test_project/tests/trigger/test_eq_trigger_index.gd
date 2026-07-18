@@ -1,8 +1,8 @@
 extends RefCounted
-## EQM-102 — the trigger index returns the SAME fired set + arm order as the linear
-## EQTriggerEngine scan, while only reconsidering a strict subset of armed reactions
-## (the target bucket + wildcards). Parity is the gate; the smaller candidate set is
-## the speedup.
+## EQM-102 / EQM-136 — the trigger index returns the SAME fired set + arm order as
+## the linear EQTriggerEngine scan, while only reconsidering a strict subset of
+## armed reactions (the target bucket + wildcards). This is correctness/parity;
+## production elapsed and work-count measurements live in res://tests/performance/.
 
 const EQReservation := preload("res://addons/event_queue_manager/runtime/eq_reservation.gd")
 const EQActionDefinition := preload("res://addons/event_queue_manager/resources/eq_action_definition.gd")

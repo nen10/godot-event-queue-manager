@@ -9,7 +9,7 @@ Tests: not rerun per user instruction; implementation confirmation uses queue pr
 
 - Reviewed queue plan entries: 50.
 - Blocking product implementation gaps: none detected under the already-passed test suite and queue proof log.
-- Nonblocking implementation follow-ups are limited to transparent trigger-index integration, interactive editor-dock mounting, and release-publish extras.
+- Nonblocking implementation follow-ups are limited to interactive editor-dock mounting and release-publish extras; transparent trigger-index integration closed in EQM-136.
 - Several completed queue tasks lack full `TASK_PACKET.md` planning artifacts; those are design/process gaps and are listed separately from code implementation gaps.
 
 ## Implementation Follow-ups
@@ -19,6 +19,12 @@ Tests: not rerun per user instruction; implementation confirmation uses queue pr
 | EQM-102 | EQTriggerIndex is not wired into EQTriggerEngine | Performance backend/index task proves parity, but runtime callers do not receive the index automatically. | `addons/event_queue_manager/runtime/eq_trigger_engine.gd; addons/event_queue_manager/runtime/eq_trigger_index.gd; docs/review/autopilot/EQM-102_SELF_REVIEW_2026-06-18.md` |
 | EQM-090..EQM-095 / EQM-103 | Editor surfaces are implemented/tested as Controls but not mounted as live editor docks | Timeline/debug/template/calibration surfaces are headless projection-first; plugin.gd registers EQManager only. Interactive add_control_to_dock + picker wiring remains a v1.x follow-up. | `addons/event_queue_manager/plugin.gd; docs/review/autopilot/EQM-090_SELF_REVIEW_2026-06-18.md; docs/review/autopilot/EQM-103_RELEASE_CANDIDATE_2026-06-18.md` |
 | EQM-103 | AssetLib publish extras remain external/nonblocking | No icon.png, no tag, and no AssetLib form submission. The self-review marks these as optional/external, not queue blockers. | `docs/review/autopilot/EQM-103_RELEASE_CANDIDATE_2026-06-18.md` |
+
+### Follow-up status update (2026-07-18)
+
+| original source | status | owner / closure gate |
+|---|---|---|
+| EQM-102 transparent trigger-index integration | `COMPLETE` | EQM-136 integrated the derived index into production `EQTriggerEngine`; regression and independent performance lanes both pass, and the EQM-local work-count/environment-labelled elapsed evidence is recorded. Amberground tests or timings were not used as a comparison oracle. |
 
 ## Task Packet Artifact Gaps
 
@@ -50,7 +56,7 @@ These are design/process gaps, not evidence that the product code failed tests. 
 | EQM-095 | `needs_design_update` | task-packet design source files がない; 欠落 planning artifact を補完する: SUB_TASKS.md, UX.md, POLICY.md, IMPLEMENTATION_PLAN.md; editor surface は headless Controls として実装/検証済みだが、EditorPlugin live dock mounting は未実装 |
 | EQM-100 | `needs_design_update` | task-packet design source files がない; 欠落 planning artifact を補完する: SUB_TASKS.md, UX.md, POLICY.md, IMPLEMENTATION_PLAN.md |
 | EQM-101 | `needs_design_update` | task-packet design source files がない; 欠落 planning artifact を補完する: SUB_TASKS.md, UX.md, POLICY.md, IMPLEMENTATION_PLAN.md |
-| EQM-102 | `needs_design_update` | 欠落 planning artifact を補完する: UX.md, POLICY.md, IMPLEMENTATION_PLAN.md; EQTriggerIndex は単体 parity proof 済みだが EQTriggerEngine へ自動統合されていない |
+| EQM-102 | `needs_design_update` | 欠落 planning artifact を補完する: UX.md, POLICY.md, IMPLEMENTATION_PLAN.md; 当時の未統合follow-upはEQM-136でproduction engineへ統合済み。 |
 | EQM-103 | `needs_design_update` | task-packet design source files がない; 欠落 planning artifact を補完する: SUB_TASKS.md, UX.md, POLICY.md, IMPLEMENTATION_PLAN.md; AssetLib icon/tag/submission と snapshot v2 migrator は非blocking follow-up / external action |
 
 ## Reviewed Packet Index

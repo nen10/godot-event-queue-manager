@@ -11,7 +11,15 @@ const EQTagMatcher := preload("res://addons/event_queue_manager/runtime/eq_tag_m
 
 @export var match_kind: StringName = &""
 @export var match_source: StringName = &""
-@export var match_target: StringName = &""
+@export var match_target: StringName = &"":
+	set(value):
+		if match_target == value:
+			return
+		match_target = value
+		# EQTriggerIndex is derived state. Notify it when an already-armed
+		# condition changes buckets so indexed matching stays observationally
+		# equivalent to the former linear scan.
+		emit_changed()
 @export var require_tags: Array[StringName] = []
 @export var any_tags: Array[StringName] = []
 # Placeholder for the range/sensing adapter (Q12); not evaluated by matches().

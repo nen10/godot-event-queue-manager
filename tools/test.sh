@@ -11,7 +11,8 @@
 # Never writes to a shared log or a fixed resource path.
 #
 # Usage:
-#   ./tools/test.sh                      run all available checks
+#   ./tools/test.sh                      run regression checks (performance excluded)
+#   ./tools/test.sh --performance        run performance checks only
 #   ./tools/test.sh --update-golden <c>  explicit golden re-baseline (see DETERMINISM_TRACE_TEST_POLICY.md)
 
 set -uo pipefail
@@ -27,13 +28,18 @@ RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
 OUT_DIR=".godot_user/test-runs/${RUN_ID}"
 mkdir -p "$OUT_DIR"
 
+SUITE="regression"
 UPDATE_GOLDEN=""
-if [[ "${1:-}" == "--update-golden" ]]; then
-  UPDATE_GOLDEN="${2:-}"
-  if [[ -z "$UPDATE_GOLDEN" ]]; then
-    echo "ERROR: --update-golden requires a <case> argument" >&2
-    exit "$EXIT_FAIL"
-  fi
+if [[ "$#" -eq 0 ]]; then
+  :
+elif [[ "$#" -eq 1 && "$1" == "--performance" ]]; then
+  SUITE="performance"
+elif [[ "$#" -eq 2 && "$1" == "--update-golden" && -n "$2" ]]; then
+  UPDATE_GOLDEN="$2"
+else
+  echo "ERROR: unknown or incomplete arguments: $*" >&2
+  echo "Usage: ./tools/test.sh [--performance | --update-golden <case>]" >&2
+  exit "$EXIT_FAIL"
 fi
 
 log() { echo "[test.sh] $*"; }
@@ -47,10 +53,13 @@ done
 
 log "run-id: ${RUN_ID}"
 log "output: ${OUT_DIR}"
+log "suite: ${SUITE}"
 
-# --- python-only checks (run regardless of Godot) ------------------------
+# --- python-only regression checks (run regardless of Godot) -------------
 PY_FAIL=0
-if command -v python3 >/dev/null 2>&1; then
+if [[ "$SUITE" == "performance" ]]; then
+  log "skip Python checks (performance suite)"
+elif command -v python3 >/dev/null 2>&1; then
   if [[ -f tools/ui_static_audit.py ]]; then
     log "running tools/ui_static_audit.py (--enforce: UI metric adoption M4, EQM-093)"
     python3 tools/ui_static_audit.py --enforce | tee "${OUT_DIR}/ui_static_audit.log" || PY_FAIL=1
@@ -78,7 +87,11 @@ fi
 # --- Godot headless tests ------------------------------------------------
 if [[ -z "$GODOT_BIN" ]]; then
   log "BLOCKED_BY_TEST_ENV: Godot not found (set \$GODOT, or put 'godot'/'godot4' on PATH)."
-  log "Docs-only and Python-only checks above still ran; Godot test paths could not."
+  if [[ "$SUITE" == "regression" ]]; then
+    log "Docs-only and Python-only checks above still ran; Godot test paths could not."
+  else
+    log "Performance tests could not run."
+  fi
   echo "BLOCKED_BY_TEST_ENV" > "${OUT_DIR}/status"
   exit "$EXIT_BLOCKED"
 fi
@@ -95,10 +108,10 @@ if [[ -f "$RUNNER" ]]; then
   "$GODOT_BIN" --headless --path test_project --import \
     > "${OUT_DIR}/godot_import.log" 2>&1 || true
 
-  log "running Godot headless test runner"
+  log "running Godot headless test runner (${SUITE})"
   # EQ_RUN_OUT (absolute) lets trace tests dump produced traces under traces/
   # for diff reporting on a golden mismatch (DETERMINISM_TRACE_TEST_POLICY §2/§6).
-  GODOT_UPDATE_GOLDEN="$UPDATE_GOLDEN" EQ_RUN_OUT="${REPO_ROOT}/${OUT_DIR}" "$GODOT_BIN" --headless \
+  EQ_TEST_SUITE="$SUITE" GODOT_UPDATE_GOLDEN="$UPDATE_GOLDEN" EQ_RUN_OUT="${REPO_ROOT}/${OUT_DIR}" "$GODOT_BIN" --headless \
     --path test_project --script res://tests/run_all.gd \
     2>&1 | tee "${OUT_DIR}/godot_tests.log"
   if [[ "${PIPESTATUS[0]}" -ne 0 ]]; then GODOT_FAIL=1; fi

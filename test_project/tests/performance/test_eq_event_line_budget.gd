@@ -2,8 +2,8 @@ extends RefCounted
 ## EQM-112 — progression performance budgets (SEM §12.1, Q43): the polling +
 ## sweep machinery must stay within the declared per-advance budget at the v1.x
 ## target scale (watched lines <= 300, actors <= 200, +0.5ms per advance()).
-## Like EQM-102, this is a coarse regression guard (declared budget with CI
-## headroom), not a microbenchmark.
+## Like EQM-102, this is a coarse independent-performance guard (declared budget
+## with CI headroom), not a standard-regression test or microbenchmark.
 
 const EQEventLines := preload("res://addons/event_queue_manager/runtime/eq_event_lines.gd")
 const EQActorRegistry := preload("res://addons/event_queue_manager/runtime/eq_actor_registry.gd")

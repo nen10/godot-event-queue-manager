@@ -61,12 +61,14 @@ concept / feedback
 ## テスト
 
 ```sh
-./tools/test.sh        # 標準検証。$GODOT または PATH 上の godot を使う
+./tools/test.sh                # 標準回帰: correctness / determinism / UI / package
+./tools/test.sh --performance  # 独立測定: performance tests のみ
 ```
 
 - 必要環境: Godot 4.x (headless), python3。
 - Godot が無い場合、`./tools/test.sh` は `BLOCKED_BY_TEST_ENV` を明示し専用 exit code (3) で終了する。
 - 出力先は `.godot_user/test-runs/<run-id>/` (固定 path / 共有 log へ書かない)。
+- 2 lane は排他で、performance run は標準回帰の代替にならない。work-count はportable hard gate、新規raw wall-clockは環境付きadvisory（既存の粗いbudget guardもperformance lane限定）。
 - 詳細は [`docs/devflow/TEST.md`](docs/devflow/TEST.md)。
 
 ## リポジトリ構成

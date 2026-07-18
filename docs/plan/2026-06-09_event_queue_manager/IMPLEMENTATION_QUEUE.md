@@ -167,6 +167,14 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 | EQM-130 | COMPLETE | EQM-129 | `docs/plan/2026-06-09_event_queue_manager/EQM-130_maintenance_autodrive/` | [repair, 意図監査 A2/C1/C2] 維持条件 sweep の自動駆動 + 公平合成 acceptance + 迎撃標準形。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_runtime.gd`, `tests/core/`, `tests/golden/` | 相談4「EQM が評価タイミングを固定」の実装: 既定 sweep は step_tick で自動評価、カスタム sweep 名は同名 sweep rule (§4.7) 実行直後に自動評価。predicates は named registry から自動供給。公平: 公平関係 → 展開 → 非対称反射の合成 golden。迎撃: effect handler から intervene_close を呼ぶ標準形の例示。既存 golden 不変。 |
 | EQM-131 | COMPLETE | EQM-130 | `docs/plan/2026-06-09_event_queue_manager/EQM-131_acceptance_repair/` | [repair, 意図監査 B1/B2 + EBS A-R08-1] R06 資源述語停止 / retarget 中間段 / R08 消費順整合。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | R06: 焦点 counter line decrement + `<= 0` invalidation で停止する golden 変種 (「コスト述語の閉包」の証明) + 常真 assert の実質化。retarget: `params.stage` に int (連鎖 index、reach 検査) を additive 追加。R08: 例を EBS A-R08-1 (メタレベル昇順・同率付与順) に揃える。既存 golden 不変 (mutual_counter_stop は変種追加のみ)。 |
 
+## Phase 13 — Consumer runtime performance lane
+
+Source: roadmap Phase 14 + EQM-102 deferred production integration + EQM-134 consumer-informed work-scale evidence。correctness/serialization回帰とruntime performance測定を別suiteとして扱う。
+
+| id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
+|---|---|---|---|---|---|---|
+| EQM-136 | COMPLETE | EQM-102, EQM-134 | `docs/plan/2026-06-09_event_queue_manager/EQM-136_trigger_index_runtime/` | Production trigger-index integration + independent performance test lane. | `runtime/eq_trigger_engine.gd`, `runtime/eq_trigger_index.gd`, `resources/eq_condition.gd`, `tools/test.sh`, `test_project/tests/{trigger,performance,support}/`, performance/test docs | Public API/schema/trace unchanged。production matchingはtarget bucket + wildcardだけをfull評価し、arm順・rumination・expiry・disarm・condition mutation・save/load continuationがlinear semanticsと一致。`./tools/test.sh`はperformanceを収集せずPASS、`./tools/test.sh --performance`はperformanceだけを収集してwork-count reductionとelapsedを記録しPASS。 |
+
 ## Dynamic follow-up area
 
 Add `follow-up-ready` tasks here during execution when a current task is complete but reveals nonblocking follow-up work.
@@ -175,6 +183,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 |---|---|---|---|---|---|
 | EQM-132 | COMPLETE | EQM-131 | Amberground reaction counter runtime profile | FIRE ごとの独立 occurrence + versioned cause transport + schema-v5 checkpoint | armed と pending FIRE の instance 分離、context deep-copy、2回発火、expiry、save/load continuation、stable rejection を `test_eq_reaction_fire_context.gd` と full gate で証明。 |
 | EQM-133 | COMPLETE | EQM-132 | Amberground reaction checkpoint audit | schema-v6 reaction-expiry ownership + exact one-event resolution boundary | count終了後のexpiryをsave/loadしFIRE/FIRE/`already_closed` continuation一致、v5 armed migration／orphan rejection、table tamper、後続reservationを消費しない1-event boundaryをfull gateで証明。 |
+| EQM-134 | COMPLETE | EQM-133 | Amberground state/passive/perception implementation audit | State/relation engineering work-scale rung + one-shot inversion hot-path repair | 64 tokens×8 actors、1,024 relations、200 actual triggersのround-trip/resolve、work-scale profile、full gate。 |
 | EQM-135 | COMPLETE | EQM-134 | Amberground interception tranche | 発行済みPREPARED単独予約へのmeta介入primitive | 発行時metaを予約instanceへ固定し、同値以上の介入でeffect未実行のまま`event_invalidated(closed_by: intervention)`、不足時は`intervention_avoided`、非対応contextはstable rejection。snapshot/pending消失とtrace順を専用test + full gateで証明。 |
 
 ## Current pointer
@@ -183,7 +192,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: none — **EQM-135 reservation meta intervention COMPLETE** (2026-07-18)。通常PREPARED singletonをstable event idで対象にし、submit受理時metaの同値以上でeffect未実行のまま無効化する。schema v7が発行時metaを保存し、bundle／race／reaction FIREはfail-closed。Phase 12の既存window介入とtick意味は不変。
+Current: **none** — EQM-136 COMPLETE。通常回帰とperformance laneは排他的にPASSし、queueにREADY/BACKLOG taskなし。
 
 Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
@@ -1548,3 +1557,27 @@ review: docs/review/autopilot/EQM-135_SELF_REVIEW_2026-07-18.md
 ```
 
 Current pointer → none。EQM-135 COMPLETE; group intervention generalization and game-side damage/range/presentation remain consumer-owned or demand-gated。
+
+### EQM-136 — COMPLETE (2026-07-18) — production trigger index + independent performance lane
+
+```text
+acceptance:
+  - canonical armed tableから再構築可能なtarget/wildcard indexをproduction engineへ透明に統合
+  - 1,000 arms fixtureでcandidate/full-match 75、旧full-scan相当の925 callsを構造的に除去
+  - arm order、shared-condition retarget、duplicate slot、rumination、expiry境界、disarm、save/load不変
+  - standard regressionとperformance discoveryを排他化し、unknown/zero-file/golden misuseはfail-closed
+  - Amberground test/scene/timingをbaselineまたはoracleに使用せず、EQM headless範囲だけを主張
+plan: docs/plan/2026-06-09_event_queue_manager/EQM-136_trigger_index_runtime/
+tests:
+  - ./tools/test.sh -> PASS (regression only; files=74 checks=1705 failures=0; run 20260718-210518-25827)
+  - ./tools/test.sh --performance -> PASS (performance only; files=4 checks=16 failures=0; run 20260718-210344-16925)
+performance:
+  - trigger fixture: total=1000 candidates=75 matches_calls=75 fired=0 retained=1000
+  - elapsed=181 usec (Godot 4.7 stable, Darwin arm64, one headless sweep; advisory only)
+compatibility:
+  - API surface golden unchanged; snapshot schema v7 and deterministic trace goldens unchanged
+review: docs/review/autopilot/EQM-136_SELF_REVIEW_2026-07-18.md
+profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
+```
+
+Current pointer → none。EQM-136 COMPLETE; event-line/relation/scheduler/traceの次最適化は新しいEQM-local evidenceが出た場合だけ起票する。
