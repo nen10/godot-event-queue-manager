@@ -12,6 +12,9 @@ const EQConditionSpec = preload("res://addons/event_queue_manager/resources/eq_c
 static func run(t) -> void:
 	_test_declare_type_redeclaration_and_invalid(t)
 	_test_bind_dissolve_invert_and_trace(t)
+	_test_failed_tree_invert_restores_adjacency(t)
+	_test_adjacency_query_and_expand_order(t)
+	_test_duplicate_relation_id_restore_reindexes(t)
 	_test_serial_rebound_chain(t)
 	_test_invalidate_actor(t)
 	_test_maintenance(t)
@@ -139,6 +142,154 @@ static func _test_bind_dissolve_invert_and_trace(t) -> void:
 	t.ok(_has_trace(rows, "relation_dissolved", String(inv_id)), "relation_dissolved is recorded")
 
 
+static func _test_failed_tree_invert_restores_adjacency(t) -> void:
+	var rg = EQRelationGraph.new()
+	rg.declare_relation_type({
+		"name": &"forward",
+		"inverse": &"reverse",
+		"structure": EQRelationGraph.Structure.TREE,
+	})
+	rg.declare_relation_type({
+		"name": &"reverse",
+		"inverse": &"forward",
+		"structure": EQRelationGraph.Structure.TREE,
+	})
+	var existing_parent = rg.bind(&"reverse", &"X", &"A")
+	var original = rg.bind(&"forward", &"A", &"B")
+
+	t.ok(not rg.invert(original), "TREE inverse rejects a second reverse parent")
+	var restored = rg.relation(original)
+	t.eq(restored.get("type", &""), &"forward", "failed invert restores original relation type")
+	t.eq(restored.get("from_actor", &""), &"A", "failed invert restores original from endpoint")
+	t.eq(restored.get("to_actor", &""), &"B", "failed invert restores original to endpoint")
+	t.eq(
+		_relation_id_strings(rg.relations_of(&"A")),
+		[String(existing_parent), String(original)],
+		"failed invert reindexes the original relation beside the blocking parent",
+	)
+	t.eq(
+		_relation_id_strings(rg.relations_of(&"B")),
+		[String(original)],
+		"failed invert restores adjacency at the original target",
+	)
+	t.eq(rg.invalidate_actor(&"B"), 1, "restored target adjacency remains usable by invalidation")
+	t.ok(rg.relation(original).is_empty(), "restored original relation is dissolved exactly once")
+
+
+static func _test_adjacency_query_and_expand_order(t) -> void:
+	var rg = EQRelationGraph.new()
+	rg.declare_relation_type({"name": &"link", "structure": EQRelationGraph.Structure.GRAPH})
+	rg.declare_relation_type({"name": &"other", "structure": EQRelationGraph.Structure.GRAPH})
+
+	rg.bind(&"link", &"unrelated.0", &"unrelated.1")
+	var id2 = rg.bind(&"link", &"hub", &"a")
+	for i in range(7):
+		rg.bind(
+			&"link",
+			StringName("unrelated.%d.left" % i),
+			StringName("unrelated.%d.right" % i),
+		)
+	var id10 = rg.bind(&"link", &"hub", &"b")
+	var id11 = rg.bind(&"link", &"hub", &"hub")
+	var id12 = rg.bind(&"other", &"hub", &"ignored")
+
+	var expected_ids: Array[String] = [String(id2), String(id10), String(id11), String(id12)]
+	expected_ids.sort()
+	t.eq(
+		_relation_id_strings(rg.relations_of(&"hub")),
+		expected_ids,
+		"relations_of keeps lexicographic relation-id order beyond single digits",
+	)
+	t.eq(
+		(rg._actor_relations["hub"] as Array).count(id11),
+		1,
+		"a self-loop occupies one incident adjacency slot",
+	)
+
+	var projected: Array = rg.relations_of(&"hub")
+	projected[0]["from_actor"] = &"mutated"
+	projected.clear()
+	t.eq(
+		_relation_id_strings(rg.relations_of(&"hub")),
+		expected_ids,
+		"relations_of returns fresh arrays and deep-copied payloads",
+	)
+	t.eq(
+		rg.expand(&"hub", &"link", 1, 1),
+		[&"hub", &"b", &"a"],
+		"adjacency expansion preserves lexicographic relation-id discovery order",
+	)
+
+	var rebuilt = EQRelationGraph.new()
+	rebuilt.restore(rg.to_dict())
+	t.eq(
+		_relation_id_strings(rebuilt.relations_of(&"hub")),
+		expected_ids,
+		"restore rebuilds identical sorted actor adjacency",
+	)
+	t.eq(
+		rebuilt.expand(&"hub", &"link", 1, 1),
+		[&"hub", &"b", &"a"],
+		"restored adjacency keeps exact bounded expansion order",
+	)
+
+
+static func _test_duplicate_relation_id_restore_reindexes(t) -> void:
+	var rg = EQRelationGraph.new()
+	rg.restore({
+		"relation_types": [{"name": &"link", "structure": EQRelationGraph.Structure.GRAPH}],
+		"relations": [
+			{"relation_id": &"eqm.rel.7", "type": &"link", "from": &"A", "to": &"B"},
+			{"relation_id": &"eqm.rel.8", "type": &"link", "from": &"C", "to": &"E"},
+			{"relation_id": &"eqm.rel.7", "type": &"link", "from": &"C", "to": &"D"},
+		],
+		"relation_seq": 8,
+	})
+
+	t.eq(rg.relation(&"eqm.rel.7").get("from_actor", &""), &"C", "duplicate id remains canonical last-entry-wins")
+	t.ok(rg.relations_of(&"A").is_empty(), "replaced relation leaves no stale first endpoint adjacency")
+	t.ok(rg.relations_of(&"B").is_empty(), "replaced relation leaves no stale second endpoint adjacency")
+	t.eq(
+		_relation_id_strings(rg.relations_of(&"C")),
+		["eqm.rel.7", "eqm.rel.8"],
+		"last endpoints own each restored relation id exactly once",
+	)
+	t.eq(rg.invalidate_actor(&"A"), 0, "stale endpoint cannot invalidate replacement relation")
+	t.ok(not rg.relation(&"eqm.rel.7").is_empty(), "replacement survives stale-endpoint invalidation")
+	t.eq(rg.invalidate_actor(&"C"), 2, "canonical endpoint invalidates both incident relations")
+	t.ok(rg.relation_ids().is_empty(), "canonical invalidation leaves no dangling relation")
+
+	var tree = EQRelationGraph.new()
+	tree.restore({
+		"relation_types": [{"name": &"tree", "structure": EQRelationGraph.Structure.TREE}],
+		"relations": [
+			{"relation_id": &"eqm.rel.7", "type": &"tree", "from": &"A", "to": &"B"},
+			{"relation_id": &"eqm.rel.7", "type": &"tree", "from": &"C", "to": &"B"},
+		],
+		"relation_seq": 7,
+	})
+	t.eq(tree.relation(&"eqm.rel.7").get("from_actor", &""), &"C", "TREE duplicate id excludes its old payload from parent validation")
+	t.ok(tree.relations_of(&"A").is_empty(), "TREE replacement removes its old source adjacency")
+	t.eq(
+		_relation_id_strings(tree.relations_of(&"B")),
+		["eqm.rel.7"],
+		"TREE replacement retains one canonical target adjacency",
+	)
+
+	var blocked = EQRelationGraph.new()
+	blocked.restore({
+		"relation_types": [{"name": &"tree", "structure": EQRelationGraph.Structure.TREE}],
+		"relations": [
+			{"relation_id": &"eqm.rel.7", "type": &"tree", "from": &"A", "to": &"C"},
+			{"relation_id": &"eqm.rel.8", "type": &"tree", "from": &"X", "to": &"B"},
+			{"relation_id": &"eqm.rel.7", "type": &"tree", "from": &"D", "to": &"B"},
+		],
+		"relation_seq": 8,
+	})
+	t.eq(blocked.relation(&"eqm.rel.7").get("to_actor", &""), &"C", "a different TREE parent still blocks duplicate-id replacement")
+	t.eq(blocked.faults.size(), 1, "blocked TREE replacement records the existing stable constraint fault")
+
+
 static func _test_serial_rebound_chain(t) -> void:
 	var tr = EQTrace.new()
 	var rg = EQRelationGraph.new(tr)
@@ -179,10 +330,22 @@ static func _test_invalidate_actor(t) -> void:
 
 	t.eq(rg.invalidate_actor(&"B"), 2, "invalidate_actor dissolves endpoint relations")
 	var rows = _json_rows(tr.to_jsonl())
+	var expected_dissolved: Array[String] = [String(a), String(b)]
+	expected_dissolved.sort()
+	t.eq(
+		_trace_relation_ids(rows, "relation_dissolved"),
+		expected_dissolved,
+		"invalidate_actor dissolves the original incident snapshot in relation-id order",
+	)
 	t.eq(_count_kind(rows, "relation_dissolved"), 2, "invalidate_actor emits dissolve trace")
 	t.eq(_count_with_context(rows, "relation_dissolved", "cause", &"actor_removed"), 2, "invalidate_actor uses actor_removed cause")
 	t.eq(_count_kind(rows, "relation_rebound"), 1, "invalidate_actor may apply serial rebound")
 	t.ok(rg.relations_of(&"B").is_empty(), "actor B has no relations afterwards")
+	var rebound_id = _trace_field(rows, "relation_rebound", "via", String(a), "new_relation")
+	var rebound = rg.relation(rebound_id)
+	t.eq(rebound.get("from_actor", &""), &"X", "serial rebound still starts before invalidated actor")
+	t.eq(rebound.get("to_actor", &""), &"Y", "serial rebound still ends after invalidated actor")
+	t.ok(not rg.relation(x).is_empty(), "unrelated original chain segment survives invalidation")
 
 
 static func _test_maintenance(t) -> void:
@@ -392,6 +555,21 @@ static func _count_with_context(rows: Array, kind: String, key: String, value: S
 		if String(row.get("kind", "")) == kind and String(row.get(key, "")) == String(value):
 			count += 1
 	return count
+
+
+static func _relation_id_strings(relations: Array) -> Array[String]:
+	var out: Array[String] = []
+	for relation_payload in relations:
+		out.append(String((relation_payload as Dictionary).get("relation_id", "")))
+	return out
+
+
+static func _trace_relation_ids(rows: Array, kind: String) -> Array[String]:
+	var out: Array[String] = []
+	for row in rows:
+		if String(row.get("kind", "")) == kind:
+			out.append(String(row.get("relation", "")))
+	return out
 
 
 static func _trace_field(rows: Array, kind: String, key: String, value: String, field: String) -> StringName:

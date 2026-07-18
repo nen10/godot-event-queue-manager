@@ -70,6 +70,7 @@ The Godot binary is discovered via the `GODOT` environment variable, else `godot
 | `test_project/tests/transaction/test_eq_reservation_intervention.gd` | Transaction / Snapshot / Trace | PREPARED singletonへの発行時meta介入、同値成功、回避不変、effect未実行、schema-v7 roundtrip、group/context fail-closed | EQM-135 |
 | `test_project/tests/core/test_eq_reservation_runtime.gd` + trigger index lifecycle tests | Runtime / Trigger / Resilience | `reaction_condition` wrong-typeのmutation前拒否、dev/shipped fault/trace、direct engine/index ghost-arm防止、後続valid reaction継続 | EQM-137 |
 | `test_project/tests/trigger/test_eq_trigger_engine_index_lifecycle.gd` + `test_eq_trigger_index.gd` | Trigger / Determinism | sorted derived buckets、populated target/wildcardへのretarget、fresh candidate projection、global arm order | EQM-138 |
+| `test_project/tests/core/test_eq_relation_graph.gd` + resolution/snapshot relation tests | Relation / Determinism | sorted actor adjacency、query copy、BFS order、TREE/GRAPH、serial suture、duplicate-id restore reindex、trace/snapshot parity | EQM-139 |
 | Godot golden-trace tests under `tests/golden/` | Determinism trace | same-seed replay byte-identical, permutation/prediction purity | EQM-013 以降 |
 | Godot UI-headless tests under `tests/ui_headless/` | UI / metric | layout metric P0, state matrix, interaction contract, projection integrity | EQM-090 以降 |
 | `python3 tools/ui_static_audit.py` | UI static audit | source 上の no-op button / debug leakage / generic picker pattern | EQM-087 以降 |
@@ -80,7 +81,7 @@ The Godot binary is discovered via the `GODOT` environment variable, else `godot
 | path / command | category | what it proves / records | owner |
 |---|---|---|---|
 | `./tools/test.sh --performance` | Performance suite boundary | only `test_project/tests/performance/` is collected; non-performance checks are absent; zero-file/unknown mode fail closed | EQM-136 |
-| `test_project/tests/performance/` | Scheduler / Trigger / State / Relation / Event-line | EQM-local deterministic work-count gates and environment-labelled elapsed observations; legacy-sort vs stable-merge A/B is performance-only | EQM-102, EQM-112, EQM-134, EQM-136, EQM-138 |
+| `test_project/tests/performance/` | Scheduler / Trigger / State / Relation / Event-line | EQM-local deterministic work-count gates and environment-labelled elapsed observations; trigger merge and relation full-scan/adjacency A/B are performance-only | EQM-102, EQM-112, EQM-134, EQM-136, EQM-138, EQM-139 |
 | `docs/design/RUNTIME_PERFORMANCE_PROFILE.md` | Measurement record | workload definition, hard-gate counts, advisory elapsed, environment, and residual hot paths | EQM-136+ |
 
 Configured optional helper checks may report an explicit skip when their

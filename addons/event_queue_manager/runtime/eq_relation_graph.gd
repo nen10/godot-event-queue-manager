@@ -189,13 +189,11 @@ func invalidate_actor(actor_id: StringName) -> int:
 	if actor_id == &"":
 		_fault(EQError.CONDITION_LINE_ID_EMPTY, "invalidate_actor requires non-empty actor id", {"actor": ""})
 		return 0
-	var impacted: Array = []
-	for rel_id in _relations:
-		var rel: Dictionary = _relations[rel_id]
-		if rel["from_actor"] == actor_id or rel["to_actor"] == actor_id:
-			impacted.append(rel_id)
+	# Snapshot the sorted derived ids before dissolve mutates adjacency or creates
+	# a serial-suture rebound. This preserves the legacy "relations present at
+	# invalidation start" boundary.
+	var impacted: Array = _incident_relation_ids(actor_id)
 	var count := 0
-	impacted.sort_custom(func(a, b): return String(a) < String(b))
 	for rel_id in impacted:
 		if dissolve(rel_id, &"actor_removed"):
 			count += 1
@@ -205,9 +203,10 @@ func invalidate_actor(actor_id: StringName) -> int:
 # --- query --------------------------------------------------------------------
 
 func relations_of(actor: StringName) -> Array:
-	var ids := relation_ids()
 	var out: Array = []
-	for rid in ids:
+	for rid in _incident_relation_ids(actor):
+		if not _relations.has(rid):
+			continue
 		var rel: Dictionary = _relations[rid]
 		if rel["from_actor"] == actor or rel["to_actor"] == actor:
 			out.append(rel.duplicate(true))
@@ -239,7 +238,6 @@ func expand(origin: StringName, relation_type: StringName, hop_cost: int, budget
 	if relation_type == &"" or hop_cost <= 0 or budget <= 0:
 		return out
 
-	var rel_ids: Array = relation_ids()
 	var frontier: Array = [{"actor": origin, "cost": 0}]
 	var idx := 0
 	while idx < frontier.size():
@@ -247,10 +245,10 @@ func expand(origin: StringName, relation_type: StringName, hop_cost: int, budget
 		idx += 1
 		var current := StringName(frame.get("actor", ""))
 		var spent := int(frame.get("cost", 0))
-		for rel_id in rel_ids:
-			var rel: Dictionary = relation(StringName(rel_id))
-			if rel.is_empty():
+		for rel_id in _incident_relation_ids(current):
+			if not _relations.has(rel_id):
 				continue
+			var rel: Dictionary = _relations[rel_id]
 			if StringName(rel.get("type", "")) != relation_type:
 				continue
 			var next: StringName = &""
@@ -394,7 +392,10 @@ func restore(d: Dictionary) -> void:
 		if from_actor == &"" or to_actor == &"":
 			_fault(EQError.CONDITION_LINE_UNKNOWN, "relation endpoint must not be empty", {"relation_id": String(rel_id)})
 			continue
-		if int(_type_declarations[String(r_type)]["structure"]) == Structure.TREE and _has_parent_of_type(r_type, to_actor):
+		if (
+			int(_type_declarations[String(r_type)]["structure"]) == Structure.TREE
+			and _has_parent_of_type(r_type, to_actor, rel_id)
+		):
 			_fault(EQError.CONDITION_LINE_UNKNOWN, "TREE relation constraint violated while restoring", {"relation_id": String(rel_id), "type": String(r_type), "to": String(to_actor)})
 			continue
 		_add_relation(rel_id, {
@@ -440,6 +441,11 @@ func _next_relation_id() -> StringName:
 
 
 func _add_relation(relation_id: StringName, payload: Dictionary) -> void:
+	# When restore accepts a duplicate relation id, remove the previous endpoints
+	# before replacing the payload so the derived actor adjacency cannot retain
+	# stale ownership.
+	if _relations.has(relation_id):
+		_remove_relation(relation_id)
 	_relations[relation_id] = {
 		"relation_id": relation_id,
 		"type": payload["type"],
@@ -483,8 +489,19 @@ func _remove_relation(relation_id: StringName) -> void:
 			_actor_relations[to_key] = to_list
 
 
-func _has_parent_of_type(type: StringName, actor: StringName) -> bool:
-	for rel_id in relation_ids():
+func _incident_relation_ids(actor: StringName) -> Array:
+	var ids: Array = _actor_relations.get(String(actor), [])
+	return ids.duplicate()
+
+
+func _has_parent_of_type(
+	type: StringName, actor: StringName, excluded_relation_id: StringName = &""
+) -> bool:
+	for rel_id in _incident_relation_ids(actor):
+		if rel_id == excluded_relation_id:
+			continue
+		if not _relations.has(rel_id):
+			continue
 		var rel: Dictionary = _relations[rel_id]
 		if rel["type"] == type and rel["to_actor"] == actor:
 			return true
@@ -493,7 +510,9 @@ func _has_parent_of_type(type: StringName, actor: StringName) -> bool:
 
 func _incoming_of_type(type: StringName, actor: StringName) -> Array:
 	var out: Array = []
-	for rel_id in relation_ids():
+	for rel_id in _incident_relation_ids(actor):
+		if not _relations.has(rel_id):
+			continue
 		var rel: Dictionary = _relations[rel_id]
 		if rel["type"] == type and rel["to_actor"] == actor:
 			out.append(rel_id)
@@ -502,7 +521,9 @@ func _incoming_of_type(type: StringName, actor: StringName) -> Array:
 
 func _outgoing_of_type(type: StringName, actor: StringName) -> Array:
 	var out: Array = []
-	for rel_id in relation_ids():
+	for rel_id in _incident_relation_ids(actor):
+		if not _relations.has(rel_id):
+			continue
 		var rel: Dictionary = _relations[rel_id]
 		if rel["type"] == type and rel["from_actor"] == actor:
 			out.append(rel_id)
