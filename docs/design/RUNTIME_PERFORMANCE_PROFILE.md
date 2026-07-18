@@ -355,7 +355,7 @@ add result rows here when a task changes those paths.
 
 ## Residual hot-path ledger
 
-| path | status after EQM-143 | evidence / next condition |
+| path | status after EQM-144 | evidence / next condition |
 |---|---|---|
 | production trigger target matching | resolved by EQM-136 | 1,000 arms → 75 candidates / 75 full-match calls in the declared fixture |
 | target + wildcard candidate assembly | resolved by EQM-138 | exact stable merge; 4.43–4.65x sparse and 9.93–10.24x wildcard-heavy advisory A/B |
@@ -368,10 +368,10 @@ add result rows here when a task changes those paths.
 | relation maintenance global scan | retained by design | every relation is an evaluation target; profile separately before changing |
 | default sorted-array scheduler / live peek | resolved for ordinary live-min peeks by EQM-142 | heap drain trace peeks: 511 `ordered()` calls / 130,816 copied+sorted entries → 0; stale-front fallback retained |
 | scheduler `reschedule()` live-entry lookup | resolved by EQM-143 | heap reschedule lookup: 256 `ordered()` calls / 98,176 copied+sorted entries → 0 |
-| scheduler membership scans (`peek(size())` existence checks) | queued as EQM-144 | add `has_event()` and remove full-copy membership scans |
+| scheduler membership scans (`peek(size())` existence checks) | resolved by EQM-144 | new O(1) `EQScheduler.has_event()`; reservation intervention and snapshot-restore reconciliation no longer full-copy the queue; remaining `peek(size())` is `invalidate_actor` actor-filter (intentional full scan) |
 | consumer backend selection | queued as EQM-145 | expose heap only after EQM-142 prevents trace-peek O(n² log n) regression |
 | trace retention / allocation | unmeasured | define an EQM-local fixture before making a claim |
 
-EQM-136/138/139/140/142/143 completion evidence is recorded in their self-reviews under
+EQM-136/138/139/140/142/143/144 completion evidence is recorded in their self-reviews under
 `docs/review/autopilot/`. The fixture values are engineering evidence, not
 gameplay caps or Amberground support claims.

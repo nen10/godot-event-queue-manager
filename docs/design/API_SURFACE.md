@@ -35,6 +35,12 @@ EQM-135 reservation-intervention surface note: `EQReservationRuntime.intervene_r
 
 EQM-141 reaction-gate surface note: `EQTriggerEngine.preview_event_resolved_occurrences()` returns non-mutating opaque candidate tokens (expired candidates are filtered without closing them); `commit_occurrence()` and `invalidate_occurrence()` accept only a still-current token and reject stale reuse. `armed_entries()` exposes `{reservation, condition, owner, armed_at, duration, authored_ruminations, remaining_ruminations, slot_id}`; `slot_id` is the exact engine-slot identity and is stable for that slot's armed lifetime, while the three lifecycle values are its arm-time/continuation snapshot. `on_event_resolved_occurrences()` remains the commit-all compatibility wrapper and applies standalone expiry. Save-bundle schema v8 persists arm-bound solve/invalidation state plus generated-counter provenance (SEM §6.2, §10.6). `EQError.CONDITION_COUNTER_SOLVE_UNSUPPORTED` makes the invalidation-only COUNTER authoring rule explicit.
 
+EQM-142/143/144 scheduler hot-path surface note (Phase 15, 2026-07-19):
+
+- **Consumer action required — none for EQM-142/143.** `EQScheduler.peek_next()` (live-peek fast path, EQM-142) and `reschedule()` (O(1) live-entry lookup, EQM-143) are pure internal performance changes: identical return values, ordering, trace `decided_by`, and snapshot behavior. Amberground needs no code change and should observe identical goldens.
+- **New API — EQM-144.** `EQScheduler.has_event(event_id: int) -> bool` returns O(1) scheduler liveness (true only for live events; cancelled/rescheduled stale backend artifacts are invisible). Consumers that previously scanned `peek(size())` to test whether an event id is still scheduled should migrate to `has_event()`; `peek(n)` remains for ordered previews. This is a `core`/L0-visible additive method with no layer leak; the API surface golden is re-baselined for it under the explicit approval procedure.
+- **Upcoming — EQM-145** will add opt-in `EQConfig.scheduler_backend` (sorted-array default / binary heap). Consumers wanting the heap for very large queues should wait for that note; enabling the heap is only safe now because EQM-142 removed the per-resolution full sort.
+
 Ownership boundary: these mutation methods are the standalone `EQTriggerEngine`
 surface. For an engine obtained as `EQReservationRuntime.engine`, they are
 inspection-only to consumers; reaction commit/invalidate/disarm must occur through

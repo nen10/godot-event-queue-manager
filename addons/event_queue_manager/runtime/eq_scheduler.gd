@@ -145,6 +145,12 @@ func size() -> int:
 	return _generation.size()
 
 
+## True when event_id is currently live. Stale backend artifacts from cancelled
+## or rescheduled events are intentionally invisible.
+func has_event(event_id: int) -> bool:
+	return _generation.has(event_id)
+
+
 ## True when no live event remains (stale backend entries do not count).
 func is_empty() -> bool:
 	return _generation.is_empty()

@@ -1921,6 +1921,11 @@
           "returns": "-> bool"
         },
         {
+          "name": "has_event",
+          "params": "event_id: int",
+          "returns": "-> bool"
+        },
+        {
           "name": "is_empty",
           "params": "",
           "returns": "-> bool"

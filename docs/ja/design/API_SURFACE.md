@@ -37,6 +37,12 @@ EQM-135 reservation介入公開面: `EQReservationRuntime.intervene_reservation(
 
 EQM-141 reaction gate公開面: `EQTriggerEngine.preview_event_resolved_occurrences()`は期限切れcandidateも閉じずにfilterする非mutationのopaque tokenを返し、`commit_occurrence()`／`invalidate_occurrence()`はcurrent tokenだけを一度受理します。`armed_entries()`は`{reservation, condition, owner, armed_at, duration, authored_ruminations, remaining_ruminations, slot_id}`を公開し、`slot_id`はそのarm中に安定するexactなengine slot identity、3つのlifecycle値はarm-time／continuation snapshotです。既存`on_event_resolved_occurrences()`はstandalone expiryを適用して全候補commitする互換wrapperです。save schema v8はarm-bound solve/invalidationとgenerated-counter provenanceを保存します。`EQError.CONDITION_COUNTER_SOLVE_UNSUPPORTED`がCOUNTERのinvalidation-only authoring ruleを明示します。
 
+EQM-142/143/144 scheduler hot-path公開面 (Phase 15, 2026-07-19):
+
+- **利用側の対応 — EQM-142/143では不要。** `EQScheduler.peek_next()` (live-peek fast path, EQM-142) と `reschedule()` (O(1) live-entry lookup, EQM-143) は内部性能改善のみです。返り値、順序、trace `decided_by`、snapshot挙動は同一で、Amberground側のコード変更は不要です。goldenも同一であるべきです。
+- **新API — EQM-144。** `EQScheduler.has_event(event_id: int) -> bool` はscheduler上でevent idが現在liveかを O(1) で返します (cancel/rescheduleで残るstale backend artifactはfalse)。これまで「event idがまだscheduleされているか」を `peek(size())` 走査で調べていた利用側コードは `has_event()` へ移行してください。`peek(n)` はordered preview用として維持します。これは `core`/L0-visible のadditive methodで、layer leakはありません。API surface goldenは明示手順でre-baselineします。
+- **次のEQM-145予定。** `EQConfig.scheduler_backend` (既定sorted-array / opt-in binary heap) を追加予定です。大規模queueでheapを使いたいconsumerはこの注記を待ってください。EQM-142によりper-resolution full sortが除去されたため、heap公開が安全になります。
+
 ownership境界: 上記mutation methodはstandalone `EQTriggerEngine`向けです。
 `EQReservationRuntime.engine`として得たinstanceはconsumerに対してinspection-onlyで、
 commit／invalidate／disarmはruntime pipelineへ任せます。gate、declared counter、watch、

@@ -599,12 +599,7 @@ func intervene_reservation(event_id: int, intervener: Dictionary) -> bool:
 		return _reject_reservation_intervention(
 			event_id, &"not_pending", "intervention target must still be pending"
 		)
-	var scheduler_has_event := false
-	for entry in runtime.scheduler.peek(runtime.scheduler.size()):
-		if entry.event_id == event_id:
-			scheduler_has_event = true
-			break
-	if not scheduler_has_event:
+	if not runtime.scheduler.has_event(event_id):
 		return _reject_reservation_intervention(
 			event_id, &"scheduler_missing", "intervention target is absent from the scheduler"
 		)
@@ -695,34 +690,31 @@ func _close_top(commit: bool, cause: StringName) -> bool:
 
 
 func _reconcile_runtime_state_after_snapshot_restore() -> void:
-	var live_event_ids: Dictionary = {}
-	for e in runtime.scheduler.peek(runtime.scheduler.size()):
-		live_event_ids[int(e.event_id)] = true
 	for event_id in _window_of_event.keys():
-		if not live_event_ids.has(int(event_id)):
+		if not runtime.scheduler.has_event(int(event_id)):
 			_window_of_event.erase(event_id)
 	for event_id in _bound_inv.keys():
-		if not live_event_ids.has(int(event_id)):
+		if not runtime.scheduler.has_event(int(event_id)):
 			_bound_inv.erase(event_id)
 	for event_id in _bundle_of.keys():
-		if not live_event_ids.has(int(event_id)):
+		if not runtime.scheduler.has_event(int(event_id)):
 			_bundle_of.erase(event_id)
 	for event_id in _by_event.keys():
-		if not live_event_ids.has(int(event_id)):
+		if not runtime.scheduler.has_event(int(event_id)):
 			_by_event.erase(event_id)
 			_reaction_fire_context_by_event.erase(event_id)
 			_clear_bundle_event_link(int(event_id))
 			_window_of_event.erase(event_id)
 			_bound_inv.erase(event_id)
 	for event_id in _reaction_fire_context_by_event.keys():
-		if not live_event_ids.has(int(event_id)) or not _by_event.has(event_id):
+		if not runtime.scheduler.has_event(int(event_id)) or not _by_event.has(event_id):
 			_reaction_fire_context_by_event.erase(event_id)
 	var dead_bundles: Array[StringName] = []
 	for bid in _bundle_members.keys():
 		var members: Array = _bundle_members[bid]
 		var kept: Array = []
 		for raw in members:
-			if live_event_ids.has(int(raw)):
+			if runtime.scheduler.has_event(int(raw)):
 				kept.append(int(raw))
 		if kept.is_empty():
 			dead_bundles.append(bid)
@@ -731,7 +723,7 @@ func _reconcile_runtime_state_after_snapshot_restore() -> void:
 	for bid in dead_bundles:
 		_bundle_members.erase(bid)
 	for event_id in _expiry_by_event.keys():
-		if not live_event_ids.has(int(event_id)):
+		if not runtime.scheduler.has_event(int(event_id)):
 			_expiry_by_event.erase(event_id)
 
 

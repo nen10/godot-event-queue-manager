@@ -203,8 +203,8 @@ consumer (Amberground) 影響は API 追加 (`has_event`, `EQConfig.scheduler_ba
 |---|---|---|---|---|---|---|
 | EQM-142 | COMPLETE | EQM-141 | `docs/plan/2026-06-09_event_queue_manager/EQM-142_scheduler_live_peek/` | O(1) live-peek fast path for `EQScheduler.peek_next()` (no full-backend copy per resolution). | `runtime/eq_scheduler.gd`, core scheduler tests, `test_project/tests/performance/`, runtime performance profile | `peek_next()` は backend の O(1) `peek_min()` を使い、min が live のときは全 `ordered()` 複製を行わない。stale-front のみ従来走査へ fallback。空/単一/stale-front(cancel)/reschedule-min/mixed で返す entry と `advance()` の trace `decided_by` バイト列は不変 (既存 golden 緑)。独立 performance lane が inspected-entry work 削減 (no-stale で N→1) を hard gate、生 elapsed を advisory 記録。regression と performance discovery は排他のまま両方 PASS。 |
 | EQM-143 | COMPLETE | EQM-142 | `docs/plan/2026-06-09_event_queue_manager/EQM-143_reschedule_o1/` | True O(1) `reschedule()` via an event_id→live-entry accelerator (docstring 是正)。 | `runtime/eq_scheduler.gd`, core scheduler tests, `test_project/tests/performance/`, runtime performance profile | `reschedule()`/`_find_live()` は全 `ordered()` 走査をやめ event_id→live EQEntry map を引く。push/reschedule/cancel/pop/restore で map と `_generation` の整合を保ち、liveness/tie-break/snapshot roundtrip/trace は不変。class docstring の O(1) 主張を実態と一致。performance lane が reschedule の inspected-entry work 削減 (N→O(1)) を hard gate。regression + performance PASS。 |
-| EQM-144 | READY | EQM-143 | `docs/plan/2026-06-09_event_queue_manager/EQM-144_has_event_membership/` | O(1) `EQScheduler.has_event()` and removal of full-copy membership scans. | `runtime/eq_scheduler.gd`, `runtime/eq_reservation_runtime.gd`, core/reservation tests, `tools/check_api_surface.py` golden, `docs/design/API_SURFACE.md`(+JA) | 新 public L0 `has_event(id)->bool` = `_generation.has(id)` (O(1))。reservation intervention の存在確認と snapshot 復元後照合の `peek(size())` 全複製 membership を `has_event` へ置換 (semantics/reject code/trace 不変)。API surface golden は明示手順で追記 (L0、layer-leak なし)。regression + performance PASS。 |
-| EQM-145 | BACKLOG | EQM-142 | `docs/plan/2026-06-09_event_queue_manager/EQM-145_backend_selection/` | Consumer-facing scheduler backend selection (sorted-array default / opt-in binary heap). | `resources/eq_config.gd`, `runtime/eq_runtime.gd`, `runtime/eq_manager.gd`, core/runtime tests, `docs/design/API_SURFACE.md`(+JA), `docs/design/SNAPSHOT_COMPAT_V1.md` | `EQConfig.scheduler_backend` enum {SORTED_ARRAY(default)=0, BINARY_HEAP=1} を additive 追加・serialize・validate (未知値=安定 error)。`EQRuntime` が config から backend を構築し、`EQManager.configure()` は live event が無い setup 時のみ scheduler を再構築 (非空なら安定 fault、既定不変)。両 backend で pop 順・trace が entry-for-entry 同一 (EQOrdering total order)。EQM-142 の live-peek 前提で heap が O(n²log n) 退行しないことを performance lane で確認。regression + performance PASS。API surface/snapshot compat に consumer 注記。 |
+| EQM-144 | COMPLETE | EQM-143 | `docs/plan/2026-06-09_event_queue_manager/EQM-144_has_event_membership/` | O(1) `EQScheduler.has_event()` and removal of full-copy membership scans. | `runtime/eq_scheduler.gd`, `runtime/eq_reservation_runtime.gd`, core/reservation tests, `tools/check_api_surface.py` golden, `docs/design/API_SURFACE.md`(+JA) | 新 public L0 `has_event(id)->bool` = `_generation.has(id)` (O(1))。reservation intervention の存在確認と snapshot 復元後照合の `peek(size())` 全複製 membership を `has_event` へ置換 (semantics/reject code/trace 不変)。API surface golden は明示手順で追記 (L0、layer-leak なし)。regression + performance PASS。 |
+| EQM-145 | READY | EQM-142, EQM-144 | `docs/plan/2026-06-09_event_queue_manager/EQM-145_backend_selection/` | Consumer-facing scheduler backend selection (sorted-array default / opt-in binary heap). | `resources/eq_config.gd`, `runtime/eq_runtime.gd`, `runtime/eq_manager.gd`, core/runtime tests, `docs/design/API_SURFACE.md`(+JA), `docs/design/SNAPSHOT_COMPAT_V1.md` | `EQConfig.scheduler_backend` enum {SORTED_ARRAY(default)=0, BINARY_HEAP=1} を additive 追加・serialize・validate (未知値=安定 error)。`EQRuntime` が config から backend を構築し、`EQManager.configure()` は live event が無い setup 時のみ scheduler を再構築 (非空なら安定 fault、既定不変)。両 backend で pop 順・trace が entry-for-entry 同一 (EQOrdering total order)。EQM-142 の live-peek 前提で heap が O(n²log n) 退行しないことを performance lane で確認。regression + performance PASS。API surface/snapshot compat に consumer 注記。 |
 
 ## Dynamic follow-up area
 
@@ -224,7 +224,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: **EQM-144**。user-approved autonomous scheduler hot-path round (2026-07-19):
+Current: **EQM-145**。user-approved autonomous scheduler hot-path round (2026-07-19):
 速度改善調査で `peek_next()` の backend 全複製が binary heap drain を支配する証拠が揃ったため、
 Phase 15 (EQM-142→145) を起票し、線形に実装・検証する。consumer (Amberground) が必要対応に
 気付けるよう API docs に backend 選択と membership API の移行注記を残す。
@@ -1793,3 +1793,25 @@ profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
 ```
 
 Dependency sweep: EQM-143 COMPLETE → EQM-144 READY。Current pointer → EQM-144。
+
+### EQM-144 — COMPLETE (2026-07-19) — scheduler has_event membership API
+
+```text
+acceptance:
+  - EQScheduler.has_event(event_id: int) -> bool reports live scheduler membership in O(1)
+  - cancelled/rescheduled stale backend artifacts remain invisible to membership checks
+  - reservation intervention and snapshot-restore reconciliation stop using full-copy peek(size()) membership scans
+  - API surface golden is explicitly re-baselined with one additive EQScheduler.has_event method
+  - EN/JA API docs tell Amberground/consumers to migrate membership checks from peek(size()) scans to has_event()
+plan: docs/plan/2026-06-09_event_queue_manager/EQM-144_has_event_membership/
+tests:
+  - python3 tools/check_api_surface.py --update -> PASS (golden diff: EQScheduler.has_event only)
+  - ./tools/test.sh -> PASS (regression only; files=79 checks=2116 failures=0; run 20260719-042623-43002)
+  - ./tools/test.sh --performance -> PASS (performance only; files=7 checks=64 failures=0; run 20260719-042629-43163)
+api:
+  - EQScheduler.has_event(event_id: int) -> bool (core/L0-visible additive membership helper)
+review: docs/review/autopilot/EQM-144_SELF_REVIEW_2026-07-19.md
+profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
+```
+
+Dependency sweep: EQM-144 COMPLETE → EQM-145 READY (dependencies EQM-142, EQM-144 satisfied)。Current pointer → EQM-145。
