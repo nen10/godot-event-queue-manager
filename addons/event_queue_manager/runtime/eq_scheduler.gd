@@ -66,6 +66,18 @@ func pop() -> EQEntry:
 
 ## Returns the next live entry without removing it, or null.
 func peek_next() -> EQEntry:
+	# Fast path: EQOrdering is a total order, so the backend minimum is the next
+	# entry in pop order. When it is live (the steady-state case) it is exactly
+	# the next live entry, answered in O(1) via peek_min() with no full-backend
+	# copy/sort. This matters because advance() calls peek_next() for every
+	# resolved event's trace `decided_by`; the old unconditional ordered() copy
+	# made draining O(n^2) on the sorted-array backend and O(n^2 log n) on the
+	# binary heap (ordered() sorts a copy). Semantics are unchanged (EQM-142).
+	var m := _backend.peek_min()
+	if m != null and _is_live(m):
+		return m
+	# Stale-front fallback: the minimum is a cancelled/rescheduled artifact, so
+	# scan ordered entries for the first live one (lazy invalidation preserved).
 	for e in _backend.ordered():
 		if _is_live(e):
 			return e

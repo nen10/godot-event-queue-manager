@@ -1,6 +1,6 @@
 # Runtime Performance Profile
 
-Status: **EQM-140 measured and verified (2026-07-18)**.
+Status: **EQM-142 measured and verified (2026-07-19)**.
 
 This document records reproducible, EQM-local runtime performance evidence.
 It is deliberately separate from correctness, determinism, lifecycle, and
@@ -22,6 +22,49 @@ Wall-clock values are not portable SLAs and are never the sole acceptance
 proof. Existing EQM-102/112 coarse guards remain isolated in this lane and run
 with exact workload sentinels; EQM-136's newly reported raw elapsed is advisory.
 A faster or slower host does not change the algorithmic work-count contract.
+
+## EQM-142 scheduler live-peek fast path
+
+`EQRuntime.advance()` records a resolved event's `tie_break.decided_by` by
+asking `EQScheduler.peek_next()` for the next live entry. Before EQM-142,
+`peek_next()` always called `backend.ordered()` and then scanned for the first
+live entry. That meant every ordinary event resolution copied the full sorted
+array backend, and the binary-heap backend sorted a copied heap (`O(n log n)`)
+for every trace peek.
+
+EQM-142 first asks the backend for its minimum with `peek_min()`. If that entry
+is live, it is exactly the next live event because `EQOrdering` is total. Only
+the rare stale-front case (cancelled or superseded entry at the minimum) falls
+back to the previous ordered scan. Peek remains non-mutating; lazy invalidation
+and trace semantics are unchanged.
+
+### Workload and hard gates
+
+The independent performance fixture drains a heap-backed scheduler with 512 live
+events and no stale front. The test-only legacy helper is a copy of the removed
+`peek_next()` shape, using the same live scheduler/backend objects.
+
+| path | legacy source work | current source work | hard parity |
+|---|---:|---:|---|
+| heap drain trace peeks | 511 `ordered()` calls | 0 `ordered()` calls | exactly 512 popped events |
+| backend entries copied/sorted for trace peeks | 130,816 triangular remaining entries | 0 entries | same declared workload completed |
+
+Regression proves empty/single queues, live-min mixed order, cancelled-front
+fallback, rescheduled-front fallback, legacy-scan parity, steady-state zero
+ordered-copy drain, and existing deterministic trace/golden behavior. The
+fallback path intentionally preserves lazy invalidation rather than purging
+stale entries during a peek.
+
+### Advisory elapsed record
+
+| run id | backend | workload | legacy µs | current µs | speedup |
+|---|---|---:|---:|---:|---:|
+| `20260719-041804-36685` | binary heap | drain 512 events | 301,161 | 6,051 | 49.77x |
+
+The portable claim is the removal of per-resolution `ordered()` copies in the
+ordinary live-min case, not this host's elapsed ratio. Larger heap-backed drains
+benefit disproportionately because the removed legacy operation sorted a copy
+for every trace peek.
 
 ## EQM-140 watched-only polling and effective-rate cache
 
@@ -271,7 +314,7 @@ add result rows here when a task changes those paths.
 
 ## Residual hot-path ledger
 
-| path | status after EQM-140 | evidence / next condition |
+| path | status after EQM-142 | evidence / next condition |
 |---|---|---|
 | production trigger target matching | resolved by EQM-136 | 1,000 arms → 75 candidates / 75 full-match calls in the declared fixture |
 | target + wildcard candidate assembly | resolved by EQM-138 | exact stable merge; 4.43–4.65x sparse and 9.93–10.24x wildcard-heavy advisory A/B |
@@ -282,9 +325,12 @@ add result rows here when a task changes those paths.
 | relation-maintenance-only watched lines | correctness audit candidate | current watched input set intentionally unchanged; needs separate semantic proof |
 | actor-local relation query/expansion/invalidation | resolved by EQM-139 | 2,048 total / 9 incident; exact parity; 227.6–391.2x fewer inspected ids |
 | relation maintenance global scan | retained by design | every relation is an evaluation target; profile separately before changing |
-| default sorted-array scheduler / live peek | deferred | queue only if an EQM-local profile shows it dominates |
+| default sorted-array scheduler / live peek | resolved for ordinary live-min peeks by EQM-142 | heap drain trace peeks: 511 `ordered()` calls / 130,816 copied+sorted entries → 0; stale-front fallback retained |
+| scheduler `reschedule()` live-entry lookup | queued as EQM-143 | `_find_live()` still uses full `ordered()` scan; optimize after live-peek proof |
+| scheduler membership scans (`peek(size())` existence checks) | queued as EQM-144 | add `has_event()` and remove full-copy membership scans |
+| consumer backend selection | queued as EQM-145 | expose heap only after EQM-142 prevents trace-peek O(n² log n) regression |
 | trace retention / allocation | unmeasured | define an EQM-local fixture before making a claim |
 
-EQM-136/138/139/140 completion evidence is recorded in their self-reviews under
+EQM-136/138/139/140/142 completion evidence is recorded in their self-reviews under
 `docs/review/autopilot/`. The fixture values are engineering evidence, not
 gameplay caps or Amberground support claims.

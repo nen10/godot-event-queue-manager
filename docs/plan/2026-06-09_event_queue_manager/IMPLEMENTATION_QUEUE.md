@@ -188,6 +188,24 @@ task として線形に実装・検証する。
 | EQM-139 | COMPLETE | EQM-138 | `docs/plan/2026-06-09_event_queue_manager/EQM-139_relation_adjacency_runtime/` | Production relation queries/expansion/invalidation use the existing actor adjacency. | `runtime/eq_relation_graph.gd`, core/performance tests, runtime performance profile | `relations_of`/`expand`/actor invalidation inspect only incident relation ids while preserving relation-id ordering, TREE/GRAPH semantics, maintenance, trace, snapshot roundtrip。regression + independent performance lane PASS with deterministic workload evidence。 |
 | EQM-140 | COMPLETE | EQM-139 | `docs/plan/2026-06-09_event_queue_manager/EQM-140_sparse_event_line_polling/` | Watched-only event-line polling and derived effective-rate cache. | `runtime/eq_event_lines.gd`, core/performance tests, runtime performance profile | polling work is bounded by watched existing lines rather than all lines; modifier add/remove/re-rate and restore rebuild cache deterministically。progression trace/order/snapshot semantics unchanged; regression + independent performance lane PASS。 |
 
+## Phase 15 — Scheduler live-peek and backend hot-path reduction
+
+Source: 2026-07-19 速度改善調査 (`docs/design/RUNTIME_PERFORMANCE_PROFILE.md` residual
+hot-path ledger の "default sorted-array scheduler / live peek" deferred 項目に対する
+EQM-local profile evidence が揃った)。`EQScheduler.peek_next()` が解決毎に backend 全体を
+`ordered()` で複製している (sorted は O(n²) shallow copy、binary heap では毎回 O(n log n)
+sort → N 消化で O(n² log n)、実測 4,096 件 drain で ≈32 秒)。correctness/determinism 境界を
+不変に保ったまま、live-peek と reschedule/membership の hot path を線形に修正・検証する。
+consumer (Amberground) 影響は API 追加 (`has_event`, `EQConfig.scheduler_backend`) のみで
+`docs/design/API_SURFACE.md` に移行注記を残す。
+
+| id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
+|---|---|---|---|---|---|---|
+| EQM-142 | COMPLETE | EQM-141 | `docs/plan/2026-06-09_event_queue_manager/EQM-142_scheduler_live_peek/` | O(1) live-peek fast path for `EQScheduler.peek_next()` (no full-backend copy per resolution). | `runtime/eq_scheduler.gd`, core scheduler tests, `test_project/tests/performance/`, runtime performance profile | `peek_next()` は backend の O(1) `peek_min()` を使い、min が live のときは全 `ordered()` 複製を行わない。stale-front のみ従来走査へ fallback。空/単一/stale-front(cancel)/reschedule-min/mixed で返す entry と `advance()` の trace `decided_by` バイト列は不変 (既存 golden 緑)。独立 performance lane が inspected-entry work 削減 (no-stale で N→1) を hard gate、生 elapsed を advisory 記録。regression と performance discovery は排他のまま両方 PASS。 |
+| EQM-143 | READY | EQM-142 | `docs/plan/2026-06-09_event_queue_manager/EQM-143_reschedule_o1/` | True O(1) `reschedule()` via an event_id→live-entry accelerator (docstring 是正)。 | `runtime/eq_scheduler.gd`, core scheduler tests, `test_project/tests/performance/`, runtime performance profile | `reschedule()`/`_find_live()` は全 `ordered()` 走査をやめ event_id→live EQEntry map を引く。push/reschedule/cancel/pop/restore で map と `_generation` の整合を保ち、liveness/tie-break/snapshot roundtrip/trace は不変。class docstring の O(1) 主張を実態と一致。performance lane が reschedule の inspected-entry work 削減 (N→O(1)) を hard gate。regression + performance PASS。 |
+| EQM-144 | BACKLOG | EQM-143 | `docs/plan/2026-06-09_event_queue_manager/EQM-144_has_event_membership/` | O(1) `EQScheduler.has_event()` and removal of full-copy membership scans. | `runtime/eq_scheduler.gd`, `runtime/eq_reservation_runtime.gd`, core/reservation tests, `tools/check_api_surface.py` golden, `docs/design/API_SURFACE.md`(+JA) | 新 public L0 `has_event(id)->bool` = `_generation.has(id)` (O(1))。reservation intervention の存在確認と snapshot 復元後照合の `peek(size())` 全複製 membership を `has_event` へ置換 (semantics/reject code/trace 不変)。API surface golden は明示手順で追記 (L0、layer-leak なし)。regression + performance PASS。 |
+| EQM-145 | BACKLOG | EQM-142 | `docs/plan/2026-06-09_event_queue_manager/EQM-145_backend_selection/` | Consumer-facing scheduler backend selection (sorted-array default / opt-in binary heap). | `resources/eq_config.gd`, `runtime/eq_runtime.gd`, `runtime/eq_manager.gd`, core/runtime tests, `docs/design/API_SURFACE.md`(+JA), `docs/design/SNAPSHOT_COMPAT_V1.md` | `EQConfig.scheduler_backend` enum {SORTED_ARRAY(default)=0, BINARY_HEAP=1} を additive 追加・serialize・validate (未知値=安定 error)。`EQRuntime` が config から backend を構築し、`EQManager.configure()` は live event が無い setup 時のみ scheduler を再構築 (非空なら安定 fault、既定不変)。両 backend で pop 順・trace が entry-for-entry 同一 (EQOrdering total order)。EQM-142 の live-peek 前提で heap が O(n²log n) 退行しないことを performance lane で確認。regression + performance PASS。API surface/snapshot compat に consumer 注記。 |
+
 ## Dynamic follow-up area
 
 Add `follow-up-ready` tasks here during execution when a current task is complete but reveals nonblocking follow-up work.
@@ -206,11 +224,15 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: **none**。user-approved autonomous hardening round (2026-07-18–19)のEQM-137→141は
+Current: **EQM-143**。user-approved autonomous scheduler hot-path round (2026-07-19):
+速度改善調査で `peek_next()` の backend 全複製が binary heap drain を支配する証拠が揃ったため、
+Phase 15 (EQM-142→145) を起票し、線形に実装・検証する。consumer (Amberground) が必要対応に
+気付けるよう API docs に backend 選択と membership API の移行注記を残す。
+
+Previous: user-approved autonomous hardening round (2026-07-18–19)のEQM-137→141は
 すべてCOMPLETE。EQM-141がEQM-137のnamed solve backlogとhistorical R04 false-greenを
 candidate matcher／definition FIRE gateの二層契約として閉じ、exact slot lifecycleとschema v8
 continuationまで検証した。通常回帰と独立performance laneは分離を保ったまま両方PASS。
-queueにREADY/BACKLOG taskなし。
 
 Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
@@ -1729,3 +1751,24 @@ golden:
 
 Dependency sweep: EQM-141 COMPLETE → queueにREADY/BACKLOG taskなし。Current pointer → none。
 EQM-137 COMPLETE_WITH_BACKLOGのhistorical named solve backlogはEQM-141で閉じ、現在statusはCOMPLETE。
+
+### EQM-142 — COMPLETE (2026-07-19) — scheduler live-peek fast path
+
+```text
+acceptance:
+  - peek_next uses backend.peek_min() for the ordinary live-min path and performs no full ordered() copy/sort
+  - stale-front lazy invalidation fallback preserves cancel/reschedule behavior without mutating peek
+  - empty/single/mixed/cancel-front/reschedule-front and legacy ordered-scan parity are covered
+  - trace decided_by/golden behavior remains unchanged through full regression
+  - independent performance lane hard-gates heap drain trace-peek work: 511 ordered() calls / 130,816 copied+sorted entries -> 0
+plan: docs/plan/2026-06-09_event_queue_manager/EQM-142_scheduler_live_peek/
+tests:
+  - ./tools/test.sh -> PASS (regression only; files=77 checks=2081 failures=0; run 20260719-041732-35719)
+  - ./tools/test.sh --performance -> PASS (performance only; files=6 checks=56 failures=0; run 20260719-041804-36685)
+performance (operation-local; advisory elapsed):
+  - binary-heap drain N=512: legacy 301,161 usec, current 6,051 usec, 49.77x; hard work 130,816 copied/sorted entries -> 0
+review: docs/review/autopilot/EQM-142_SELF_REVIEW_2026-07-19.md
+profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
+```
+
+Dependency sweep: EQM-142 COMPLETE → EQM-143 READY。Current pointer → EQM-143。
