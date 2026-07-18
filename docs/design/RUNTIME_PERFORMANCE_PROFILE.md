@@ -1,6 +1,6 @@
 # Runtime Performance Profile
 
-Status: **EQM-142 measured and verified (2026-07-19)**.
+Status: **EQM-143 measured and verified (2026-07-19)**.
 
 This document records reproducible, EQM-local runtime performance evidence.
 It is deliberately separate from correctness, determinism, lifecycle, and
@@ -65,6 +65,47 @@ The portable claim is the removal of per-resolution `ordered()` copies in the
 ordinary live-min case, not this host's elapsed ratio. Larger heap-backed drains
 benefit disproportionately because the removed legacy operation sorted a copy
 for every trace peek.
+
+## EQM-143 scheduler reschedule live-entry lookup
+
+`EQScheduler.reschedule()` preserves the old event's kind/actor/payload by first
+finding the current live entry for an event id. Before EQM-143, that lookup used
+`backend.ordered()` and scanned the copied ordered backend. On a binary heap,
+`ordered()` sorts a copied heap, so frequent CTB/energy/wait-turn reschedules
+could pay a hidden full-queue sort before inserting the new entry.
+
+EQM-143 adds a private `event_id -> live EQEntry` accelerator mirrored with the
+existing generation map. `_generation` remains the liveness source of truth;
+`_live_entries` is rebuilt from validated snapshot entries and updated by
+push/pop/cancel/reschedule/restore. Lazy stale backend artifacts are unchanged.
+
+### Workload and hard gates
+
+The independent performance fixture reschedules 256 heap-backed live events.
+The test-only legacy shape calls a copy of the removed `_find_live()` before the
+same current reschedule mutation, isolating lookup work while preserving
+identical state transitions. Because lazy reschedule leaves stale artifacts in
+the backend, the legacy lookup copies a growing backend: `N^2 + N(N-1)/2`
+entries for N reschedules.
+
+| path | legacy source work | current source work | hard parity |
+|---|---:|---:|---|
+| reschedule live-entry lookup | 256 `ordered()` calls | 0 `ordered()` calls | exactly 256 successful reschedules |
+| copied/sorted backend entries | 98,176 entries | 0 entries | live size remains exactly 256 |
+
+Regression proves no backend scan for ordinary reschedule, cancel rejection,
+popped-event rejection, restore-rebuilt accelerator, invalid-tick non-mutation,
+metadata preservation, and existing scheduler/snapshot/trace behavior.
+
+### Advisory elapsed record
+
+| run id | backend | workload | legacy-shape µs | current µs | speedup |
+|---|---|---:|---:|---:|---:|
+| `20260719-042251-41408` | binary heap | reschedule 256 events | 185,047 | 779 | 237.54x |
+
+The portable claim is the O(1) live-entry lookup and zero backend copies/sorts
+for reschedule target lookup. Backend insertion cost remains backend-owned
+(`O(log n)` heap, `O(n)` sorted array).
 
 ## EQM-140 watched-only polling and effective-rate cache
 
@@ -314,7 +355,7 @@ add result rows here when a task changes those paths.
 
 ## Residual hot-path ledger
 
-| path | status after EQM-142 | evidence / next condition |
+| path | status after EQM-143 | evidence / next condition |
 |---|---|---|
 | production trigger target matching | resolved by EQM-136 | 1,000 arms → 75 candidates / 75 full-match calls in the declared fixture |
 | target + wildcard candidate assembly | resolved by EQM-138 | exact stable merge; 4.43–4.65x sparse and 9.93–10.24x wildcard-heavy advisory A/B |
@@ -326,11 +367,11 @@ add result rows here when a task changes those paths.
 | actor-local relation query/expansion/invalidation | resolved by EQM-139 | 2,048 total / 9 incident; exact parity; 227.6–391.2x fewer inspected ids |
 | relation maintenance global scan | retained by design | every relation is an evaluation target; profile separately before changing |
 | default sorted-array scheduler / live peek | resolved for ordinary live-min peeks by EQM-142 | heap drain trace peeks: 511 `ordered()` calls / 130,816 copied+sorted entries → 0; stale-front fallback retained |
-| scheduler `reschedule()` live-entry lookup | queued as EQM-143 | `_find_live()` still uses full `ordered()` scan; optimize after live-peek proof |
+| scheduler `reschedule()` live-entry lookup | resolved by EQM-143 | heap reschedule lookup: 256 `ordered()` calls / 98,176 copied+sorted entries → 0 |
 | scheduler membership scans (`peek(size())` existence checks) | queued as EQM-144 | add `has_event()` and remove full-copy membership scans |
 | consumer backend selection | queued as EQM-145 | expose heap only after EQM-142 prevents trace-peek O(n² log n) regression |
 | trace retention / allocation | unmeasured | define an EQM-local fixture before making a claim |
 
-EQM-136/138/139/140/142 completion evidence is recorded in their self-reviews under
+EQM-136/138/139/140/142/143 completion evidence is recorded in their self-reviews under
 `docs/review/autopilot/`. The fixture values are engineering evidence, not
 gameplay caps or Amberground support claims.

@@ -5,10 +5,13 @@ extends RefCounted
 ##
 ## The scheduler owns event identity, the insertion sequence, liveness and the
 ## event-driven clock; the backend owns only ordered storage. Cancel and
-## reschedule are O(1): they touch only the generation map, never the backend.
-## A cancelled or superseded entry stays in the backend until it surfaces at
-## pop, then is discarded (lazy invalidation). This keeps cancel/reschedule
-## cheap on any backend, including a future binary heap.
+## reschedule resolve the target live event in O(1) via the generation map and
+## the event_id -> live-entry accelerator (EQM-143); cancel touches only those
+## maps. Reschedule additionally inserts the new entry into the backend
+## (O(log n) on the heap, O(n) on the sorted array). A cancelled or superseded
+## entry stays in the backend until it surfaces at pop, then is discarded (lazy
+## invalidation), so neither cancel nor reschedule scans/copies the backend to
+## find the current entry, including on a future binary heap.
 ##
 ## Liveness is generation-based (not object identity), so it survives the
 ## EQM-012 snapshot roundtrip: an entry is live iff its generation equals the
@@ -26,6 +29,9 @@ var _backend: EQBackend
 # event_id -> current live generation. Its key set is exactly the live event_ids,
 # so size() == _generation.size().
 var _generation: Dictionary = {}
+# event_id -> current live EQEntry. Private accelerator mirrored with
+# _generation; the backend may still contain stale cancelled/rescheduled entries.
+var _live_entries: Dictionary = {}
 var _next_event_id: int = 1
 var _next_sequence: int = 0
 
@@ -44,6 +50,7 @@ func push(due_tick: int, priority: int = 0, kind: StringName = &"", actor_id: St
 		return -1
 	entry.generation = 0
 	_generation[event_id] = 0
+	_live_entries[event_id] = entry
 	_next_event_id += 1
 	_next_sequence += 1
 	_backend.insert(entry)
@@ -58,6 +65,7 @@ func pop() -> EQEntry:
 		var e := _backend.pop_min()
 		if _is_live(e):
 			_generation.erase(e.event_id)
+			_live_entries.erase(e.event_id)
 			current_tick = maxi(current_tick, e.due_tick)
 			return e
 		# stale (cancelled or superseded by reschedule): discard
@@ -103,6 +111,7 @@ func cancel(event_id: int) -> bool:
 	if not _generation.has(event_id):
 		return false
 	_generation.erase(event_id)
+	_live_entries.erase(event_id)
 	return true
 
 
@@ -125,6 +134,7 @@ func reschedule(event_id: int, new_due_tick: int, new_priority = null) -> bool:
 	var new_gen := int(_generation[event_id]) + 1
 	entry.generation = new_gen
 	_generation[event_id] = new_gen
+	_live_entries[event_id] = entry
 	_next_sequence += 1
 	_backend.insert(entry)
 	return true
@@ -178,11 +188,13 @@ func restore(data) -> int:
 	# Commit.
 	_backend.clear()
 	_generation.clear()
+	_live_entries.clear()
 	current_tick = int(data["current_tick"])
 	_next_event_id = int(data["next_event_id"])
 	_next_sequence = int(data["next_sequence"])
 	for e in rebuilt:
 		_generation[e.event_id] = e.generation
+		_live_entries[e.event_id] = e
 		_backend.insert(e)
 	return EQSnapshot.Load.OK
 
@@ -192,7 +204,7 @@ func _is_live(entry: EQEntry) -> bool:
 
 
 func _find_live(event_id: int) -> EQEntry:
-	for e in _backend.ordered():
-		if e.event_id == event_id and _is_live(e):
-			return e
+	var e = _live_entries.get(event_id, null)
+	if e != null and _is_live(e):
+		return e
 	return null
