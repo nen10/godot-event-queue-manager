@@ -73,8 +73,10 @@ Repair-now: none。trace exact shape、SHIPPED full pipeline、EBS R04 claimの3
 Follow-up-ready:
 
 - EQM-141: reaction definition solve/invalidationをFIRE occurrenceへ適用する意味論修理。
-- consumer finalization: このEQM addon commit hashをEBS `DEPS.md`とdevelopment logへ記録し、
-  EBS gateをそのrevisionで再確認する（hash確定後のため本commit直後に実施）。
 
-Proof grade: `contract_tested` + consumer integration proof。statusはconsumer hash記録を残す
+Consumer finalization完了: addon commit `754f905`をEBS `DEPS.md`と2本のdevelopment
+logへ記録し、そのrevisionでEBS regression 166/166 (574 asserts)、独立performance
+5/5 (16 asserts)、package checkを再実行してPASS。
+
+Proof grade: `contract_tested` + consumer integration proof。EQM-141を残すためstatusは
 `COMPLETE_WITH_BACKLOG`。

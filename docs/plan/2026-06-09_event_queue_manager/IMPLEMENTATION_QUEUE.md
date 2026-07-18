@@ -207,8 +207,9 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
 Current: **EQM-138 READY** — EQM-137はtrace schema、SHIPPED continuation、consumer
-R04 false-greenを修理してCOMPLETE_WITH_BACKLOG。確定commit hashのEBS DEPS/log記録は
-commit直後のconsumer follow-up。user-approved autonomous hardening round (2026-07-18)として
+R04 false-greenを修理してCOMPLETE_WITH_BACKLOG。addon `754f905`をEBS DEPS/logへ記録し、
+同revisionでconsumer 3 gateも再検証済み。user-approved autonomous hardening round
+(2026-07-18)として
 EQM-138→140を線形実行し、各performance taskは通常回帰と独立performance laneの
 両方を完了証拠にする。
 
@@ -1617,8 +1618,8 @@ plan: docs/plan/2026-06-09_event_queue_manager/EQM-137_reaction_condition_contra
 tests:
   - ./tools/test.sh -> PASS (regression only; files=74 checks=1757 failures=0; run 20260718-223514-52656; coverage 34 implemented + 1 reserved, violations=0)
   - ./tools/test.sh --performance -> PASS (performance only; files=4 checks=16 failures=0; run 20260718-223533-53363)
-  - EBS ./tools/test.sh -> PASS (166/166; runner guard also converted the prior SCRIPT ERROR false-green to exit 1 before repair)
-  - EBS ./tools/test_performance.sh -> PASS (5/5); ./tools/package_addon.sh --check -> PASS
+  - EBS ./tools/test.sh -> PASS (166/166; 574 asserts; runner guard also converted the prior SCRIPT ERROR false-green to exit 1 before repair)
+  - EBS ./tools/test_performance.sh -> PASS (5/5; 16 asserts); ./tools/package_addon.sh --check -> PASS
 api:
   - EQTriggerEngine.arm return void -> bool (explicit low-level rejection result)
   - EQError append-only REACTION_CONDITION_TYPE_INVALID
@@ -1626,5 +1627,5 @@ review: docs/review/autopilot/EQM-137_SELF_REVIEW_2026-07-18.md
 ```
 
 Dependency sweep: EQM-137 COMPLETE_WITH_BACKLOG → EQM-138 READY。named solve gateは
-consumer proofから除外し、EQM-141へ分離。確定commit hashのEBS DEPS/log記録だけを
-post-commit consumer follow-upとして残す。
+consumer proofから除外し、EQM-141へ分離。addon `754f905`をEBS `DEPS.md` / development
+logsへ記録し、EBS current symlinkでregression/performance/packageを再検証済み。
