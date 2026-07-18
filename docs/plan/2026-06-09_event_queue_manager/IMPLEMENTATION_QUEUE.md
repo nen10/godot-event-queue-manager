@@ -184,8 +184,8 @@ task として線形に実装・検証する。
 | id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
 |---|---|---|---|---|---|---|
 | EQM-137 | COMPLETE_WITH_BACKLOG | EQM-136 | `docs/plan/2026-06-09_event_queue_manager/EQM-137_reaction_condition_contract/` | Reaction-condition type contract hardening + consumer false-green repair proof. | `runtime/{eq_error,eq_reservation_runtime,eq_trigger_engine,eq_trigger_index}.gd`, error/API docs, trigger/runtime tests; EBS integration/tests/docs are consumer-owned proof | `reaction_condition` is `EQCondition|null`; wrong types produce a stable contract fault/rejection trace before any reservation/index/scheduler mutation in dev and shipped modes。direct engine/index calls reject explicitly without ghost state。valid reaction behavior and normal goldens remain unchanged。EBS current-head regression detects the former bad input as rejection, corrects the R04 standard form, and its runner fails on `SCRIPT ERROR`; EQM `./tools/test.sh` and `./tools/test.sh --performance` both PASS。 |
-| EQM-138 | READY | EQM-137 | `docs/plan/2026-06-09_event_queue_manager/EQM-138_trigger_candidate_merge/` | Stable linear merge for target + wildcard trigger candidates. | `runtime/eq_trigger_index.gd`, trigger regression/performance tests, runtime performance profile | Candidate order/fired occurrences remain byte-equivalent to arm order across target-only/wildcard-only/mixed/mutated conditions。candidate assembly performs no full candidate sort; independent lane records sparse and wildcard-heavy work/elapsed, while regression and performance discovery remain exclusive。 |
-| EQM-139 | BACKLOG | EQM-138 | `docs/plan/2026-06-09_event_queue_manager/EQM-139_relation_adjacency_runtime/` | Production relation queries/expansion/invalidation use the existing actor adjacency. | `runtime/eq_relation_graph.gd`, core/performance tests, runtime performance profile | `relations_of`/`expand`/actor invalidation inspect only incident relation ids while preserving relation-id ordering, TREE/GRAPH semantics, maintenance, trace, snapshot roundtrip。regression + independent performance lane PASS with deterministic workload evidence。 |
+| EQM-138 | COMPLETE | EQM-137 | `docs/plan/2026-06-09_event_queue_manager/EQM-138_trigger_candidate_merge/` | Stable linear merge for target + wildcard trigger candidates. | `runtime/eq_trigger_index.gd`, trigger regression/performance tests, runtime performance profile | Candidate order/fired occurrences remain exactly equivalent to arm order across target-only/wildcard-only/mixed/mutated conditions。candidate assembly performs no full candidate sort; independent lane records sparse and wildcard-heavy work/elapsed, while regression and performance discovery remain exclusive。 |
+| EQM-139 | READY | EQM-138 | `docs/plan/2026-06-09_event_queue_manager/EQM-139_relation_adjacency_runtime/` | Production relation queries/expansion/invalidation use the existing actor adjacency. | `runtime/eq_relation_graph.gd`, core/performance tests, runtime performance profile | `relations_of`/`expand`/actor invalidation inspect only incident relation ids while preserving relation-id ordering, TREE/GRAPH semantics, maintenance, trace, snapshot roundtrip。regression + independent performance lane PASS with deterministic workload evidence。 |
 | EQM-140 | BACKLOG | EQM-139 | `docs/plan/2026-06-09_event_queue_manager/EQM-140_sparse_event_line_polling/` | Watched-only event-line polling and derived effective-rate cache. | `runtime/eq_event_lines.gd`, core/performance tests, runtime performance profile | polling work is bounded by watched existing lines rather than all lines; modifier add/remove/re-rate and restore rebuild cache deterministically。progression trace/order/snapshot semantics unchanged; regression + independent performance lane PASS。 |
 
 ## Dynamic follow-up area
@@ -206,7 +206,7 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: **EQM-138 READY** — EQM-137はtrace schema、SHIPPED continuation、consumer
+Current: **EQM-139 READY** — EQM-137はtrace schema、SHIPPED continuation、consumer
 R04 false-greenを修理してCOMPLETE_WITH_BACKLOG。addon `754f905`をEBS DEPS/logへ記録し、
 同revisionでconsumer 3 gateも再検証済み。user-approved autonomous hardening round
 (2026-07-18)として
@@ -1629,3 +1629,24 @@ review: docs/review/autopilot/EQM-137_SELF_REVIEW_2026-07-18.md
 Dependency sweep: EQM-137 COMPLETE_WITH_BACKLOG → EQM-138 READY。named solve gateは
 consumer proofから除外し、EQM-141へ分離。addon `754f905`をEBS `DEPS.md` / development
 logsへ記録し、EBS current symlinkでregression/performance/packageを再検証済み。
+
+### EQM-138 — COMPLETE (2026-07-18) — stable trigger candidate merge
+
+```text
+acceptance:
+  - target/wildcard derived buckets stay sequence-sorted across add/remove/retarget
+  - candidates are exact global arm order; single-bucket paths return fresh arrays
+  - production candidates() has no full-result sort; mixed assembly is O(t+w)
+  - public API/schema/trace unchanged
+tests:
+  - ./tools/test.sh -> PASS (regression only; files=74 checks=1761 failures=0; run 20260718-224934-81074)
+  - ./tools/test.sh --performance -> PASS x3 (performance only; files=4 checks=22 failures=0;
+    runs 20260718-224906-80604, 20260718-224950-81434, 20260718-225017-81801)
+performance (candidate-array assembly only; advisory):
+  - sparse 75 candidates: 4.43–4.65x / 77.4–78.5% time reduction
+  - wildcard-heavy 275 candidates: 9.93–10.24x / 89.9–90.2% time reduction
+review: docs/review/autopilot/EQM-138_SELF_REVIEW_2026-07-18.md
+profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
+```
+
+Dependency sweep: EQM-138 COMPLETE → EQM-139 READY。Current pointer → EQM-139。

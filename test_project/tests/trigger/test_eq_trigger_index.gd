@@ -18,6 +18,7 @@ static func run(t) -> void:
 	_test_parity_and_speedup(t)
 	_test_wildcard_matches_any_target(t)
 	_test_invalid_condition_does_not_consume_sequence(t)
+	_test_single_bucket_candidates_are_fresh_arrays(t)
 
 
 static func _armed_set() -> Array:
@@ -100,3 +101,37 @@ static func _test_invalid_condition_does_not_consume_sequence(t) -> void:
 	var accepted := EQReservation.new(&"accepted", definition)
 	t.eq(index.add(accepted, EQCondition.new()), 0, "the next valid arm receives sequence zero")
 	t.eq(index.size(), 1, "only the valid arm is indexed")
+
+
+static func _test_single_bucket_candidates_are_fresh_arrays(t) -> void:
+	var definition := EQActionDefinition.new()
+	definition.kind = EQActionDefinition.Kind.REACTION_PREPARATION
+	definition.duration = EQActionDefinition.DURATION_UNLIMITED
+
+	var targeted := EQTriggerIndex.new()
+	var target_condition := EQCondition.new()
+	target_condition.match_target = &"hero"
+	var target_reservation := EQReservation.new(&"targeted", definition)
+	targeted.add(target_reservation, target_condition)
+	var target_result := targeted.candidates({"target": &"hero"})
+	target_result.clear()
+	t.eq(
+		targeted.candidates({"target": &"hero"}).map(
+			func(entry): return entry["reservation"]
+		),
+		[target_reservation],
+		"target-only candidates return a fresh array, not the derived bucket"
+	)
+
+	var wildcard := EQTriggerIndex.new()
+	var wildcard_reservation := EQReservation.new(&"wildcard", definition)
+	wildcard.add(wildcard_reservation, EQCondition.new())
+	var wildcard_result := wildcard.candidates({"target": &"any"})
+	wildcard_result.clear()
+	t.eq(
+		wildcard.candidates({"target": &"any"}).map(
+			func(entry): return entry["reservation"]
+		),
+		[wildcard_reservation],
+		"wildcard-only candidates return a fresh array, not the derived bucket"
+	)

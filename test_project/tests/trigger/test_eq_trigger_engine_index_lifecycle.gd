@@ -12,6 +12,7 @@ const EQConditionSpec := preload("res://addons/event_queue_manager/resources/eq_
 static func run(t) -> void:
 	_test_target_and_wildcard_keep_global_arm_order(t)
 	_test_mutable_target_reindexes_existing_slots(t)
+	_test_retarget_into_populated_buckets_preserves_arm_order(t)
 	_test_duplicate_reservation_disarms_first_slot_only(t)
 	_test_rumination_survivor_keeps_original_sequence(t)
 	_test_expiry_boundary_and_derived_cleanup(t)
@@ -43,6 +44,17 @@ static func _view(target: StringName) -> Dictionary:
 
 static func _actor_ids(occurrences: Array) -> Array:
 	return occurrences.map(func(occurrence): return occurrence["reservation"].actor_id)
+
+
+static func _occurrence_signatures(occurrences: Array) -> Array:
+	return occurrences.map(
+		func(occurrence):
+			return [
+				occurrence["reservation"].actor_id,
+				int(occurrence["fire_index"]),
+				bool(occurrence["closes_arm"]),
+			]
+	)
 
 
 static func _test_invalid_condition_type_does_not_ghost_arm(t) -> void:
@@ -100,6 +112,40 @@ static func _test_mutable_target_reindexes_existing_slots(t) -> void:
 		"retargeting to wildcard makes the existing slot target-agnostic"
 	)
 
+
+static func _test_retarget_into_populated_buckets_preserves_arm_order(t) -> void:
+	var targeted := EQTriggerEngine.new()
+	var shared_old := _condition(&"old-target")
+	targeted.arm(_reaction(&"old-shared-first"), shared_old, 0)  # seq 0
+	targeted.arm(_reaction(&"destination-middle"), _condition(&"new-target"), 0)  # seq 1
+	targeted.arm(_reaction(&"old-shared-last"), shared_old, 0)  # seq 2
+	targeted.arm(_reaction(&"wildcard-after"), _condition(&""), 0)  # seq 3
+	shared_old.match_target = &"new-target"
+	t.eq(
+		_occurrence_signatures(
+			targeted.on_event_resolved_occurrences(_view(&"new-target"), 1)
+		),
+		[
+			[&"old-shared-first", 1, true],
+			[&"destination-middle", 1, true],
+			[&"old-shared-last", 1, true],
+			[&"wildcard-after", 1, true],
+		],
+		"populated-target rebucket keeps exact occurrence order and lifecycle fields"
+	)
+
+	var wildcard := EQTriggerEngine.new()
+	var becomes_wildcard := _condition(&"specific")
+	wildcard.arm(_reaction(&"older-specific"), becomes_wildcard, 0)  # seq 0
+	wildcard.arm(_reaction(&"newer-wildcard"), _condition(&""), 0)  # seq 1
+	becomes_wildcard.match_target = &""
+	t.eq(
+		_occurrence_signatures(
+			wildcard.on_event_resolved_occurrences(_view(&"unrelated"), 1)
+		),
+		[[&"older-specific", 1, true], [&"newer-wildcard", 1, true]],
+		"populated-wildcard rebucket keeps exact occurrence order and lifecycle fields"
+	)
 
 static func _test_duplicate_reservation_disarms_first_slot_only(t) -> void:
 	var engine := EQTriggerEngine.new()

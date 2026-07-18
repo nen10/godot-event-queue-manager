@@ -36,7 +36,7 @@ func add(reservation, condition) -> int:
 	}
 	_seq += 1
 	_by_sequence[entry["seq"]] = entry
-	_append_to_bucket(entry, target)
+	_insert_into_bucket(entry, target)
 	_register_condition(condition, int(entry["seq"]))
 	return entry["seq"]
 
@@ -46,11 +46,37 @@ func add(reservation, condition) -> int:
 ## condition.matches(view) to these (a strict subset of all armed) to fire.
 func candidates(view: Dictionary) -> Array:
 	var target: StringName = view.get("target", &"")
+	var targeted: Array = _by_target[target] if _by_target.has(target) else []
+	if targeted.is_empty():
+		return _wildcard.duplicate()
+	if _wildcard.is_empty():
+		return targeted.duplicate()
+
+	# Both derived buckets are kept in arm-sequence order. Merge them without
+	# the former per-sweep O(c log c) full candidate sort (EQM-138).
 	var out: Array = []
-	if _by_target.has(target):
-		out.append_array(_by_target[target])
-	out.append_array(_wildcard)
-	out.sort_custom(func(a, b): return int(a["seq"]) < int(b["seq"]))
+	out.resize(targeted.size() + _wildcard.size())
+	var target_index := 0
+	var wildcard_index := 0
+	var output_index := 0
+	while target_index < targeted.size() and wildcard_index < _wildcard.size():
+		var target_entry: Dictionary = targeted[target_index]
+		var wildcard_entry: Dictionary = _wildcard[wildcard_index]
+		if int(target_entry["seq"]) < int(wildcard_entry["seq"]):
+			out[output_index] = target_entry
+			target_index += 1
+		else:
+			out[output_index] = wildcard_entry
+			wildcard_index += 1
+		output_index += 1
+	while target_index < targeted.size():
+		out[output_index] = targeted[target_index]
+		target_index += 1
+		output_index += 1
+	while wildcard_index < _wildcard.size():
+		out[output_index] = _wildcard[wildcard_index]
+		wildcard_index += 1
+		output_index += 1
 	return out
 
 
@@ -103,14 +129,33 @@ func _remove_sequence(sequence: int) -> bool:
 	return true
 
 
-func _append_to_bucket(entry: Dictionary, target: StringName) -> void:
+func _insert_into_bucket(entry: Dictionary, target: StringName) -> void:
 	entry["bucket_target"] = target
 	if target == &"":
-		_wildcard.append(entry)
+		_insert_sorted(_wildcard, entry)
 		return
 	if not _by_target.has(target):
 		_by_target[target] = []
-	(_by_target[target] as Array).append(entry)
+	_insert_sorted(_by_target[target] as Array, entry)
+
+
+## Keeps one derived bucket ordered by the immutable arm sequence. Normal arm
+## insertion is the O(1) append fast path; rebucketing an older slot uses a
+## lower-bound insertion without changing canonical state.
+func _insert_sorted(entries: Array, entry: Dictionary) -> void:
+	var sequence := int(entry["seq"])
+	if entries.is_empty() or int(entries.back()["seq"]) < sequence:
+		entries.append(entry)
+		return
+	var low := 0
+	var high := entries.size()
+	while low < high:
+		var middle := low + int((high - low) / 2)
+		if int(entries[middle]["seq"]) < sequence:
+			low = middle + 1
+		else:
+			high = middle
+	entries.insert(low, entry)
 
 
 func _remove_from_bucket(entry: Dictionary) -> void:
@@ -183,4 +228,4 @@ func _on_condition_changed(condition_id: int) -> void:
 		if entry.get("bucket_target", &"") == target:
 			continue
 		_remove_from_bucket(entry)
-		_append_to_bucket(entry, target)
+		_insert_into_bucket(entry, target)
