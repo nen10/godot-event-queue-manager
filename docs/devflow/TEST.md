@@ -68,6 +68,7 @@ The Godot binary is discovered via the `GODOT` environment variable, else `godot
 | `./tools/test.sh` (Godot regression suite) | Core / Policy / Trigger / Transaction / Presentation | scheduler ordering, policy contracts, reactions, rollback, flush; performance directory excluded | EQM-010 以降 |
 | `test_project/tests/trigger/test_eq_reaction_fire_context.gd` (上記 runner が自動収集) | Trigger / Transaction | 独立 FIRE occurrence、cause の immutable projection、schema-v5 migration、schema-v6 exhausted-expiry checkpoint、exact 1-event解決境界 | EQM-132, EQM-133 |
 | `test_project/tests/transaction/test_eq_reservation_intervention.gd` | Transaction / Snapshot / Trace | PREPARED singletonへの発行時meta介入、同値成功、回避不変、effect未実行、schema-v7 roundtrip、group/context fail-closed | EQM-135 |
+| `test_project/tests/core/test_eq_reservation_runtime.gd` + trigger index lifecycle tests | Runtime / Trigger / Resilience | `reaction_condition` wrong-typeのmutation前拒否、dev/shipped fault/trace、direct engine/index ghost-arm防止、後続valid reaction継続 | EQM-137 |
 | Godot golden-trace tests under `tests/golden/` | Determinism trace | same-seed replay byte-identical, permutation/prediction purity | EQM-013 以降 |
 | Godot UI-headless tests under `tests/ui_headless/` | UI / metric | layout metric P0, state matrix, interaction contract, projection integrity | EQM-090 以降 |
 | `python3 tools/ui_static_audit.py` | UI static audit | source 上の no-op button / debug leakage / generic picker pattern | EQM-087 以降 |

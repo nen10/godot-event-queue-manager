@@ -10,6 +10,10 @@ const EQReservation := preload("res://addons/event_queue_manager/runtime/eq_rese
 const EQActionDefinition := preload(
 	"res://addons/event_queue_manager/resources/eq_action_definition.gd"
 )
+const EQCondition := preload("res://addons/event_queue_manager/resources/eq_condition.gd")
+const EQConditionSpec := preload(
+	"res://addons/event_queue_manager/resources/eq_condition_spec.gd"
+)
 const EQError := preload("res://addons/event_queue_manager/runtime/eq_error.gd")
 
 
@@ -21,6 +25,8 @@ static func run(t) -> void:
 	_test_operation_rejects_missing_or_unknown_target(t)
 	_test_operation_does_not_ghost_arm_removed_target(t)
 	_test_reaction_armed(t)
+	_test_reaction_condition_wrong_type_fails_closed_in_dev(t)
+	_test_reaction_condition_wrong_type_fails_closed_in_shipped(t)
 
 
 static func _def(kind: int, delay: int = 0) -> EQActionDefinition:
@@ -166,3 +172,110 @@ static func _test_reaction_armed(t) -> void:
 	t.eq(id, -1, "reaction preparation is not scheduled")
 	t.ok(rr.runtime.scheduler.is_empty(), "no scheduler event for an armed reaction")
 	t.eq(rr.armed_for(&"hero").size(), 1, "reaction preparation is armed")
+
+
+static func _wrong_reaction_condition() -> EQConditionSpec:
+	var spec := EQConditionSpec.new()
+	spec.type = EQConditionSpec.Type.NAMED_PREDICATE
+	spec.predicate_name = &"not_a_trigger_matcher"
+	return spec
+
+
+static func _reaction_reservation(
+	duration: int = EQActionDefinition.DURATION_UNLIMITED
+) -> EQReservation:
+	var definition := _def(EQActionDefinition.Kind.REACTION_PREPARATION)
+	definition.duration = duration
+	definition.meta_level = 7
+	return EQReservation.new(&"hero", definition)
+
+
+static func _assert_wrong_condition_has_no_issued_state(t, rr, reservation: EQReservation) -> void:
+	t.eq(reservation.status, EQReservation.Status.PENDING, "rejected reaction stays unissued")
+	t.eq(reservation.event_id, -1, "rejected reaction receives no event id")
+	t.eq(reservation.effect_commit_result_version, -1, "rejected reaction binds no effect mode")
+	t.eq(reservation.expiry_effect_commit_result_version, -1, "rejected reaction binds no expiry mode")
+	t.eq(reservation._issued_meta_level, null, "rejected reaction samples no issued meta")
+	t.eq(rr.engine.armed_count(), 0, "rejected reaction creates no ghost arm")
+	t.ok(rr.runtime.scheduler.is_empty(), "rejected reaction creates no scheduler or expiry work")
+
+
+static func _assert_reaction_rejection_trace(t, rr, label: String) -> void:
+	var records: Array = rr.runtime.trace().records()
+	t.eq(records.size(), 1, "%s records exactly one pre-submit trace" % label)
+	if records.size() != 1:
+		return
+	t.eq(
+		records[0],
+		{
+			"i": 0,
+			"kind": "reservation_rejected",
+			"actor": "hero",
+			"code": String(EQError.REACTION_CONDITION_TYPE_INVALID),
+			"reason": "wrong_type",
+		},
+		"%s rejection trace has the authoritative record shape" % label
+	)
+
+
+static func _test_reaction_condition_wrong_type_fails_closed_in_dev(t) -> void:
+	var rr = _rr_with([&"hero"])
+	rr.runtime.emit_engine_diagnostics = false
+	var reservation := _reaction_reservation(5)
+	t.eq(rr.submit(reservation, _wrong_reaction_condition()), -1, "wrong trigger type is rejected")
+	_assert_wrong_condition_has_no_issued_state(t, rr, reservation)
+	t.ok(rr.runtime.halted, "dev mode halts on the reaction-condition contract violation")
+	t.eq(
+		rr.runtime.faults.back()["code"],
+		EQError.REACTION_CONDITION_TYPE_INVALID,
+		"wrong trigger type uses the stable reaction-condition code"
+	)
+	t.eq(
+		rr.runtime.faults.back()["recoverability"],
+		EQError.Recoverability.CONTRACT_VIOLATION,
+		"wrong trigger type is a contract violation"
+	)
+	_assert_reaction_rejection_trace(t, rr, "dev")
+
+
+static func _test_reaction_condition_wrong_type_fails_closed_in_shipped(t) -> void:
+	var rr = _rr_with([&"hero", &"enemy"])
+	rr.runtime.emit_engine_diagnostics = false
+	rr.runtime.set_mode(rr.runtime.Mode.SHIPPED)
+	var rejected := _reaction_reservation(5)
+	t.eq(rr.submit(rejected, _wrong_reaction_condition()), -1, "shipped mode rejects wrong trigger type")
+	_assert_wrong_condition_has_no_issued_state(t, rr, rejected)
+	t.ok(not rr.runtime.halted, "shipped rejection does not halt the runtime")
+	t.eq(rr.runtime.faults.back()["code"], EQError.REACTION_CONDITION_TYPE_INVALID, "shipped records the same stable fault")
+	_assert_reaction_rejection_trace(t, rr, "shipped")
+
+	var valid := _reaction_reservation()
+	var condition := EQCondition.new()
+	condition.match_target = &"hero"
+	t.eq(rr.submit(valid, condition), -1, "a valid reaction remains the unscheduled arm path")
+	t.eq(valid.status, EQReservation.Status.ARMED, "shipped runtime accepts a later valid reaction")
+	t.eq(rr.engine.armed_count(), 1, "later valid reaction is indexed once")
+	var incoming_definition := _def(EQActionDefinition.Kind.IMMEDIATE)
+	incoming_definition.tags = [&"damage"]
+	var incoming := EQReservation.new(&"enemy", incoming_definition)
+	incoming.target_id = &"hero"
+	t.ok(rr.submit(incoming) > 0, "later incoming event enters the reservation pipeline")
+	t.eq(rr.resolve_next(), incoming, "later incoming event resolves after shipped rejection")
+	t.eq(rr.engine.armed_count(), 0, "valid one-shot reaction is consumed by the pipeline sweep")
+	var fired_records: Array = rr.runtime.trace().records().filter(
+		func(record): return record.get("kind", "") == "reaction_fired"
+	)
+	t.eq(fired_records.size(), 1, "pipeline sweep schedules exactly one valid reaction FIRE")
+	t.eq(rr.pending().size(), 1, "scheduled reaction FIRE remains pending until its own pop")
+	var fired := rr.resolve_next()
+	t.ok(fired != null, "scheduled reaction FIRE resolves through the pipeline")
+	if fired != null:
+		t.eq(fired.actor_id, &"hero", "resolved FIRE belongs to the valid reaction owner")
+		t.eq(fired.status, EQReservation.Status.RESOLVED, "resolved FIRE completes normally")
+	t.eq(
+		rr.runtime.trace().records().filter(
+			func(record): return record.get("kind", "") == "reaction_fire_resolved"
+		).size(),
+		1,
+		"later valid reaction records one resolved FIRE after shipped rejection"
+	)

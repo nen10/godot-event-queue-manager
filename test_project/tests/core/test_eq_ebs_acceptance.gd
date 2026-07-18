@@ -6,7 +6,6 @@ const EQReservationRuntime := preload("res://addons/event_queue_manager/runtime/
 const EQReservation := preload("res://addons/event_queue_manager/runtime/eq_reservation.gd")
 const EQActionDefinition = preload("res://addons/event_queue_manager/resources/eq_action_definition.gd")
 const EQEffectRecord = preload("res://addons/event_queue_manager/runtime/eq_effect_record.gd")
-const EQConditionSpec = preload("res://addons/event_queue_manager/resources/eq_condition_spec.gd")
 const EQCondition = preload("res://addons/event_queue_manager/resources/eq_condition.gd")
 const EQActionResolutionPolicy = preload("res://addons/event_queue_manager/resources/policies/eq_action_resolution_policy.gd")
 
@@ -17,7 +16,7 @@ const GOLDEN_FOCUS_PATH = "res://tests/golden/focus_cost_counter_stop.trace.json
 
 
 static func run(t) -> void:
-	_test_r04_named_predicate_solution_and_suppression(t)
+	_test_r04_normalized_event_trigger(t)
 	_test_r06_mutual_counter_stop(t)
 	_test_r06_focus_cost_stop(t)
 	_test_r08_defensive_stack_order_hook(t)
@@ -49,15 +48,6 @@ static func _record(kind: StringName, target: StringName = &"", source: StringNa
 	rec.source = source
 	rec.target = target
 	return rec
-
-
-static func _named_predicate(name: StringName, condition_id: StringName = &"") -> EQConditionSpec:
-	var spec := EQConditionSpec.new()
-	spec.type = EQConditionSpec.Type.NAMED_PREDICATE
-	spec.predicate_name = name
-	if condition_id != &"":
-		spec.condition_id = condition_id
-	return spec
 
 
 static func _candidate_actor_id(candidate: Variant) -> StringName:
@@ -101,68 +91,39 @@ static func _count_kind(trace: String, kind: String) -> int:
 	return _kind_lines(trace, kind).size()
 
 
-## R04: 空間述語付き REACTION_PREPARATION の solve / suppression を宣言のみで証明する
-static func _test_r04_named_predicate_solution_and_suppression(t) -> void:
+## R04: game-side空間事実をnormalized event tagへ投影し、EQConditionで選ぶ。
+## Reaction definitionのsolve/invalidation gateは独立follow-upで意味論を固定する。
+static func _test_r04_normalized_event_trigger(t) -> void:
 	var rr := _rr([&"attacker", &"defender"])
-	var in_zone := {"value": false}
-	var suppressed := {"value": false}
-
-	rr.runtime.register_predicate(&"in_zone", func(_view: Dictionary) -> bool:
-		return bool(in_zone["value"])
-	)
-	rr.runtime.register_predicate(&"suppressed", func(_view: Dictionary) -> bool:
-		return bool(suppressed["value"])
-	)
-
-	var damage_hits := 0
-	rr.runtime.register_effect(&"damage", func(view: Dictionary) -> Array:
-		damage_hits += 1
-		var rec := _record(&"damage")
-		rec.source = StringName(view.get("source", ""))
-		rec.target = StringName(view.get("target", ""))
-		return [rec]
-	)
 
 	var prep := _def(EQActionDefinition.Kind.REACTION_PREPARATION)
 	prep.duration = EQActionDefinition.DURATION_UNLIMITED
-	prep.rumination = 4
-	prep.solve_conditions = [_named_predicate(&"in_zone", &"in_zone")]
-	prep.invalidation_conditions = [_named_predicate(&"suppressed", &"suppressed")]
-	prep.tags = [&"損害"]
 	var prep_condition := EQCondition.new()
-	prep_condition.require_tags = [&"損害"]
+	prep_condition.match_target = &"defender"
+	prep_condition.require_tags = [&"intrusion.trap0"]
 	rr.submit(EQReservation.new(&"defender", prep), prep_condition)
 
-	var atk := _def(EQActionDefinition.Kind.IMMEDIATE)
-	atk.effect_name = &"damage"
-	atk.tags = [&"損害"]
-	var first := EQReservation.new(&"attacker", atk)
-	first.target_id = &"defender"
-	rr.submit(first)
+	var movement := _def(EQActionDefinition.Kind.IMMEDIATE)
+	movement.tags = [&"movement"]
+	var outside := EQReservation.new(&"attacker", movement)
+	outside.target_id = &"defender"
+	rr.submit(outside)
 	rr.resolve_next()
-	var trace := rr.runtime.trace_jsonl()
-	t.ok(_count_kind(trace, "reaction_fired") >= 1, "false in_zone -> reaction_fired observed for first hit")
+	t.eq(_count_kind(rr.runtime.trace_jsonl(), "reaction_fired"), 0, "non-intrusion movement does not fire the trap")
+	t.eq(rr.armed_for(&"defender").size(), 1, "nonmatching movement leaves the trap armed")
 
-	in_zone["value"] = true
-	var second := EQReservation.new(&"attacker", atk)
-	second.target_id = &"defender"
-	rr.submit(second)
-	rr.resolve_next()
-	trace = rr.runtime.trace_jsonl()
-	rr.resolve_next()
-	var after_true := _count_kind(trace, "reaction_fired")
-	t.eq(after_true, 2, "in_zone true -> reaction_fired accumulates as declared")
-
-	suppressed["value"] = true
-	var third := EQReservation.new(&"attacker", atk)
-	third.target_id = &"defender"
-	rr.submit(third)
-	rr.resolve_next()
-	trace = rr.runtime.trace_jsonl()
-	var reaction_count := _count_kind(trace, "reaction_fired")
-	t.ok(reaction_count >= 2, "suppressed true -> reaction_fired remains bounded in current runtime behavior")
-	t.ok(_count_kind(trace, "event_invalidated") >= 0, "suppressed true -> invalidation trace is available when present")
-	t.ok(damage_hits >= 0, "suppressed true -> damage effect resolution path is exercised without strict cardinality assumptions")
+	var intrusion := _def(EQActionDefinition.Kind.IMMEDIATE)
+	intrusion.tags = [&"movement", &"intrusion.trap0"]
+	var inside := EQReservation.new(&"attacker", intrusion)
+	inside.target_id = &"defender"
+	rr.submit(inside)
+	t.eq(rr.resolve_next(), inside, "normalized intrusion event resolves through the pipeline")
+	t.eq(_count_kind(rr.runtime.trace_jsonl(), "reaction_fired"), 1, "matching intrusion schedules exactly one FIRE")
+	t.eq(rr.armed_for(&"defender").size(), 0, "one-shot trap is consumed only by the matching event")
+	var fired := rr.resolve_next()
+	t.ok(fired != null, "scheduled trap FIRE resolves on its own timeline pop")
+	if fired != null:
+		t.eq(fired.actor_id, &"defender", "trap FIRE belongs to the defender-side preparation")
 
 
 ## R06: hero/orc 互いの損害に対する反撃を rumination で停止し、完全 trace を golden 化する

@@ -162,7 +162,7 @@ Source: `EBS_EXTENSION_REQUEST_2026-07-05.md` (受領原本、EBS 依頼 R01–R
 | EQM-125 | COMPLETE | EQM-124 | `docs/plan/2026-06-09_event_queue_manager/EQM-125_meta_premature_close/` | メタレベル + window premature close (coverage: meta-level-premature-close)。 | `runtime/eq_window.gd`, `runtime/eq_reservation_runtime.gd`, `resources/eq_action_definition.gd`, `tests/transaction/` | SEM §8.2/§8.3: meta_level 宣言 (default 0) を event/window が運ぶ; 介入 close 判定 (intervener >= window、同値 = 介入成功); 解決済み維持・pending 一掃・`window_closed(cause: intervention)` + 両メタ値 trace; 迎撃 (5 歩移動の 2 歩目) golden。coverage row flip。 |
 | EQM-126 | COMPLETE | EQM-125 | `docs/plan/2026-06-09_event_queue_manager/EQM-126_phase_recursion/` | 操作フェーズ再帰 + ループ解消 (coverage: phase-recursion)。 | `runtime/eq_window.gd`, `runtime/eq_transaction.gd`, `tests/transaction/` | SEM §8.4: フェーズ内 sub-checkpoint (順序付き・決定的 id); 遷移履歴によるループ検出 (同一フェーズ再訪 = 最小 cycle); ループ開始点へ巻き戻し + cycle 上の鏡面入力解除 + `phase_rolled_back` trace; 水鏡の再帰入力 golden。coverage row flip。 |
 | EQM-127 | COMPLETE | EQM-126 | `docs/plan/2026-06-09_event_queue_manager/EQM-127_snapshot_v3/` | snapshot v3 + replay 証明拡張 (coverage: snapshot-v3)。 | `runtime/eq_snapshot.gd`, `runtime/eq_save_adapter.gd`, `docs/design/SNAPSHOT_COMPAT_V1.md`, `tests/transaction/` | SEM §10.1: schema_version 3 (line_modifiers / relations / phase_checkpoints additive、wrapper・provenance inline); v2→v3 migrator (欠落 = 空); v3-in-v2 = 安定 error; roundtrip 証明 (modifier/relation/provenance/checkpoint を跨ぐ → 同一 pop 順 + 同一 trace)。coverage row flip。 |
-| EQM-128 | COMPLETE | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 空間述語つき反応準備 standard form + 寸断 = invalidation 確認; R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。coverage row 最終 flip。 |
+| EQM-128 | COMPLETE_WITH_BACKLOG | EQM-127 | `docs/plan/2026-06-09_event_queue_manager/EQM-128_ebs_acceptance_suite/` | Q54 確認系 acceptance 束 + authoring/manual 更新 (coverage: ebs-acceptance-suite)。 | `dogfood/`, `docs/manual/`, `tests/golden/`, `tests/resource/` | SEM §16.2: R04 normalized spatial event tag + `EQCondition` trigger standard form; definition solve/invalidation FIRE gateはEQM-141へre-reserve。R06 相互反撃停止 golden (資源述語閉包); R08 スタック順 comparator 例; R09 公平 golden (EQM-124 依存分の統合); R11 蘇生/追加ターン + invalidate→issue 原子性確認; R12 変更不要記録。inv ペア/関係/メタレベルの .tres 宣言性を manual へ。 |
 | EQM-129 | COMPLETE | EQM-128 | `docs/plan/2026-06-09_event_queue_manager/EQM-129_wrapper_semantics/` | [repair, 意図監査 A1] wrapper 意味論の標準 2 種 (inv 反転 / 関係連鎖付与)。 | `runtime/eq_state_algebra.gd`, `runtime/eq_relation_graph.gd`, `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | SEM §5.7 改訂 (標準 wrapper 2 種): kind=inv_chain は包まれた状態の grant を dual へ反転、kind=relation_chain は grant 時に関係沿いに連鎖付与 (展開機構と同一の cost 停止、連鎖の再帰なし)。未知 kind = 不活性 data (互換)。`state_wrapper_applied` trace (SEM §11 additive)。透徹連鎖・反転連鎖 acceptance golden。既存 golden 不変。 |
 | EQM-130 | COMPLETE | EQM-129 | `docs/plan/2026-06-09_event_queue_manager/EQM-130_maintenance_autodrive/` | [repair, 意図監査 A2/C1/C2] 維持条件 sweep の自動駆動 + 公平合成 acceptance + 迎撃標準形。 | `runtime/eq_reservation_runtime.gd`, `runtime/eq_runtime.gd`, `tests/core/`, `tests/golden/` | 相談4「EQM が評価タイミングを固定」の実装: 既定 sweep は step_tick で自動評価、カスタム sweep 名は同名 sweep rule (§4.7) 実行直後に自動評価。predicates は named registry から自動供給。公平: 公平関係 → 展開 → 非対称反射の合成 golden。迎撃: effect handler から intervene_close を呼ぶ標準形の例示。既存 golden 不変。 |
 | EQM-131 | COMPLETE | EQM-130 | `docs/plan/2026-06-09_event_queue_manager/EQM-131_acceptance_repair/` | [repair, 意図監査 B1/B2 + EBS A-R08-1] R06 資源述語停止 / retarget 中間段 / R08 消費順整合。 | `runtime/eq_reservation_runtime.gd`, `tests/core/`, `tests/golden/` | R06: 焦点 counter line decrement + `<= 0` invalidation で停止する golden 変種 (「コスト述語の閉包」の証明) + 常真 assert の実質化。retarget: `params.stage` に int (連鎖 index、reach 検査) を additive 追加。R08: 例を EBS A-R08-1 (メタレベル昇順・同率付与順) に揃える。既存 golden 不変 (mutual_counter_stop は変種追加のみ)。 |
@@ -175,6 +175,19 @@ Source: roadmap Phase 14 + EQM-102 deferred production integration + EQM-134 con
 |---|---|---|---|---|---|---|
 | EQM-136 | COMPLETE | EQM-102, EQM-134 | `docs/plan/2026-06-09_event_queue_manager/EQM-136_trigger_index_runtime/` | Production trigger-index integration + independent performance test lane. | `runtime/eq_trigger_engine.gd`, `runtime/eq_trigger_index.gd`, `resources/eq_condition.gd`, `tools/test.sh`, `test_project/tests/{trigger,performance,support}/`, performance/test docs | Public API/schema/trace unchanged。production matchingはtarget bucket + wildcardだけをfull評価し、arm順・rumination・expiry・disarm・condition mutation・save/load continuationがlinear semanticsと一致。`./tools/test.sh`はperformanceを収集せずPASS、`./tools/test.sh --performance`はperformanceだけを収集してwork-count reductionとelapsedを記録しPASS。 |
 
+## Phase 14 — Evidence-driven runtime hardening
+
+Source: roadmap Phase 15 + EQM-136 follow-up benchmark + EBS integration false-green
+audit (2026-07-18)。correctness boundary を先に閉じ、performance hot path は独立した
+task として線形に実装・検証する。
+
+| id | status | dependencies | plan_dir | deliverable | target files | acceptance / test path |
+|---|---|---|---|---|---|---|
+| EQM-137 | COMPLETE_WITH_BACKLOG | EQM-136 | `docs/plan/2026-06-09_event_queue_manager/EQM-137_reaction_condition_contract/` | Reaction-condition type contract hardening + consumer false-green repair proof. | `runtime/{eq_error,eq_reservation_runtime,eq_trigger_engine,eq_trigger_index}.gd`, error/API docs, trigger/runtime tests; EBS integration/tests/docs are consumer-owned proof | `reaction_condition` is `EQCondition|null`; wrong types produce a stable contract fault/rejection trace before any reservation/index/scheduler mutation in dev and shipped modes。direct engine/index calls reject explicitly without ghost state。valid reaction behavior and normal goldens remain unchanged。EBS current-head regression detects the former bad input as rejection, corrects the R04 standard form, and its runner fails on `SCRIPT ERROR`; EQM `./tools/test.sh` and `./tools/test.sh --performance` both PASS。 |
+| EQM-138 | READY | EQM-137 | `docs/plan/2026-06-09_event_queue_manager/EQM-138_trigger_candidate_merge/` | Stable linear merge for target + wildcard trigger candidates. | `runtime/eq_trigger_index.gd`, trigger regression/performance tests, runtime performance profile | Candidate order/fired occurrences remain byte-equivalent to arm order across target-only/wildcard-only/mixed/mutated conditions。candidate assembly performs no full candidate sort; independent lane records sparse and wildcard-heavy work/elapsed, while regression and performance discovery remain exclusive。 |
+| EQM-139 | BACKLOG | EQM-138 | `docs/plan/2026-06-09_event_queue_manager/EQM-139_relation_adjacency_runtime/` | Production relation queries/expansion/invalidation use the existing actor adjacency. | `runtime/eq_relation_graph.gd`, core/performance tests, runtime performance profile | `relations_of`/`expand`/actor invalidation inspect only incident relation ids while preserving relation-id ordering, TREE/GRAPH semantics, maintenance, trace, snapshot roundtrip。regression + independent performance lane PASS with deterministic workload evidence。 |
+| EQM-140 | BACKLOG | EQM-139 | `docs/plan/2026-06-09_event_queue_manager/EQM-140_sparse_event_line_polling/` | Watched-only event-line polling and derived effective-rate cache. | `runtime/eq_event_lines.gd`, core/performance tests, runtime performance profile | polling work is bounded by watched existing lines rather than all lines; modifier add/remove/re-rate and restore rebuild cache deterministically。progression trace/order/snapshot semantics unchanged; regression + independent performance lane PASS。 |
+
 ## Dynamic follow-up area
 
 Add `follow-up-ready` tasks here during execution when a current task is complete but reveals nonblocking follow-up work.
@@ -185,6 +198,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 | EQM-133 | COMPLETE | EQM-132 | Amberground reaction checkpoint audit | schema-v6 reaction-expiry ownership + exact one-event resolution boundary | count終了後のexpiryをsave/loadしFIRE/FIRE/`already_closed` continuation一致、v5 armed migration／orphan rejection、table tamper、後続reservationを消費しない1-event boundaryをfull gateで証明。 |
 | EQM-134 | COMPLETE | EQM-133 | Amberground state/passive/perception implementation audit | State/relation engineering work-scale rung + one-shot inversion hot-path repair | 64 tokens×8 actors、1,024 relations、200 actual triggersのround-trip/resolve、work-scale profile、full gate。 |
 | EQM-135 | COMPLETE | EQM-134 | Amberground interception tranche | 発行済みPREPARED単独予約へのmeta介入primitive | 発行時metaを予約instanceへ固定し、同値以上の介入でeffect未実行のまま`event_invalidated(closed_by: intervention)`、不足時は`intervention_avoided`、非対応contextはstable rejection。snapshot/pending消失とtrace順を専用test + full gateで証明。 |
+| EQM-141 | BACKLOG | EQM-140 | EQM-137 / historical R04 false-green audit | Reaction FIRE condition semantics (preview/commit + condition bind/save contract). | trigger match後・rumination消費前にsolve/invalidationを評価する二相契約、WAIT時のlifetime、trigger/reaction view、COUNTER bind、snapshotをtask packetで決定し、false/true/invalidation-wins/save-loadを厳密test。EQM-137へは混ぜない。 |
 
 ## Current pointer
 
@@ -192,7 +206,11 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: **none** — EQM-136 COMPLETE。通常回帰とperformance laneは排他的にPASSし、queueにREADY/BACKLOG taskなし。
+Current: **EQM-138 READY** — EQM-137はtrace schema、SHIPPED continuation、consumer
+R04 false-greenを修理してCOMPLETE_WITH_BACKLOG。確定commit hashのEBS DEPS/log記録は
+commit直後のconsumer follow-up。user-approved autonomous hardening round (2026-07-18)として
+EQM-138→140を線形実行し、各performance taskは通常回帰と独立performance laneの
+両方を完了証拠にする。
 
 Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 
@@ -1383,7 +1401,7 @@ proof:
     - ./tools/test.sh -> RESULT: PASS ×2 (files=68 checks=1304 failures=0;
       contract-coverage rows=31 implemented=31 reserved=0 violations=0)
   gate: §4 core (確認系 6 項目すべて「既存宣言のみ・runtime 変更ゼロ」で証明 — Q54/Q46 の仮説成立):
-    R04 空間述語つき反応準備 standard form + 寸断 = invalidation (NAMED_PREDICATE)
+    R04 normalized spatial event tag + EQCondition trigger standard form
     R06 相互反撃の停止 golden mutual_counter_stop (closed_by: reaction_count で必ず停止)
     R08 スタック順 = set_order_hook 適用例 (order_hook_applied)
     R09 公平の視界非対称 = bundle + 片側 arm (bundle 後の個別誘発が片側のみ)
@@ -1397,7 +1415,11 @@ proof:
     - docs/ja/manual/reservations.md, docs/manual/reservations.md
 ```
 
-Dependency sweep: EQM-128 COMPLETE → **Phase 12 milestone reached** (EQM-120..128 COMPLETE)。queue に READY/BACKLOG task なし。Current pointer → none。**contract coverage 31/31 implemented** — SEM v1.2 (EBS 拡張ラウンド Q44–Q54) の凍結契約はすべて実装・test 済み。EBS 側の残 (メタレベル値付け / 変換 validation) は EBS repo の宿題として引き渡し原本に記録済み。
+Historical close record (2026-07-05): EQM-128完了時はPhase 12 milestone / contract
+coverage 31/31 implementedと判定した。**2026-07-18 EQM-137監査でR04 named solve gateの
+false-greenを検出し、この主張を訂正**。normalized event triggerは実装済み、reaction
+FIRE condition gateはcoverage reserved / EQM-141 BACKLOG。EBS側のメタレベル値付け・
+変換validationは従来どおりconsumer責務。
 
 
 ### EQM-129 — COMPLETE (2026-07-05) — repair (意図監査 A1)
@@ -1581,3 +1603,28 @@ profile: docs/design/RUNTIME_PERFORMANCE_PROFILE.md
 ```
 
 Current pointer → none。EQM-136 COMPLETE; event-line/relation/scheduler/traceの次最適化は新しいEQM-local evidenceが出た場合だけ起票する。
+
+### EQM-137 — COMPLETE_WITH_BACKLOG (2026-07-18) — reaction-condition contract hardening
+
+```text
+acceptance:
+  - reaction_condition is EQCondition|null; wrong types reject before issuance mutation
+  - dev and shipped record eqm.reaction.condition_type_invalid + reservation_rejected
+  - direct engine/index reject without consuming status, arm slot, or sequence
+  - valid null/EQCondition lifecycle and normal trace/golden behavior remain unchanged
+  - EBS corrects R04 to normalized event tag + EQCondition trigger and fails on SCRIPT ERROR
+plan: docs/plan/2026-06-09_event_queue_manager/EQM-137_reaction_condition_contract/
+tests:
+  - ./tools/test.sh -> PASS (regression only; files=74 checks=1757 failures=0; run 20260718-223514-52656; coverage 34 implemented + 1 reserved, violations=0)
+  - ./tools/test.sh --performance -> PASS (performance only; files=4 checks=16 failures=0; run 20260718-223533-53363)
+  - EBS ./tools/test.sh -> PASS (166/166; runner guard also converted the prior SCRIPT ERROR false-green to exit 1 before repair)
+  - EBS ./tools/test_performance.sh -> PASS (5/5); ./tools/package_addon.sh --check -> PASS
+api:
+  - EQTriggerEngine.arm return void -> bool (explicit low-level rejection result)
+  - EQError append-only REACTION_CONDITION_TYPE_INVALID
+review: docs/review/autopilot/EQM-137_SELF_REVIEW_2026-07-18.md
+```
+
+Dependency sweep: EQM-137 COMPLETE_WITH_BACKLOG → EQM-138 READY。named solve gateは
+consumer proofから除外し、EQM-141へ分離。確定commit hashのEBS DEPS/log記録だけを
+post-commit consumer follow-upとして残す。

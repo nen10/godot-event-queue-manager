@@ -10,6 +10,8 @@ extends RefCounted
 ## entries in ARM order, so applying matches() to them yields the same fired set and
 ## order as the linear engine — verified by the parity benchmark.
 
+const _EQCondition := preload("../resources/eq_condition.gd")
+
 # entry: { reservation, condition, seq, bucket_target }
 var _by_target: Dictionary = {}   # StringName -> Array[Dictionary]
 var _wildcard: Array = []         # conditions with empty match_target
@@ -20,7 +22,11 @@ var _seq: int = 0
 
 
 ## Index an armed reaction. Returns its arm sequence (stable ordering key).
+## Wrong condition types are rejected before consuming a sequence or mutating
+## any derived bucket. The runtime boundary owns the structured fault.
 func add(reservation, condition) -> int:
+	if condition != null and not is_instance_of(condition, _EQCondition):
+		return -1
 	var target: StringName = condition.match_target if condition != null else &""
 	var entry := {
 		"reservation": reservation,

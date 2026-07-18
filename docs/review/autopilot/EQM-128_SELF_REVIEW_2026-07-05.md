@@ -6,7 +6,7 @@ date: 2026-07-05 / task: EQM-128 (Phase 12 終端) / pattern: P2 (codex 委譲) 
 
 **確認系の成果 = 「既存機能で書ける」証明。全 6 項目が runtime 変更ゼロ・宣言のみで成立:**
 
-- [x] R04: NAMED_PREDICATE (in_zone) の solve 宣言 + 反応準備の合成 = 空間述語つき反応準備の標準形。寸断 = invalidation_conditions の NAMED_PREDICATE — 新機構なしでトリガ抑制が書ける。
+- [ ] R04 original claim was invalidated by the 2026-07-18 EQM-137 audit; see the correction below. The retained proof covers normalized event tags + `EQCondition` trigger matching only.
 - [x] R06: 相互反撃が反撃回数の枯渇 (`closed_by: reaction_count`) で必ず停止 — golden `mutual_counter_stop` + 停止後 pending 0。cascade 上限 fault ではなく宣言資源で止まることを確認。
 - [x] R08: `set_order_hook` の stack_index 降順適用例 (`order_hook_applied` で順序固定)。実体はゲーム側 (相談5) — EQM は順序規律のみ。
 - [x] R09: bundle + 片側のみ armed 反射 = 視界非対称の公平 (bundle 後の個別誘発が片側のみ)。
@@ -25,3 +25,10 @@ date: 2026-07-05 / task: EQM-128 (Phase 12 終端) / pattern: P2 (codex 委譲) 
 - EQM-120..128 の 9 task、全て同日完了。P2 委譲 7 run 成功 / 2 run が context 枯渇で仕切り直し (いずれも code 破壊なし)。
 - orchestrator 検収で捕捉した実バグ 4 件: StringName sort の replay 非決定性 (既存・重大)、active_state の型崩れ、maintenance typed-null、v2 test の偽陽性化。委任 contract 側の誤り 1 件 (golden env var) も検収で発見・是正。
 - 「宣言なし = v1.1 挙動不変」を全 task で golden により機械的に担保。
+
+## 2026-07-18 correction (EQM-137 audit)
+
+R04の上記claimを撤回する。旧testはfalse `in_zone`でも`reaction_fired`を肯定し、
+suppressionも非負件数だけを確認していたためproofになっていなかった。testはnormalized
+intrusion tag + `EQCondition` matcherの厳密な非一致/一致/FIRE解決へ差し替えた。
+reaction definition solve/invalidationをFIREへ適用する意味論はEQM-141へ分離する。

@@ -1343,6 +1343,27 @@ func apply_state(data: Dictionary) -> void:
 				fire_context
 			)
 
+func _reject_reaction_condition_type(res: EQReservation, reason: StringName) -> void:
+	var context := {
+		"actor_id": String(res.actor_id),
+		"expected": "EQCondition|null",
+		"reason": String(reason),
+	}
+	runtime.trace().record(
+		{
+			"kind": "reservation_rejected",
+			"actor": String(res.actor_id),
+			"code": String(EQError.REACTION_CONDITION_TYPE_INVALID),
+			"reason": String(reason),
+		}
+	)
+	runtime._fault(
+		EQError.REACTION_CONDITION_TYPE_INVALID,
+		"reaction_condition must be EQCondition or null",
+		context,
+		true
+	)
+
 
 ## Schedules (or arms) a reservation per its kind. A reservation with solve
 ## conditions is condition-gated: it stays pending and is pushed at the tick
@@ -1355,6 +1376,9 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 	if not v.is_valid():
 		var issue = v.errors()[0] if not v.errors().is_empty() else v.issues[0]
 		runtime._fault(issue["code"], issue["message"], {"actor_id": String(res.actor_id)}, true)
+		return -1
+	if reaction_condition != null and not is_instance_of(reaction_condition, EQCondition):
+		_reject_reaction_condition_type(res, &"wrong_type")
 		return -1
 	var kind := res.definition.kind
 	if not runtime.registry.is_registered(res.actor_id):
@@ -1411,8 +1435,9 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 			ready_def.delay = res.definition.delay
 			return submit(EQReservation.new(res.actor_id, ready_def))
 		EQActionDefinition.Kind.REACTION_PREPARATION:
-			res.status = EQReservation.Status.ARMED
-			engine.arm(res, reaction_condition, runtime.scheduler.current_tick)
+			if not engine.arm(res, reaction_condition, runtime.scheduler.current_tick):
+				_reject_reaction_condition_type(res, &"engine_rejected")
+				return -1
 			if res.definition.duration > 0:
 				var expiry_id := runtime.schedule(res.actor_id, runtime.scheduler.current_tick + res.definition.duration, 0, &"expiry")
 				if expiry_id > 0:

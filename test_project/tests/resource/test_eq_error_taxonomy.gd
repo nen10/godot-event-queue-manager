@@ -29,6 +29,14 @@ static func _test_code_metadata(t) -> void:
 	# code stability: codes are namespaced strings
 	t.eq(String(EQError.POLICY_MISSING), "eqm.config.policy_missing", "code is the stable namespaced string")
 	t.ok(EQError.is_known(EQError.TIE_BREAK_UNKNOWN), "known code recognised")
+	t.ok(EQError.is_known(EQError.REACTION_CONDITION_TYPE_INVALID), "reaction condition type code recognised")
+	t.eq(
+		EQError.recoverability_of(EQError.REACTION_CONDITION_TYPE_INVALID),
+		EQError.Recoverability.CONTRACT_VIOLATION,
+		"reaction condition wrong type is a contract violation"
+	)
+	t.ok(EQError.surfaces_in(EQError.REACTION_CONDITION_TYPE_INVALID, "editor"), "reaction condition fault surfaces in editor")
+	t.ok(EQError.surfaces_in(EQError.REACTION_CONDITION_TYPE_INVALID, "game"), "reaction condition fault surfaces in game")
 
 
 static func _test_unknown_code_strict_default(t) -> void:

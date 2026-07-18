@@ -1047,7 +1047,7 @@
         {
           "name": "arm",
           "params": "reservation: EQReservation, condition, current_tick: int",
-          "returns": "-> void"
+          "returns": "-> bool"
         },
         {
           "name": "armed_count",
@@ -1735,6 +1735,7 @@
         "POLICY_MISSING",
         "POLICY_NAME_EMPTY",
         "PRESENTATION_POLICY_CLASS_CONFLICT",
+        "REACTION_CONDITION_TYPE_INVALID",
         "REACTION_EXPIRY_STATE_INVALID",
         "REACTION_FIRE_CONTEXT_INVALID",
         "REACTION_FIRE_CONTEXT_MISSING",

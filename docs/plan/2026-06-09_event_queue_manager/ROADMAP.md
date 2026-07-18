@@ -437,6 +437,48 @@ Why now: EQM-134 が consumer-informed work scale と既知 hot path を確立�
 
 Layer note: L2 内部最適化。既存 caller API、snapshot schema、trace semantics、L0/L1 surface は変更しない。
 
+### Phase 15 — Evidence-driven runtime hardening *(additive, 2026-07-18)*
+
+Purpose: Phase 14 の実測と EBS integration 再検証で見つかった correctness gap と
+選択性依存の性能退行を、契約境界から順に閉じる。性能改善より先に ghost arm と
+false-green を排除し、その後は EQM 内で再現できた hot path だけを個別 task として
+最適化する。
+
+Produces:
+
+- `reaction_condition` を `EQCondition | null` に限定する fail-closed submit/arm 契約と、
+  dev/shipped の構造化 rejection proof。
+- target bucket と wildcard bucket の既存順序を利用した stable linear merge。候補が
+  wildcard-heavy でも不要な全候補 sort を行わない。
+- relation graph の既存 actor adjacency を production query/expand/invalidation へ接続し、
+  canonical relation table と relation-id 順を維持したまま全表走査を除く。
+- event-line polling を watched 集合へ限定し、effective rate の派生 cache を canonical
+  modifier state から再構築可能な形で管理する。
+- consumer integration の誤契約は consumer repo 自身で修正・文書化し、EQM は consumer
+  test や timing を自身の oracle にしない。
+
+Adopted principles:
+
+- `EQConditionSpec` (pending solve/invalidation) を trigger matcher の互換入力として扱わない。
+- invalid input は status/index/scheduler/expiry を一切変えず、明示的に拒否する。
+- armed table、relation table、event-line data が canonical。index/cache は派生状態に限る。
+- elapsed は環境付き advisory。correctness、順序、work-count は通常回帰または portable
+  performance gate で別々に証明する。
+
+Rejected / deferred:
+
+- transient `Callable` を暗黙に serializable named trigger へ昇格する互換層。
+- wildcard-heavy の退行を平均値で隠すこと。
+- scheduler backend、trace retention、consumer frame rateを本 phase の完了条件へ混ぜること。
+
+Why now: EQM-136 の follow-up benchmark が通常 fixture で約 5.1 倍の改善を示す一方、
+wildcard 25% 以上で退行を実測した。また EBS 再検証により、誤った reaction condition が
+GUT の成功表示を通過して ghost arm を作る契約欠陥が判明した。correctness boundary を
+先に直すことで、後続の性能値を信頼できる状態にする。
+
+Layer note: L2/L3 runtime contract と内部派生 index の hardening。正常入力の trace、
+snapshot schema、L0/L1 surface は不変。
+
 ## 8. Milestones
 
 | Milestone | Main value | Included phases |
@@ -452,6 +494,7 @@ Layer note: L2 内部最適化。既存 caller API、snapshot schema、trace sem
 | v1.0 Release Candidate | Performance, packaging, release proof. | Phase 12 |
 | v1.2 EBS Extension | 状態・関係サブシステム、メタレベル介入、変換フック (queue Phase 12 として実行予定)。 | Phase 13 |
 | Consumer Runtime Performance | Production trigger sweep has measured work reduction with unchanged order, trace, API, and save continuation. | Phase 14 |
+| Runtime Performance Hardening | Invalid reaction inputs fail closed and measured trigger/relation/event-line hot paths improve without changing deterministic semantics. | Phase 15 |
 
 ## 9. Success criteria
 
@@ -473,6 +516,7 @@ The roadmap succeeds when:
 - In shipped resilient mode, injected runtime anomalies skip-and-log instead of crashing, while normal-input traces stay byte-identical across modes (`RUNTIME_RESILIENCE_POLICY.md`).
 - Production trigger matching evaluates only target-bucket + wildcard candidates while preserving exact occurrence order, lifecycle state, trace, and save/load continuation.
 - Runtime performance evidence separates deterministic work-count gates from environment-sensitive wall-clock measurements and never turns an engineering rung into a gameplay cap.
+- Invalid reaction-condition inputs cannot create ghost arms or false-green integration runs, and wildcard-heavy trigger workloads no longer pay an avoidable full candidate sort.
 
 ## 10. First queue-designed scope
 

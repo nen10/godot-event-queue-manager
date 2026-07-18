@@ -415,6 +415,7 @@ The canonical trace (EQM-013) already has an **open record-kind schema** (sorted
 - invalidation records carry `closed_by: <condition id>` (and `invalid_event_skipped` for lazy skips).
 - **`closed_by` vocabulary** *(v1.1)*: condition ids plus the reserved causes `duration`, `reaction_count`, `already_closed` (§6.3), `actor_removed` (§13). Cascade resolutions carry their **round number** (§6.2). Sweep-rule executions record rule name + affected count (§4.7).
 - **`event_invalidated`** *(v1.1, EQM-113)* — the invalidation record kind (carries `closed_by`, and `event_id` when the drop maps to a scheduled event). **`reaction_fired`** *(v1.1, EQM-113; extended EQM-132)* — a fired reaction was scheduled (fields: `round`, `actor`, `event_id`, versioned `reaction_fire_context`). **`reaction_fire_resolved`** *(EQM-132)* records the same isolated context when that exact occurrence resolves, allowing a save/restore continuation to prove its cause without replaying the earlier scheduling trace.
+- **`reservation_rejected`** *(EQM-137)* — a reservation was rejected before issuance and therefore has no scheduler event. The record is exactly `{kind, actor, code, reason}` plus canonical `i`; it deliberately carries no `event_id` or ordering key. For reaction-condition type rejection, `code = eqm.reaction.condition_type_invalid` and `reason = wrong_type` (the authoritative `submit` preflight).
 - Effect records carry a deterministic `classification` (important / sensed / offscreen) — **simulation-side data (Q12)**, implemented in EQM-080/081; presentation may not alter it.
 - **v1.2 reserved kinds/fields** *(Q44–Q53)*: `relation_bound` / `relation_dissolved` / `relation_rebound` / `relation_inverted` (§13.1); `targets_expanded` (§6.4 2a); `effect_transformed` (§6.4 2b, one record per application); `state_wrapped` / `state_unwrapped` (§5.7); `bundle_resolved` (bundle id + member sequence, §7.2); `phase_rolled_back` (rollback span + cleared inputs, §8.4). `window_closed` cause vocabulary gains `intervention` (with intervener event id + both meta-levels, §8.3); a failed intervention (回避) is recorded as **`intervention_avoided`** (window id/event id + target/intervener meta-levels — normal gameplay, not a fault; extended to reservation targets by EQM-135). A successful reservation intervention reuses `event_invalidated` with `closed_by: intervention` and the same meta/id fields (§8.3.1). Standard wrapper applications are recorded as **`state_wrapper_applied`** (actor / state / wrapper / kind; added with EQM-129). `event_line_progressed` gains an optional `modifier_id` field for modifier-caused rate changes (§4.8). Window/event records carry their issuance-time `meta_level` (§8.2).
 
@@ -522,6 +523,15 @@ The EBS extension round (Q44–Q54; request R01–R12; consultation rounds 2–3
 - operation-phase recursion / sub-checkpoints / loop rollback (§8.4 → EQM-126)
 - snapshot schema v3 (§10.1 → EQM-127); v1.2 trace kinds (§11, delivered with their owning sections)
 - EBS acceptance suite: 確認系 Q54 (R04/R06/R08/R09/R11/R12) + authoring additions (§16.2 → EQM-128)
+
+**R04 correction / re-reservation** *(EQM-137 audit, 2026-07-18)*: EQM-128's
+original R04 test did not prove that reaction-definition `solve_conditions` gate
+a FIRE; it explicitly accepted a false predicate. The implemented R04 trigger
+contract is narrower and exact: the game adapter projects the spatial fact into
+a normalized event tag and `EQCondition` selects that resolved event. Applying
+definition solve/invalidation before consuming the armed slot requires a
+preview/commit reaction contract, condition-bind lifetime, and snapshot rules;
+that frozen remainder is re-reserved to EQM-141 in the coverage matrix.
 
 Consumer-side responsibilities recorded at handover (not EQM contracts): spatial predicates via NAMED_PREDICATE (game), defense-stack substance (game), transform application-structure validation (EBS), per-skill meta-level assignment (EBS — drafted as the two-tier meta-class/meta-level injection model, `godot-editable-battleskill-system/docs/design/META_LEVEL_ASSIGNMENT.md`; the EQM contract still sees only a single issuance-time int). All v1.2 machinery is L2/L3 opt-in; the L0/L1 surface is unchanged (EQM-023 gate).
 

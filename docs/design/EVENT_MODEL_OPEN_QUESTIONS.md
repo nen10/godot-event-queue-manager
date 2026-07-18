@@ -811,7 +811,7 @@ user意見: 承認。今後需要に応じて拡張は検討する。
 | Q51 | DECIDED(user) | メタレベルの形式化 (横断) |
 | Q52 | DECIDED(user) | 効果パターン変換フック (多重適用可) と発行連鎖 provenance (event 側) |
 | Q53 | DECIDED(user) | 入れ子操作フェーズのループ検出・解消 (+ フェーズ内 sub-checkpoint) |
-| Q54 | SETTLED(acceptance) | 確認系 acceptance 束 (R04/R06/R08/R09/R11/R12) — EQM-128 所有 |
+| Q54 | SETTLED(acceptance; R04 gate re-reserved) | 確認系 acceptance 束 (R04 trigger/R06/R08/R09/R11/R12) — EQM-128。reaction FIRE solve/invalidation gateはEQM-141 |
 
 ## Q44 — 状態代数: inv 双対ペアの宣言と共存規則 [DECIDED(user)]
 
@@ -949,7 +949,7 @@ user意見 (相談ラウンド3, 2026-07-05): checkpoint 粒度は window draft 
 
 内訳と見込み:
 
-- **R04 オーラ・地点効果**: 「空間述語つき反応準備」の標準形 (ゲーム側 NAMED_PREDICATE + EQM 反応準備の合成) を applicative case 化。寸断 (トリガ抑制) が invalidation 条件で書けるかの確認を含む。
+- **R04 オーラ・地点効果**: game-side空間事実をnormalized event tagへ投影し、`EQCondition`で解決済みeventを選ぶtrigger標準形をapplicative case化。reaction definitionのsolve/invalidationをFIRE前に適用する残契約は2026-07-18 false-green監査でEQM-141へre-reserve。
 - **R06 相互反撃ループ**: 資源述語 (焦点コスト/HP) の閉包で必ず停止する golden。reentrancy は Q21/Q32 既決。
 - **R08 防御誘発スタック順**: comparator hook (§7.1) の適用例のみ (スタック実体は完全にゲーム側 — 依頼 相談5 確定)。
 - **R09 公平**: composite (Q49) + 事後の個別反射誘発の golden (依頼 相談3 確定)。視界条件の非対称を含む。
@@ -959,3 +959,7 @@ user意見 (相談ラウンド3, 2026-07-05): checkpoint 粒度は window draft 
 user意見: 設計 fork なし (確認系) → SETTLED。acceptance 束は EQM-128 が所有 (SEM §16.2)。R09 は Q49 の bundle に依存。
 
 user意見: 承認。
+
+2026-07-18 implementation audit: EQM-128の旧R04 testはfalse predicateでもFIREを
+肯定しており、named solve gateのproofではなかった。trigger標準形は厳密testへ修正済み。
+solve/invalidation gateはmeaning/bind/saveを分割せずEQM-141で実装する。

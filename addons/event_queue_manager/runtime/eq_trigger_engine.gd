@@ -19,6 +19,7 @@ extends RefCounted
 const EQReservation := preload("eq_reservation.gd")
 const _EQTriggerIndex := preload("eq_trigger_index.gd")
 const EQActionDefinition := preload("../resources/eq_action_definition.gd")
+const _EQCondition := preload("../resources/eq_condition.gd")
 
 # `_armed` is the sole canonical table. Private sequence/expiry keys support the
 # non-serialized derived index and are never exposed by armed_entries().
@@ -41,9 +42,13 @@ var expired: Array[Dictionary] = []
 
 ## Arms a reaction (a REACTION_PREPARATION reservation) with the condition that
 ## selects which incoming events trigger it. `current_tick` starts its lifetime.
-func arm(reservation: EQReservation, condition, current_tick: int) -> void:
-	reservation.status = EQReservation.Status.ARMED
+## Returns false without mutation unless condition is EQCondition or null.
+func arm(reservation: EQReservation, condition, current_tick: int) -> bool:
+	if condition != null and not is_instance_of(condition, _EQCondition):
+		return false
 	var sequence := _index.add(reservation, condition)
+	if sequence < 0:
+		return false
 	var armed := {
 		"reservation": reservation,
 		"condition": condition,
@@ -55,6 +60,8 @@ func arm(reservation: EQReservation, condition, current_tick: int) -> void:
 	_note_expiry(armed)
 	_armed.append(armed)
 	_armed_by_sequence[sequence] = armed
+	reservation.status = EQReservation.Status.ARMED
+	return true
 
 
 ## Sweep point with occurrence metadata. Each result is

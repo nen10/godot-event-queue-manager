@@ -7,6 +7,7 @@ extends RefCounted
 const EQReservation := preload("res://addons/event_queue_manager/runtime/eq_reservation.gd")
 const EQActionDefinition := preload("res://addons/event_queue_manager/resources/eq_action_definition.gd")
 const EQCondition := preload("res://addons/event_queue_manager/resources/eq_condition.gd")
+const EQConditionSpec := preload("res://addons/event_queue_manager/resources/eq_condition_spec.gd")
 const EQTriggerEngine := preload("res://addons/event_queue_manager/runtime/eq_trigger_engine.gd")
 const EQTriggerIndex := preload("res://addons/event_queue_manager/runtime/eq_trigger_index.gd")
 
@@ -16,6 +17,7 @@ const M := 1000
 static func run(t) -> void:
 	_test_parity_and_speedup(t)
 	_test_wildcard_matches_any_target(t)
+	_test_invalid_condition_does_not_consume_sequence(t)
 
 
 static func _armed_set() -> Array:
@@ -81,3 +83,20 @@ static func _test_wildcard_matches_any_target(t) -> void:
 	index.add(res, wild)
 	var fired := index.matching_reservations({"kind": &"hit", "target": &"anyone", "tags": []})
 	t.eq(fired, [res], "wildcard reaction fires for an arbitrary target")
+
+
+static func _test_invalid_condition_does_not_consume_sequence(t) -> void:
+	var index := EQTriggerIndex.new()
+	var definition := EQActionDefinition.new()
+	definition.kind = EQActionDefinition.Kind.REACTION_PREPARATION
+	definition.duration = EQActionDefinition.DURATION_UNLIMITED
+	var rejected := EQReservation.new(&"rejected", definition)
+	var wrong := EQConditionSpec.new()
+	wrong.type = EQConditionSpec.Type.NAMED_PREDICATE
+	wrong.predicate_name = &"wrong_layer"
+	t.eq(index.add(rejected, wrong), -1, "index rejects a non-EQCondition")
+	t.eq(index.size(), 0, "rejection mutates no bucket or sequence table")
+
+	var accepted := EQReservation.new(&"accepted", definition)
+	t.eq(index.add(accepted, EQCondition.new()), 0, "the next valid arm receives sequence zero")
+	t.eq(index.size(), 1, "only the valid arm is indexed")

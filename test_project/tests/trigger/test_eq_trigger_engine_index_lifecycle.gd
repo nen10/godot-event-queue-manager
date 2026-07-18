@@ -6,6 +6,7 @@ const EQTriggerEngine := preload("res://addons/event_queue_manager/runtime/eq_tr
 const EQReservation := preload("res://addons/event_queue_manager/runtime/eq_reservation.gd")
 const EQActionDefinition := preload("res://addons/event_queue_manager/resources/eq_action_definition.gd")
 const EQCondition := preload("res://addons/event_queue_manager/resources/eq_condition.gd")
+const EQConditionSpec := preload("res://addons/event_queue_manager/resources/eq_condition_spec.gd")
 
 
 static func run(t) -> void:
@@ -15,6 +16,7 @@ static func run(t) -> void:
 	_test_rumination_survivor_keeps_original_sequence(t)
 	_test_expiry_boundary_and_derived_cleanup(t)
 	_test_disarm_for_and_public_projection(t)
+	_test_invalid_condition_type_does_not_ghost_arm(t)
 
 
 static func _reaction(
@@ -41,6 +43,21 @@ static func _view(target: StringName) -> Dictionary:
 
 static func _actor_ids(occurrences: Array) -> Array:
 	return occurrences.map(func(occurrence): return occurrence["reservation"].actor_id)
+
+
+static func _test_invalid_condition_type_does_not_ghost_arm(t) -> void:
+	var engine := EQTriggerEngine.new()
+	var rejected := _reaction(&"rejected")
+	var wrong := EQConditionSpec.new()
+	wrong.type = EQConditionSpec.Type.NAMED_PREDICATE
+	wrong.predicate_name = &"wrong_layer"
+	t.ok(not engine.arm(rejected, wrong, 0), "engine directly rejects a non-EQCondition")
+	t.eq(rejected.status, EQReservation.Status.PENDING, "direct rejection leaves status unchanged")
+	t.eq(engine.armed_count(), 0, "direct rejection creates no canonical arm")
+
+	var accepted := _reaction(&"accepted")
+	t.ok(engine.arm(accepted, _condition(&"hero"), 0), "a valid arm still succeeds")
+	t.eq(engine.armed_count(), 1, "the valid arm is the first and only slot")
 
 
 static func _test_target_and_wildcard_keep_global_arm_order(t) -> void:
