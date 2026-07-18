@@ -1,6 +1,6 @@
 # Event Model Semantics (v1)
 
-status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. **Transactional effect-result revision (2026-07-14)**: issued handler modes are persisted by save-bundle schema v4 (§6.1, §10.2). **Reaction FIRE occurrence revision (EQM-132, 2026-07-15)**: each scheduled FIRE has an independent reservation and versioned cause value persisted by schema v5 (§6.2, §10.3). **Reaction-expiry checkpoint revision (EQM-133, 2026-07-15)**: schema v6 persists every live reaction-expiry event independently from armed membership and exposes an exact one-scheduler-event resolution boundary (§6.3, §10.4). **Reservation-intervention revision (EQM-135, 2026-07-18)**: an accepted reservation samples its issuance meta once; schema v7 persists that value and an additive L2 primitive can invalidate one ordinary PREPARED singleton before its effect (§8.3.1, §10.5). Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
+status: authoritative for v1 (EQM-014.01, 2026-06-15). **v1.1 revision (EQM-110, 2026-07-02)**: the implementation-round decisions Q27–Q43 (`EVENT_MODEL_OPEN_QUESTIONS.md` 実装ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-02.md`) are recorded additively in the sections marked *(v1.1)*. Q01–Q26 decisions are unchanged. **v1.2 revision (EQM-120, 2026-07-05)**: the EBS extension-round decisions Q44–Q54 (拡張ラウンド; rationale `docs/review/EVENT_MODEL_OPEN_QUESTIONS_SYNTHESIS_2026-07-05.md`; request origin `docs/plan/2026-06-09_event_queue_manager/EBS_EXTENSION_REQUEST_2026-07-05.md`) are recorded additively in the sections marked *(v1.2)*. Q01–Q43 decisions are unchanged. **Transactional effect-result revision (2026-07-14)**: issued handler modes are persisted by save-bundle schema v4 (§6.1, §10.2). **Reaction FIRE occurrence revision (EQM-132, 2026-07-15)**: each scheduled FIRE has an independent reservation and versioned cause value persisted by schema v5 (§6.2, §10.3). **Reaction-expiry checkpoint revision (EQM-133, 2026-07-15)**: schema v6 persists every live reaction-expiry event independently from armed membership and exposes an exact one-scheduler-event resolution boundary (§6.3, §10.4). **Reservation-intervention revision (EQM-135, 2026-07-18)**: an accepted reservation samples its issuance meta once; schema v7 persists that value and an additive L2 primitive can invalidate one ordinary PREPARED singleton before its effect (§8.3.1, §10.5). **Reaction FIRE gate revision (EQM-141, 2026-07-19)**: trigger matching is preview-only until arm-bound solve/invalidation conditions decide FIRE; schema v8 persists that bound gate (§6.2, §10.6). Contract-to-implementation tracking: `docs/design/EVENT_MODEL_CONTRACT_COVERAGE.md`.
 
 Inputs (confirmed):
 
@@ -217,11 +217,30 @@ The armed slot and a scheduled FIRE are different runtime instances. The armed r
 
 The context is game-vocabulary-neutral. EQM transports the value; a consumer decides whether its `source` means `TRIGGER_SOURCE`, whether the source is defeated, or whether a cost/refund applies. Reaction use count/duration/priority remain independent of consumer cost policy.
 
+Reaction triggering has two non-interchangeable condition layers. `EQCondition`
+selects resolved event candidates. After a match, the armed definition's
+`solve_conditions` / `invalidation_conditions` gate FIRE using the serializable
+view `{trigger: <canonical event view>, reaction: <reservation view>}`. Candidate
+selection is a non-mutating preview: solve=false is WAIT and preserves the arm,
+status, rumination, and declared counters. Invalidation is OR/invalidation-wins;
+it closes the armed reservation without creating a FIRE. Only RESOLVE commits one
+rumination/use and creates a scheduled FIRE. An unexpected gate fault closes the
+arm fail-safe as `condition_fault` without consuming a use.
+
+Authored gate terms bind exactly once when the reaction arms. Relative line
+thresholds therefore retain their arm-time anchor, and each declared COUNTER owns
+one stable counter line decremented only by accepted FIRE commits. Duration and
+rumination sugar continue to use the expiry event and `remaining_ruminations`, so
+they are not rebound into the gate. The scheduled FIRE occurrence does not bind or
+re-evaluate the armed gate a second time. COUNTER is invalidation-only: placing it
+in `solve_conditions` is rejected because a term that progresses only after
+RESOLVE cannot make its own solve gate become true.
+
 A **cascade** is therefore the repetition "sweep → fire → schedule → resolve → sweep …", bounded by the reentrancy rounds (§8) plus a same-`(event, reaction)` re-fire guard; each round is recorded in the trace with its round number. The v1.0 in-place `fire_cascade` resolution is superseded by this contract (EQM-113).
 
 ### 6.3 Expiry is an event *(v1.1, Q40; Q06 是正)*
 
-Arming a duration-limited reservation schedules an **expiry event** at `due_tick = armed_at + duration` (duration = ∞ schedules none). On resolution: if the target is still armed, it is closed with `closed_by: duration` and the optional legacy Array-returning on-expiry effect runs through §6.1; transactional-result v1 is excluded as stated in §6.1. If it was already closed (e.g. by reaction count), the expiry event drops with a lightweight `closed_by: already_closed` record. Reaction-count exhaustion uses the same vocabulary (`closed_by: reaction_count`). Silent removal of an armed reaction is forbidden.
+Arming a duration-limited reservation schedules an **expiry event** at `due_tick = armed_at + duration` (duration = ∞ schedules none). On resolution: if the target is still armed, it is closed with `closed_by: duration` and the optional legacy Array-returning on-expiry effect runs through §6.1; transactional-result v1 is excluded as stated in §6.1. If it was already closed (e.g. by reaction count, declared COUNTER, condition invalidation, or condition fault), the expiry event drops with a lightweight `closed_by: already_closed` record. Reaction-count exhaustion uses the same vocabulary (`closed_by: reaction_count`). Silent removal of an armed reaction is forbidden.
 
 ### 6.4 Resolution-stage rewrites: target expansion and effect pattern transforms *(v1.2, Q48/Q52)*
 
@@ -404,6 +423,26 @@ reservation or reaches a stopping boundary.
 
 Schema version 7 requires `issued_meta_level: int` in every serialized reservation. The value is sampled once when submit is accepted and may differ from the declaration's later `definition.meta_level`. Versions 1–6 migrate a missing value from the inline definition meta; those historical formats cannot represent a differing issued value, so an explicit mismatch under a historical top-level version is rejected before mutation. A v6 reader rejects a v7 bundle at the top-level boundary and therefore cannot silently ignore the issued fact.
 
+### 10.6 Snapshot schema v8 — armed reaction FIRE gate
+
+Schema version 8 requires every `armed_triggers[]` row to carry `solve`, `inv`,
+and `counter_lines`. The first two are already-bound evaluator terms; the third
+maps each authored COUNTER to its stable line and condition id. Event-line values
+and the counter sequence remain owned by the existing `event_lines` table, which
+also records the exact generated-counter ids. Load verifies exact term shape,
+the arm-time authored condition snapshot, named predicate registration, generated
+counter provenance/uniqueness, and line identity before mutating scheduler,
+actors, or pipeline. Later edits to the caller-owned definition do not rewrite
+the armed gate or make the writer produce an unloadable bundle.
+
+Versions 1–7 migrate an armed reaction only when its authored solve/invalidation
+sets are empty. A historical conditioned arm is rejected with
+`eqm.reaction.fire_gate_state_invalid`: its relative bind anchor or counter-line
+identity was never saved and must not be guessed from the later world state.
+Schema v8 also permits a retained duration-expiry row whose reaction already
+closed by declared counter/invalidation/fault; it later resolves as
+`already_closed`, preserving §6.3.
+
 ---
 
 ## 11. Trace record kinds
@@ -413,7 +452,7 @@ The canonical trace (EQM-013) already has an **open record-kind schema** (sorted
 - `event_line_progressed` — an event-line advanced (a→b / rate change / issuance). (Naming decided: not `event_line_advanced`; past-participle form matches `window_opened`/`window_closed`. Q-Round2.)
 - `window_opened` / `window_closed` — window lifecycle (fields per §8.1; close carries a cause, e.g. `deadline`).
 - invalidation records carry `closed_by: <condition id>` (and `invalid_event_skipped` for lazy skips).
-- **`closed_by` vocabulary** *(v1.1)*: condition ids plus the reserved causes `duration`, `reaction_count`, `already_closed` (§6.3), `actor_removed` (§13). Cascade resolutions carry their **round number** (§6.2). Sweep-rule executions record rule name + affected count (§4.7).
+- **`closed_by` vocabulary** *(v1.1 + EQM-141)*: condition ids plus the reserved causes `duration`, `reaction_count`, `already_closed` (§6.3), `condition_fault` (§6.2), `actor_removed` (§13). Cascade resolutions carry their **round number** (§6.2). Sweep-rule executions record rule name + affected count (§4.7).
 - **`event_invalidated`** *(v1.1, EQM-113)* — the invalidation record kind (carries `closed_by`, and `event_id` when the drop maps to a scheduled event). **`reaction_fired`** *(v1.1, EQM-113; extended EQM-132)* — a fired reaction was scheduled (fields: `round`, `actor`, `event_id`, versioned `reaction_fire_context`). **`reaction_fire_resolved`** *(EQM-132)* records the same isolated context when that exact occurrence resolves, allowing a save/restore continuation to prove its cause without replaying the earlier scheduling trace.
 - **`reservation_rejected`** *(EQM-137)* — a reservation was rejected before issuance and therefore has no scheduler event. The record is exactly `{kind, actor, code, reason}` plus canonical `i`; it deliberately carries no `event_id` or ordering key. For reaction-condition type rejection, `code = eqm.reaction.condition_type_invalid` and `reason = wrong_type` (the authoritative `submit` preflight).
 - Effect records carry a deterministic `classification` (important / sensed / offscreen) — **simulation-side data (Q12)**, implemented in EQM-080/081; presentation may not alter it.

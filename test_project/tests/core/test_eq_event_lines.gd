@@ -281,15 +281,28 @@ static func _test_scan_order_deterministic(t) -> void:
 
 static func _test_counter_issuance(t) -> void:
 	var a := EQEventLines.new()
+	t.ok(not a.issue(&"eqm.counter.99", 99, 0), "consumer issue cannot occupy the generated-counter namespace")
 	var c1 := a.issue_counter(3)
 	var c2 := a.issue_counter(5)
 	t.eq(c1, &"eqm.counter.1", "counter ids are deterministic (issuance order)")
 	t.eq(c2, &"eqm.counter.2", "counter seq is monotonic")
 	t.eq(a.value_of(c1), 3, "counter starts at its declared value")
 	t.eq(a.rate_of(c1), 0, "counters are frozen lines (advance by explicit decrement)")
+	t.eq(a.to_dict()["counter_ids"], ["eqm.counter.1", "eqm.counter.2"], "counter provenance is serialized in id order")
 
 	var b := EQEventLines.new()
 	t.eq(b.issue_counter(3), c1, "same call order on a fresh instance yields the same ids (replay determinism)")
+
+	var collision := EQEventLines.new()
+	collision.restore_values(
+		{
+			"lines": [{"id": "eqm.counter.1", "value": 77, "rate": 0}],
+			"counter_seq": 0,
+			"modifier_seq": 0,
+		}
+	)
+	t.eq(collision.issue_counter(4), &"eqm.counter.2", "counter issuance skips a historical occupied id")
+	t.eq(collision.value_of(&"eqm.counter.1"), 77, "collision skip never captures or rewrites the existing line")
 
 
 static func _test_sync_primary(t) -> void:

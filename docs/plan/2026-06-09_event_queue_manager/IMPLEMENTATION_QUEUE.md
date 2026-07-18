@@ -198,7 +198,7 @@ Add `follow-up-ready` tasks here during execution when a current task is complet
 | EQM-133 | COMPLETE | EQM-132 | Amberground reaction checkpoint audit | schema-v6 reaction-expiry ownership + exact one-event resolution boundary | count終了後のexpiryをsave/loadしFIRE/FIRE/`already_closed` continuation一致、v5 armed migration／orphan rejection、table tamper、後続reservationを消費しない1-event boundaryをfull gateで証明。 |
 | EQM-134 | COMPLETE | EQM-133 | Amberground state/passive/perception implementation audit | State/relation engineering work-scale rung + one-shot inversion hot-path repair | 64 tokens×8 actors、1,024 relations、200 actual triggersのround-trip/resolve、work-scale profile、full gate。 |
 | EQM-135 | COMPLETE | EQM-134 | Amberground interception tranche | 発行済みPREPARED単独予約へのmeta介入primitive | 発行時metaを予約instanceへ固定し、同値以上の介入でeffect未実行のまま`event_invalidated(closed_by: intervention)`、不足時は`intervention_avoided`、非対応contextはstable rejection。snapshot/pending消失とtrace順を専用test + full gateで証明。 |
-| EQM-141 | READY | EQM-140 | EQM-137 / historical R04 false-green audit | Reaction FIRE condition semantics (preview/commit + condition bind/save contract). | trigger match後・rumination消費前にsolve/invalidationを評価する二相契約、WAIT時のlifetime、trigger/reaction view、COUNTER bind、snapshotをtask packetで決定し、false/true/invalidation-wins/save-loadを厳密test。EQM-137へは混ぜない。 |
+| EQM-141 | RUNNING | EQM-140 | EQM-137 / historical R04 false-green audit | Reaction FIRE condition semantics (preview/commit + condition bind/save contract). | trigger match後・rumination消費前にsolve/invalidationを評価する二相契約、WAIT時のlifetime、trigger/reaction view、COUNTER bind、snapshotをtask packetで決定し、false/true/invalidation-wins/save-loadを厳密test。EQM-137へは混ぜない。 |
 
 ## Current pointer
 
@@ -206,12 +206,12 @@ Run-to-end (user-approved 2026-06-18): execute the queue in dependency order to 
 
 Run-to-end round 2 (user-approved 2026-07-02): Q27–Q43 決定に基づき Phase 11 (EQM-110→119) を依存順に自律実行する。停止は設計 fork / env 欠如 / 外部 upload のみ (§8.4)。
 
-Current: **EQM-141 READY — genuine semantic design fork**。user-approved autonomous hardening
+Current: **EQM-141 RUNNING**。user-approved autonomous hardening
 round (2026-07-18)のEQM-137→140は完了。EQM-137はtrace schema、SHIPPED continuation、
 consumer R04 false-greenを修理し、addon `754f905`をEBS DEPS/logへ記録してconsumer 3 gateも
 同revisionで再検証済み。EQM-138→140は通常回帰と独立performance laneの両方を完了証拠に
-した。EQM-141はsolve/invalidationの評価view・WAIT lifetime・bind/saveを同時に決める
-意味論forkのため、performance roundへ混ぜずtask packetで契約を確定してから実装する。
+した。EQM-141はtask packetでsolve/invalidationの評価view・WAIT lifetime・bind/saveを
+確定し、historical R04 false-greenを二層のFIRE gateとして修理中。performance roundへは混ぜない。
 
 Repair round (user-approved 2026-07-05, **完了 2026-07-05**): EQM-129→131 実行済み。wrapper 語彙は標準 2 種で確定 (user)。**B3 (展開のメタ関与) は EBS 側文書 `META_LEVEL_ASSIGNMENT.md` で解消** — メタレベル (比較値) とメタコスト予算 (展開の深さ) は別系・統合しない、hop cost は acceptance 宣言 budget = 現行実装が整合 (修理不要、確定記録)。EBS 宿題「メタレベル値付け」は同文書 (メタクラス二層 + 発行時注入) で起草済み — EQM 契約 (単一 int) と矛盾なし。前 round: **Phase 11 (v1.1 event-model implementation round) COMPLETE** (EQM-110..119, 2026-07-03)。contract coverage 21/21 implemented (`tools/check_contract_coverage.py` gate green)。SEM v1.1 の凍結契約はすべて実装・test 済み。次 round は新たな設計判断 (composite atomic bundle / race 帳簿 serialize / editor dock mounting 等の declared follow-ups) の需要が確定した時点で起票する。
 

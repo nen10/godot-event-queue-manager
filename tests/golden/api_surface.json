@@ -1065,6 +1065,11 @@
           "returns": "-> Array"
         },
         {
+          "name": "commit_occurrence",
+          "params": "preview: Dictionary",
+          "returns": "-> bool"
+        },
+        {
           "name": "disarm",
           "params": "reservation: EQReservation",
           "returns": "-> bool"
@@ -1075,12 +1080,22 @@
           "returns": "-> Array"
         },
         {
+          "name": "invalidate_occurrence",
+          "params": "preview: Dictionary",
+          "returns": "-> bool"
+        },
+        {
           "name": "on_event_resolved",
           "params": "view: Dictionary, current_tick: int",
           "returns": "-> Array"
         },
         {
           "name": "on_event_resolved_occurrences",
+          "params": "view: Dictionary, current_tick: int",
+          "returns": "-> Array"
+        },
+        {
+          "name": "preview_event_resolved_occurrences",
           "params": "view: Dictionary, current_tick: int",
           "returns": "-> Array"
         }
@@ -1720,6 +1735,7 @@
         "ACTOR_DUPLICATE_ID",
         "ACTOR_EMPTY_ID",
         "ACTOR_ID_REUSED",
+        "CONDITION_COUNTER_SOLVE_UNSUPPORTED",
         "CONDITION_COUNTER_START_INVALID",
         "CONDITION_LINE_ID_EMPTY",
         "CONDITION_LINE_UNKNOWN",
@@ -1739,6 +1755,7 @@
         "REACTION_EXPIRY_STATE_INVALID",
         "REACTION_FIRE_CONTEXT_INVALID",
         "REACTION_FIRE_CONTEXT_MISSING",
+        "REACTION_FIRE_GATE_STATE_INVALID",
         "RESERVATION_IMMEDIATE_NONZERO_DELAY",
         "RESERVATION_INTERVENTION_INVALID",
         "RESERVATION_INVALID_DURATION",

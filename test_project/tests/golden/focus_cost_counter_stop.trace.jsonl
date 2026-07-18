@@ -21,5 +21,4 @@
 {"actor":"hero","event_id":5,"i":20,"kind":"reaction_fire_resolved","reaction_fire_context":{"event_view":{"kind":"reservation","meta_level":0,"source":"orc","tags":["損害"],"target":""},"fire_event_id":5,"fire_index":2,"reaction_fire_context_version":1,"trigger":{"cell":null,"event_id":4,"source":"orc","target":"","tick":0,"view_index":0}}}
 {"i":21,"kind":"focus_react","source":"hero"}
 {"cause":"advanced","from":2,"i":22,"kind":"event_line_progressed","line":"focus.hero","to":1}
-{"actor":"orc","event_id":6,"i":23,"kind":"reaction_fired","reaction_fire_context":{"event_view":{"kind":"reservation","meta_level":0,"source":"hero","tags":["損害"],"target":""},"fire_event_id":6,"fire_index":3,"reaction_fire_context_version":1,"trigger":{"cell":null,"event_id":5,"source":"hero","target":"","tick":0,"view_index":0}},"round":5}
-{"actor":"orc","closed_by":"focus_exhausted","event_id":6,"i":24,"kind":"event_invalidated"}
+{"actor":"orc","closed_by":"focus_exhausted","i":23,"kind":"event_invalidated","trigger_event_id":5}

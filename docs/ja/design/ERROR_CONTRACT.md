@@ -56,6 +56,7 @@ determinism は両 mode で維持されます。skip/degrade は trace に現れ
 | `eqm.reservation.operation_needs_target` | RESOURCE_INVALID | ERROR | editor, game | OPERATION のdefinitionで`operation_target_tag`がempty、またはsubmit時のreservation `target_id`がempty |
 | `eqm.reservation.missing_definition` | RESOURCE_INVALID | ERROR | editor, game | `EQReservation` に definition がない |
 | `eqm.trigger.chain_limit` | BUDGET_EXCEEDED | ERROR | editor, game | trigger cascade が `EQTriggerEngine.max_chain` を超えた (chain は truncate され、record される) |
+| `eqm.condition.counter_solve_unsupported` | RESOURCE_INVALID | ERROR | editor, game | `solve_conditions`にCOUNTERを宣言した。counterはaccepted resolution後だけ進行するためinvalidation専用 |
 | `eqm.effect.commit_result_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | `register_effect_commit` で登録した handler が `EQEffectCommitResult` 以外、または records / event views / diagnostic の value validation に失敗する result を返した |
 | `eqm.effect.commit_result_version_unsupported` | CONTRACT_VIOLATION | ERROR | editor, game | transactional effect-result の登録／返却にruntime非対応versionを使用した、schema v4+ reservationで必須bindingが欠けた (`reason: missing_binding`)、またはschema v1-v3がnonzero bindingを持った (`reason: binding_not_supported_by_schema`)。loadはstate適用前に拒否する |
 | `eqm.effect.commit_result_context_unsupported` | CONTRACT_VIOLATION | ERROR | editor, game | rollback を保証できない atomic bundle または expiry-effect context で transactional effect-result v1 を宣言・検出した |
@@ -65,6 +66,7 @@ determinism は両 mode で維持されます。skip/degrade は trace に現れ
 | `eqm.reaction.expiry_state_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | schema v6のreaction-expiry rowが欠落・不正・重複／orphan、またはscheduler／armed stateと不一致。historical v1-v5のorphan expiryを復元できない場合にも使用する |
 | `eqm.reservation.intervention_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | reservation介入がunknown／非pending／非PREPARED event、またはv1対象外のbundle／race／reaction FIRE contextを指定した。対象stateは変更しない |
 | `eqm.reservation.issued_meta_level_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | schema v7 reservationの発行時metaが欠落／非int、またはhistorical top-level schemaが表現不能な異なる値を持つ。loadはstate適用前に拒否する |
+| `eqm.reaction.fire_gate_state_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | armed reactionのbound FIRE gate欠落、schema v8 term／generated-counter provenanceとarm-time authored snapshotの不整合、またはv1–v7 conditioned armのbind時state復元不能。loadはmutation前に拒否する |
 
 code は後続 task (snapshot / actor / reservation / trigger) でも同じ rules の下で追加されます。snapshot load codes (EQM-012 `EQSnapshot.Load`) はこの taxonomy より前に存在しており、現時点では独自 enum のままです。EQM-022 で rename なしに取り込む可能性があります。
 

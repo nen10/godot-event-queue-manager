@@ -48,8 +48,10 @@ const DURATION_UNLIMITED := -1
 ## (SEM §6.3). Same registry and error rule as effect_name.
 @export var expiry_effect_name: StringName = &""
 ## Solve terms — AND, level-triggered (SEM §5.4, EQM-111). Empty = no gate.
+## COUNTER is rejected here because it progresses only after accepted resolve.
 @export var solve_conditions: Array[EQConditionSpec] = []
-## Invalidation terms — OR, invalidation-wins (SEM §5.4). `duration` and
+## Invalidation terms — OR, invalidation-wins (SEM §5.4); COUNTER belongs here.
+## `duration` and
 ## `rumination` above are sugar over these; see normalized_conditions().
 @export var invalidation_conditions: Array[EQConditionSpec] = []
 
@@ -70,6 +72,12 @@ func validate() -> EQValidation:
 		if solve_conditions[i] != null:
 			for issue in solve_conditions[i].validate().issues:
 				v.issues.append(issue)
+			if solve_conditions[i].type == EQConditionSpec.Type.COUNTER:
+				v.add(
+					EQError.CONDITION_COUNTER_SOLVE_UNSUPPORTED,
+					"COUNTER is an invalidation-only condition; solve COUNTER cannot self-progress",
+					{"index": i}
+				)
 	for i in range(invalidation_conditions.size()):
 		if invalidation_conditions[i] != null:
 			for issue in invalidation_conditions[i].validate().issues:

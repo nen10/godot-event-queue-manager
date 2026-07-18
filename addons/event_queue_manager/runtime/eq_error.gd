@@ -48,6 +48,7 @@ const PRESENTATION_POLICY_CLASS_CONFLICT := &"eqm.presentation.policy_class_conf
 const CONDITION_LINE_ID_EMPTY := &"eqm.condition.line_id_empty"
 const CONDITION_PREDICATE_NAME_EMPTY := &"eqm.condition.predicate_name_empty"
 const CONDITION_COUNTER_START_INVALID := &"eqm.condition.counter_start_invalid"
+const CONDITION_COUNTER_SOLVE_UNSUPPORTED := &"eqm.condition.counter_solve_unsupported"
 const CONDITION_PREDICATE_UNREGISTERED := &"eqm.condition.predicate_unregistered"
 const CONDITION_LINE_UNKNOWN := &"eqm.condition.line_unknown"
 const EFFECT_UNREGISTERED := &"eqm.effect.unregistered"
@@ -67,6 +68,7 @@ const REACTION_EXPIRY_STATE_INVALID := &"eqm.reaction.expiry_state_invalid"
 const REACTION_CONDITION_TYPE_INVALID := &"eqm.reaction.condition_type_invalid"
 const RESERVATION_INTERVENTION_INVALID := &"eqm.reservation.intervention_invalid"
 const RESERVATION_ISSUED_META_LEVEL_INVALID := &"eqm.reservation.issued_meta_level_invalid"
+const REACTION_FIRE_GATE_STATE_INVALID := &"eqm.reaction.fire_gate_state_invalid"
 
 # code -> {rec, sev, surface}. surface is a subset of ["editor", "game"].
 const _META := {
@@ -155,6 +157,12 @@ const _META := {
 	CONDITION_PREDICATE_UNREGISTERED:
 	{
 		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	CONDITION_COUNTER_SOLVE_UNSUPPORTED:
+	{
+		"rec": Recoverability.RESOURCE_INVALID,
 		"sev": Severity.ERROR,
 		"surface": ["editor", "game"]
 	},
@@ -253,6 +261,12 @@ const _META := {
 		"surface": ["editor", "game"]
 	},
 	RESERVATION_ISSUED_META_LEVEL_INVALID:
+	{
+		"rec": Recoverability.CONTRACT_VIOLATION,
+		"sev": Severity.ERROR,
+		"surface": ["editor", "game"]
+	},
+	REACTION_FIRE_GATE_STATE_INVALID:
 	{
 		"rec": Recoverability.CONTRACT_VIOLATION,
 		"sev": Severity.ERROR,

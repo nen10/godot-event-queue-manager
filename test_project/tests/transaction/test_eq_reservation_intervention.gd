@@ -152,7 +152,7 @@ static func _test_issued_meta_roundtrips(t) -> void:
 	var event_id := original.submit(target)
 	definition.meta_level = 9
 	var bundle := EQSaveAdapter.save(original.runtime, original)
-	t.eq(bundle["schema_version"], 7, "issuance meta ships behind save schema v7")
+	t.eq(bundle["schema_version"], 8, "issuance meta remains present in save schema v8")
 	var saved := _saved_scheduled_row(bundle, event_id)
 	t.eq(saved["reservation"]["issued_meta_level"], 2, "save retains the sampled issuance meta")
 	t.eq(saved["reservation"]["definition"]["meta_level"], 9, "later definition value remains distinct")

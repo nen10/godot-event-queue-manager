@@ -104,7 +104,7 @@ static func _test_bundle_shape(t) -> void:
 	var rr := _pipeline_setup()
 	var bundle := EQSaveAdapter.save(rr.runtime, rr)
 	var schema_version := int(bundle["schema_version"])
-	t.eq(schema_version, 7, "bundle saves at the current schema v7")
+	t.eq(schema_version, 8, "bundle saves at the current schema v8")
 	for key in [
 		"event_lines", "windows", "armed_triggers", "reaction_expiries",
 		"pending_conditional", "scheduled_reservations"

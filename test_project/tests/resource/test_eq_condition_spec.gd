@@ -94,6 +94,15 @@ static func _test_nested_validate(t) -> void:
 	d.solve_conditions = [bad]
 	t.ok(d.validate().has_code(EQError.CONDITION_LINE_ID_EMPTY), "definition validate aggregates nested spec issues")
 
+	var solve_counter := EQConditionSpec.new()
+	solve_counter.type = EQConditionSpec.Type.COUNTER
+	solve_counter.counter_start = 2
+	d.solve_conditions = [solve_counter]
+	t.ok(
+		d.validate().has_code(EQError.CONDITION_COUNTER_SOLVE_UNSUPPORTED),
+		"COUNTER is rejected on solve because it cannot self-progress before RESOLVE"
+	)
+
 
 static func _test_sugar_normalization(t) -> void:
 	var d := EQActionDefinition.new()

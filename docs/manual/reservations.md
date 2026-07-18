@@ -115,6 +115,17 @@ value vs a threshold), `COUNTER` (a decremental use counter), or
 `NAMED_PREDICATE` (a name registered via `runtime.register_predicate`; only the
 NAME crosses a save). The `duration` / `rumination` fields above are **sugar**
 over this: `duration` becomes the expiry closure, `rumination` the use counter.
+`COUNTER` belongs in `invalidation_conditions`; authoring it in the solve set is
+rejected because it cannot decrement until a resolution has already been accepted.
+
+For `REACTION_PREPARATION`, keep the two condition layers distinct:
+`EQCondition` selects which resolved event candidates are relevant, while the
+definition's `EQConditionSpec` arrays decide whether that matched candidate may
+FIRE. A false solve term waits without consuming the arm or its counters; an
+invalidation term closes the arm before FIRE. Named predicates receive a
+serializable `{trigger, reaction}` view. These terms bind once at arm time and
+schema v8 preserves the bound state and generated-counter identity across
+save/load. Editing the source definition after arm does not rewrite that state.
 
 The most common case therefore needs no spec at all — one checked-in `.tres`
 declares a counterattack that closes on 3 uses OR 5 ticks, whichever first
@@ -136,7 +147,7 @@ Nothing closes silently.
 
 Declarations added by the EBS extension round (SEM v1.2). All are L2/L3 opt-in — with no declarations the runtime behaves exactly as before.
 
-- **Inv pairs**: `EQStateAlgebra.declare_inv_pair(a, b, Rule.CANCEL | EXCLUDE | COEXIST)`; CANCEL keeps one signed axis per pair, so cancellation is arithmetic. Rate suspensions are modifiers (`add_rate_modifier(line, "override", 0)` = freeze); removing one restores the remaining effective rate automatically. Attach via `rr.state_algebra`; its save tables were introduced by schema v3 and remain in current schema v7.
+- **Inv pairs**: `EQStateAlgebra.declare_inv_pair(a, b, Rule.CANCEL | EXCLUDE | COEXIST)`; CANCEL keeps one signed axis per pair, so cancellation is arithmetic. Rate suspensions are modifiers (`add_rate_modifier(line, "override", 0)` = freeze); removing one restores the remaining effective rate automatically. Attach via `rr.state_algebra`; its save tables were introduced by schema v3 and remain in current schema v8.
 - **Relations & rewrites**: declare relation types (`TREE`/`GRAPH`, `SERIAL_SUTURE` on dissolve), `bind` instances, then `declare_expansion_rule` (tag-gated target expansion along relations, cost-bounded) and `register_transform` (`retarget` to a provenance stage / `state_inv`). Transforms may apply repeatedly; validating the application structure is the consumer's job — the core guarantees deterministic order, per-application trace, and a bounded-rounds backstop.
 - **Meta-level & interventions**: `EQActionDefinition.meta_level` (int, default 0) is sampled when a reservation is accepted and is carried by events and windows. `intervene_close(window_id, {"meta_level": n})` closes a window prematurely; `intervene_reservation(event_id, {"meta_level": n})` invalidates one ordinary PREPARED singleton before its effect. Both use `n >= target meta` (tie succeeds); a lower value records `intervention_avoided`. Reservation v1 rejects bundle/race/reaction-FIRE targets rather than partially changing their bookkeeping. `submit_bundle` resolves same-tick members atomically (single sweep after all members). `open_phase`/`close_phase` add sub-checkpoints inside a window; revisiting a phase name detects the minimal loop and rolls back to its start, tracing `cleared_inputs`.
-- **Saving**: schema v3 introduced the `relations` / `state_algebra` tables used above; schema v4 added both effect-result mode bindings; schema v5 added the scheduled reaction-FIRE context; schema v6 added independent `reaction_expiries`. Current schema v7 retains them and adds `issued_meta_level` to every reservation, so declaration edits cannot rewrite pending work. Loading verifies names, bindings, occurrence/expiry identity, and issuance meta first and applies nothing on a stable error. A historical pending FIRE, a historical orphan expiry, or an issued-meta value its historical schema could not represent is rejected rather than guessed; ordinary historical scheduled work and still-armed expiries migrate.
+- **Saving**: schema v3 introduced the `relations` / `state_algebra` tables; schema v4 added effect-result mode bindings; schema v5 added scheduled reaction-FIRE context; schema v6 added independent `reaction_expiries`; schema v7 added `issued_meta_level`. Current schema v8 also saves each armed reaction's already-bound solve/invalidation terms and declared counter lines. Loading verifies names, bindings, occurrence/expiry identity, issuance meta, gate definition parity, and line identity before mutation. Historical empty-gate arms migrate; a conditioned v1-v7 arm is rejected rather than rebound against a later world state.

@@ -92,6 +92,15 @@ invalidation_conditions   Array[EQConditionSpec] — OR。同時成立は invali
 `COUNTER` (減算カウンタ)、`NAMED_PREDICATE` (`register_predicate` で登録した名前 —
 save を跨ぐのは名前だけ)。既存の `duration` / `rumination` はこの**糖衣**です
 (duration = 期限閉路、rumination = 使用回数カウンタ)。
+`COUNTER`は`invalidation_conditions`専用です。resolution accepted後まで減算されない
+ため、solve側への宣言はvalidationで拒否されます。
+
+`REACTION_PREPARATION`では二つの条件層を分けます。`EQCondition`は関連する
+resolved event候補を選び、definitionの`EQConditionSpec`配列はmatch後にFIRE可否を
+決めます。solve=falseはarm／counterを消費せずWAITし、invalidation成立はFIRE前に
+armを閉じます。named predicateのviewはserializableな`{trigger, reaction}`です。
+termはarm時に一度bindされ、schema v8がbound stateとgenerated-counter identityを
+save/loadします。arm後に元definitionを編集してもarmed stateは書き換わりません。
 
 最頻ケースは spec すら不要 — 「3 回 or 5 ターンで閉じる反撃準備」は .tres 1 個・
 コード 0 行で宣言できます (`dogfood/action_resolution/counterattack_preparation.tres`):
@@ -118,7 +127,7 @@ var algebra := EQStateAlgebra.new(rr.lines)
 algebra.declare_inv_pair(&"欠損", &"虚飾", EQStateAlgebra.Rule.CANCEL)  # 相殺 = 符号付き 1 軸
 algebra.grant_state(&"hero", &"欠損", 3)
 algebra.grant_state(&"hero", &"虚飾", 1)   # 軸は +2 (欠損 2 に相殺)
-rr.state_algebra = algebra                 # schema v3で導入、current schema v7でも保存
+rr.state_algebra = algebra                 # schema v3で導入、current schema v8でも保存
 ```
 
 規則は pair ごとに `CANCEL` (相殺) / `EXCLUDE` (排他: 付与時に対を解除) / `COEXIST` (共存)。
@@ -166,7 +175,8 @@ rr.open_phase(&"入力", [&"mirror.a"])  # 操作フェーズ checkpoint。同�
 schema v3で上記の`relations` / `state_algebra` tableを導入し、schema v4で全reservationの
 main／expiry effect-result mode binding、schema v5でscheduled reaction FIRE contextを導入した。
 schema v6は回数でarmed slotが閉じた後もduration eventを保持する`reaction_expiries` tableを追加した。
-current schema v7はさらに全reservationの`issued_meta_level`を保持する。loadは登録名・binding・occurrence／expiry identity・発行時metaを先に
-検証し、安定error時は何も適用しない。原因を保存していなかったhistorical pending FIREや、
+schema v7は全reservationの`issued_meta_level`を保持し、current schema v8はさらにarmed
+reactionのbound solve/invalidation/counter lineを保持する。loadは登録名・binding・
+occurrence／expiry identity・発行時meta・gate stateを先に検証し、安定error時は何も適用しない。原因を保存していなかったhistorical pending FIREや、
 reservationを保存していなかったhistorical orphan expiryは推測せず拒否する。通常のhistorical
 scheduled workとstill-armed expiryはmigrateする。

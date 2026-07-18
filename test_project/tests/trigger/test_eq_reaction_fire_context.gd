@@ -173,7 +173,7 @@ static func _test_pending_fire_context_roundtrips(t) -> void:
 	_submit_emitter(original)
 	original.resolve_next()
 	var bundle := EQSaveAdapter.save(original.runtime, original)
-	t.eq(bundle["schema_version"], 7, "reaction context, expiry state, and issued meta ship in schema v7")
+	t.eq(bundle["schema_version"], 8, "reaction context, expiry state, issued meta, and FIRE gates ship in schema v8")
 	var saved_row: Dictionary = bundle["scheduled_reservations"][0]
 	t.ok(not saved_row["reaction_fire_context"].is_empty(), "pending FIRE saves its cause")
 

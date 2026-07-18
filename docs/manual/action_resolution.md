@@ -158,7 +158,7 @@ The first accepted submit stores both handler modes on the reservation (0 legacy
 handler from legacy to typed or vice versa cannot reinterpret pending work; use
 the stable `eqm.effect.commit_result_binding_mismatch` to surface that setup
 error. Schema v1-v3 saves with no binding fields remain legacy.
-Schema v4 introduced both binding fields and the current schema-v6 writer
+Schema v4 introduced both binding fields and the current schema-v8 writer
 retains them. Its reader
 migrates missing fields only for schema v1-v3 bundles (to legacy 0); a v4
 or newer reservation missing either field is rejected before load mutation with
@@ -178,6 +178,10 @@ world state. Schema v6 retains that row context and also stores every live
 reaction expiry independently from armed membership. This keeps the eventual
 `closed_by: already_closed` event deterministic after count exhaustion and
 save/load; a historical orphan expiry that cannot be reconstructed is rejected.
+Schema v8 additionally persists each armed reaction's arm-time-bound solve and
+invalidation terms plus declared counter-line ids. A matched trigger therefore
+remains a non-mutating WAIT while solve is false, and save/load cannot silently
+rebind a relative threshold or issue a replacement counter.
 
 For consumers that need checkpoint or interleaving control at the exact master
 timeline boundary, call `resolve_one_scheduled_event()`. It processes at most

@@ -42,7 +42,7 @@ const EQSnapshot := preload("eq_snapshot.gd")
 # `event_lines` carries line modifiers and modifiers-only fields; line-level
 # provenance is serialized inside the reservation dicts. The phase-checkpoint
 # table that EQM-122 reserves remains boundary-gated to empty in this contract.
-const SCHEMA_VERSION := 7
+const SCHEMA_VERSION := 8
 
 
 ## A plain, node-free save bundle. With a pipeline (EQReservationRuntime), the
@@ -96,7 +96,8 @@ static func save(runtime, pipeline = null) -> Dictionary:
 ## but reject explicit nonzero bindings; schema v4+ requires both fields;
 ## schema v5 requires the scheduled-row reaction context field; schema v6
 ## requires the independent reaction-expiry table; schema v7 requires every
-## serialized reservation's issuance-time meta sample.
+## serialized reservation's issuance-time meta sample; schema v8 persists each
+## armed reaction's already-bound FIRE gate and declared counter lines.
 static func load(into_runtime, data: Dictionary, rebind: Dictionary = {}, pipeline = null) -> bool:
 	var version := int(data.get("schema_version", -1))
 	if version < 1 or version > SCHEMA_VERSION:

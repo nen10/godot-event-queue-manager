@@ -315,9 +315,16 @@ func _transform_matches(transform: Dictionary, tags: Array) -> bool:
 
 var _by_event: Dictionary = {}          # event_id -> EQReservation (scheduled)
 var _bound_inv: Dictionary = {}         # event_id -> Array bound invalidation terms
-var _expiry_by_event: Dictionary = {}   # expiry event_id -> EQReservation
+var _expiry_by_event: Dictionary = {}   # expiry event_id -> {reservation, slot_id}
 ## scheduled FIRE event_id -> immutable/versioned cause value
 var _reaction_fire_context_by_event: Dictionary = {}
+## trigger-engine slot_id -> {authored_solve, authored_inv, solve, inv,
+## counter_lines}. Conditions
+## are bound exactly once at arm time and share the armed slot's lifetime.
+var _armed_reaction_gates: Dictionary = {}
+## line_id -> number of armed gates that watch it. Keeps step_tick work tied to
+## distinct watched lines instead of scanning every armed reaction.
+var _armed_gate_watched_counts: Dictionary = {}
 var _pending_conditional: Array[Dictionary] = []  # {res, solve, inv, view} in submit order
 var _cascade_tick: int = -1
 var _cascade_round: int = 0
@@ -765,19 +772,35 @@ func save_state() -> Dictionary:
 	expiry_event_ids.sort()
 	var reaction_expiries: Array = []
 	for event_id in expiry_event_ids:
-		expiry_of[(_expiry_by_event[event_id] as EQReservation).get_instance_id()] = event_id
+		var expiry: Dictionary = _expiry_by_event[event_id]
+		var expiry_slot_id := int(expiry["slot_id"])
+		expiry_of[expiry_slot_id] = event_id
 		reaction_expiries.append({
 			"event_id": int(event_id),
-			"reservation": (_expiry_by_event[event_id] as EQReservation).to_dict(),
+			"reservation": _armed_reservation_dict(
+				expiry["reservation"] as EQReservation, expiry_slot_id
+			),
 		})
 	var armed: Array = []
 	for entry in engine.armed_entries():
 		var res: EQReservation = entry["reservation"]
+		var slot_id := int(entry["slot_id"])
+		var gate: Dictionary = _reaction_gate_for_slot(slot_id)
+		var reservation_dict := _armed_reservation_dict(res, slot_id)
 		armed.append({
-			"reservation": res.to_dict(),
+			"reservation": reservation_dict,
 			"condition": entry["condition"].to_dict() if entry["condition"] != null else {},
 			"armed_at": int(entry["armed_at"]),
-			"expiry_event_id": int(expiry_of.get(res.get_instance_id(), -1)),
+			"expiry_event_id": int(expiry_of.get(slot_id, -1)),
+			"solve": (
+				null if gate.is_empty() else (gate["solve"] as Array).duplicate(true)
+			),
+			"inv": null if gate.is_empty() else (gate["inv"] as Array).duplicate(true),
+			"counter_lines": (
+				null
+				if gate.is_empty()
+				else (gate["counter_lines"] as Array).duplicate(true)
+			),
 		})
 	var conditional: Array = []
 	for p in _pending_conditional:
@@ -805,6 +828,22 @@ func save_state() -> Dictionary:
 		"pending_conditional": conditional,
 		"scheduled_reservations": scheduled,
 	}
+
+
+func _armed_reservation_dict(res: EQReservation, slot_id: int) -> Dictionary:
+	var reservation_dict := res.to_dict()
+	var gate := _reaction_gate_for_slot(slot_id)
+	if gate.is_empty():
+		return reservation_dict
+	var definition_dict: Dictionary = reservation_dict.get("definition", {})
+	definition_dict["solve_conditions"] = (
+		gate.get("authored_solve", []) as Array
+	).duplicate(true)
+	definition_dict["invalidation_conditions"] = (
+		gate.get("authored_inv", []) as Array
+	).duplicate(true)
+	reservation_dict["definition"] = definition_dict
+	return reservation_dict
 
 
 ## Verify-before-mutate (SEM §5.5/§6.1): every name the bundle references must
@@ -842,7 +881,12 @@ func verify_state(data: Dictionary) -> bool:
 		if not registered.has(StringName(name)):
 			runtime._fault(EQError.CONDITION_PREDICATE_UNREGISTERED, "sweep rule '%s' in the save is not registered" % name, {"name": String(name)}, true)
 			return false
+	if not _verify_reaction_fire_gate_state(data, save_schema_version, lines_d):
+		return false
 	var term_sets: Array = []
+	for a in data.get("armed_triggers", []):
+		term_sets.append(a.get("solve", []))
+		term_sets.append(a.get("inv", []))
 	for c in data.get("pending_conditional", []):
 		term_sets.append(c.get("solve", []))
 		term_sets.append(c.get("inv", []))
@@ -1087,6 +1131,284 @@ func verify_state(data: Dictionary) -> bool:
 	return true
 
 
+func _verify_reaction_fire_gate_state(
+	data: Dictionary, save_schema_version: int, lines_d: Dictionary
+) -> bool:
+	var armed_value = data.get("armed_triggers", [])
+	if typeof(armed_value) != TYPE_ARRAY:
+		return _reaction_fire_gate_state_fault(
+			"armed_triggers must be an Array", {"reason": "armed_table_type"}
+		)
+	var saved_line_ids := {}
+	var saved_lines_by_id := {}
+	for line_value in lines_d.get("lines", []):
+		if line_value is Dictionary:
+			var saved_line_id := String((line_value as Dictionary).get("id", ""))
+			saved_line_ids[saved_line_id] = true
+			saved_lines_by_id[saved_line_id] = line_value
+	var generated_counter_ids := {}
+	if save_schema_version >= 8:
+		var counter_ids_value = lines_d.get("counter_ids", null)
+		if typeof(counter_ids_value) != TYPE_ARRAY:
+			return _reaction_fire_gate_state_fault(
+				"schema 8 event lines are missing counter provenance",
+				{"reason": "counter_provenance_type"}
+			)
+		var counter_seq := int(lines_d.get("counter_seq", -1))
+		for counter_id_value in counter_ids_value as Array:
+			if (
+				typeof(counter_id_value) != TYPE_STRING
+				and typeof(counter_id_value) != TYPE_STRING_NAME
+			):
+				return _reaction_fire_gate_state_fault(
+					"counter provenance id must be a String",
+					{"reason": "counter_provenance_id_type"}
+				)
+			var counter_id := String(counter_id_value)
+			var suffix := counter_id.trim_prefix("eqm.counter.")
+			if (
+				not counter_id.begins_with("eqm.counter.")
+				or not suffix.is_valid_int()
+				or int(suffix) < 1
+				or int(suffix) > counter_seq
+				or generated_counter_ids.has(counter_id)
+				or not saved_lines_by_id.has(counter_id)
+			):
+				return _reaction_fire_gate_state_fault(
+					"counter provenance is duplicate, orphaned, or non-canonical",
+					{"line_id": counter_id, "reason": "counter_provenance_identity"}
+				)
+			var counter_line: Dictionary = saved_lines_by_id[counter_id]
+			var counter_modifiers = counter_line.get("modifiers", [])
+			if (
+				int(counter_line.get("rate", 0)) != 0
+				or typeof(counter_modifiers) != TYPE_ARRAY
+				or not (counter_modifiers as Array).is_empty()
+			):
+				return _reaction_fire_gate_state_fault(
+					"generated counter line must remain frozen",
+					{"line_id": counter_id, "reason": "counter_not_frozen"}
+				)
+			generated_counter_ids[counter_id] = true
+		for saved_line_id in saved_line_ids:
+			if String(saved_line_id).begins_with("eqm.counter.") and not generated_counter_ids.has(saved_line_id):
+				return _reaction_fire_gate_state_fault(
+					"reserved counter namespace lacks generated provenance",
+					{"line_id": saved_line_id, "reason": "counter_provenance_missing"}
+				)
+	var used_gate_counter_ids := {}
+	for row_value in armed_value as Array:
+		if typeof(row_value) != TYPE_DICTIONARY:
+			return _reaction_fire_gate_state_fault(
+				"armed trigger row must be a Dictionary", {"reason": "armed_row_type"}
+			)
+		var row: Dictionary = row_value
+		var reservation_value = row.get("reservation", {})
+		if typeof(reservation_value) != TYPE_DICTIONARY:
+			return _reaction_fire_gate_state_fault(
+				"armed trigger reservation must be a Dictionary",
+				{"reason": "reservation_type"}
+			)
+		var definition_value = (reservation_value as Dictionary).get("definition", {})
+		if typeof(definition_value) != TYPE_DICTIONARY:
+			return _reaction_fire_gate_state_fault(
+				"armed trigger definition must be a Dictionary",
+				{"reason": "definition_type"}
+			)
+		var definition: Dictionary = definition_value
+		var authored_solve = definition.get("solve_conditions", [])
+		var authored_inv = definition.get("invalidation_conditions", [])
+		if typeof(authored_solve) != TYPE_ARRAY or typeof(authored_inv) != TYPE_ARRAY:
+			return _reaction_fire_gate_state_fault(
+				"reaction definition condition sets must be Arrays",
+				{"reason": "authored_term_set_type"}
+			)
+		if save_schema_version < 8:
+			if not (authored_solve as Array).is_empty() or not (authored_inv as Array).is_empty():
+				return _reaction_fire_gate_state_fault(
+					"historical save cannot reconstruct an armed reaction FIRE gate",
+					{
+						"schema_version": save_schema_version,
+						"reason": "bind_state_not_supported_by_schema",
+					}
+				)
+			for historical_key in ["solve", "inv", "counter_lines"]:
+				var historical_value = row.get(historical_key, [])
+				if typeof(historical_value) != TYPE_ARRAY or not (historical_value as Array).is_empty():
+					return _reaction_fire_gate_state_fault(
+						"historical save carries unsupported reaction FIRE gate state",
+						{
+							"schema_version": save_schema_version,
+							"field": historical_key,
+							"reason": "field_not_supported_by_schema",
+						}
+					)
+			continue
+		for required_key in ["solve", "inv", "counter_lines"]:
+			if not row.has(required_key) or typeof(row[required_key]) != TYPE_ARRAY:
+				return _reaction_fire_gate_state_fault(
+					"schema 8 armed trigger is missing a FIRE gate Array",
+					{"field": required_key, "reason": "missing_or_invalid_field"}
+				)
+		var expected_counters: Array = []
+		for group in [
+			{"name": "solve", "specs": authored_solve, "terms": row["solve"]},
+			{"name": "invalidation", "specs": authored_inv, "terms": row["inv"]},
+		]:
+			var specs: Array = group["specs"]
+			var terms: Array = group["terms"]
+			if specs.size() != terms.size():
+				return _reaction_fire_gate_state_fault(
+					"bound reaction term count differs from its definition",
+					{"group": group["name"], "reason": "term_count"}
+				)
+			for i in range(specs.size()):
+				if typeof(specs[i]) != TYPE_DICTIONARY or typeof(terms[i]) != TYPE_DICTIONARY:
+					return _reaction_fire_gate_state_fault(
+						"reaction FIRE gate terms must be Dictionaries",
+						{"group": group["name"], "index": i, "reason": "term_type"}
+					)
+				var spec: Dictionary = specs[i]
+				var term: Dictionary = terms[i]
+				if save_schema_version >= 8 and not _dictionary_has_exact_keys(
+					spec,
+					[
+						"type", "line_id", "threshold", "comparison", "relative",
+						"counter_start", "predicate_name", "condition_id",
+					]
+				):
+					return _reaction_fire_gate_state_fault(
+						"authored reaction condition has an inexact shape",
+						{"group": group["name"], "index": i, "reason": "spec_shape"}
+					)
+				var condition_id := String(spec.get("condition_id", ""))
+				if condition_id == "":
+					condition_id = "%s:%d" % [group["name"], i]
+				if String(term.get("condition_id", "")) != condition_id:
+					return _reaction_fire_gate_state_fault(
+						"bound reaction condition id differs from its definition",
+						{"group": group["name"], "index": i, "reason": "condition_id"}
+					)
+				var spec_type := int(spec.get("type", -1))
+				if spec_type == EQConditionSpec.Type.NAMED_PREDICATE:
+					if not _dictionary_has_exact_keys(
+						term, ["type", "predicate_name", "condition_id"]
+					):
+						return _reaction_fire_gate_state_fault(
+							"bound reaction predicate has an inexact shape",
+							{"group": group["name"], "index": i, "reason": "term_shape"}
+						)
+					if (
+						int(term.get("type", -1)) != EQConditionSpec.Type.NAMED_PREDICATE
+						or String(term.get("predicate_name", ""))
+						!= String(spec.get("predicate_name", ""))
+					):
+						return _reaction_fire_gate_state_fault(
+							"bound reaction predicate differs from its definition",
+							{"group": group["name"], "index": i, "reason": "predicate"}
+						)
+					continue
+				if int(term.get("type", -1)) != EQConditionSpec.Type.LINE_THRESHOLD:
+					return _reaction_fire_gate_state_fault(
+						"bound reaction line term has an invalid type",
+						{"group": group["name"], "index": i, "reason": "bound_type"}
+					)
+				if not _dictionary_has_exact_keys(
+					term, ["type", "line_id", "threshold", "comparison", "condition_id"]
+				):
+					return _reaction_fire_gate_state_fault(
+						"bound reaction line term has an inexact shape",
+						{"group": group["name"], "index": i, "reason": "term_shape"}
+					)
+				var line_id := String(term.get("line_id", ""))
+				if line_id == "" or not saved_line_ids.has(line_id):
+					return _reaction_fire_gate_state_fault(
+						"bound reaction term references an unknown saved line",
+						{"line_id": line_id, "reason": "line_unknown"}
+					)
+				if spec_type == EQConditionSpec.Type.COUNTER:
+					if (
+						not generated_counter_ids.has(line_id)
+						or used_gate_counter_ids.has(line_id)
+					):
+						return _reaction_fire_gate_state_fault(
+							"reaction counter line lacks unique generated provenance",
+							{"line_id": line_id, "reason": "counter_alias"}
+						)
+					used_gate_counter_ids[line_id] = true
+					if (
+						int(term.get("threshold", 1)) != 0
+						or int(term.get("comparison", -1)) != EQConditionSpec.Comparison.LE
+					):
+						return _reaction_fire_gate_state_fault(
+							"bound reaction counter has an invalid threshold",
+							{"group": group["name"], "index": i, "reason": "counter_shape"}
+						)
+					expected_counters.append({"line_id": line_id, "condition_id": condition_id})
+				elif spec_type == EQConditionSpec.Type.LINE_THRESHOLD:
+					if (
+						line_id != String(spec.get("line_id", ""))
+						or int(term.get("comparison", -1)) != int(spec.get("comparison", -1))
+						or (
+							not bool(spec.get("relative", false))
+							and int(term.get("threshold", 0)) != int(spec.get("threshold", 0))
+						)
+					):
+						return _reaction_fire_gate_state_fault(
+							"bound reaction line term differs from its definition",
+							{"group": group["name"], "index": i, "reason": "line_shape"}
+						)
+				else:
+					return _reaction_fire_gate_state_fault(
+						"reaction definition has an unknown condition type",
+						{"group": group["name"], "index": i, "reason": "spec_type"}
+					)
+		var counters: Array = row["counter_lines"]
+		if counters.size() != expected_counters.size():
+			return _reaction_fire_gate_state_fault(
+				"reaction counter registry differs from bound COUNTER terms",
+				{"reason": "counter_count"}
+			)
+		for i in range(counters.size()):
+			if typeof(counters[i]) != TYPE_DICTIONARY:
+				return _reaction_fire_gate_state_fault(
+					"reaction counter entry must be a Dictionary",
+					{"index": i, "reason": "counter_type"}
+				)
+			if not _dictionary_has_exact_keys(
+				counters[i], ["line_id", "condition_id"]
+			):
+				return _reaction_fire_gate_state_fault(
+					"reaction counter entry has an inexact shape",
+					{"index": i, "reason": "counter_shape"}
+				)
+			if (
+				String((counters[i] as Dictionary).get("line_id", ""))
+				!= expected_counters[i]["line_id"]
+				or String((counters[i] as Dictionary).get("condition_id", ""))
+				!= expected_counters[i]["condition_id"]
+			):
+				return _reaction_fire_gate_state_fault(
+					"reaction counter entry differs from its bound term",
+					{"index": i, "reason": "counter_identity"}
+				)
+	return true
+
+
+func _dictionary_has_exact_keys(value: Dictionary, expected: Array) -> bool:
+	if value.size() != expected.size():
+		return false
+	for key in value:
+		if not expected.has(String(key)):
+			return false
+	return true
+
+
+func _reaction_fire_gate_state_fault(message: String, context: Dictionary) -> bool:
+	runtime._fault(EQError.REACTION_FIRE_GATE_STATE_INVALID, message, context, true)
+	return false
+
+
 func _verify_reaction_expiry_state(
 	data: Dictionary, save_schema_version: int, scheduler_entries_by_event: Dictionary
 ) -> bool:
@@ -1240,17 +1562,18 @@ func _verify_reaction_expiry_state(
 				"reaction expiry row does not match its scheduler event",
 				{"event_id": event_id, "reason": "scheduler_mismatch"}
 			)
-		var expected_status := (
-			EQReservation.Status.ARMED
-			if armed_by_expiry.has(event_id)
-			else EQReservation.Status.RESOLVED
-		)
-		if int(reservation.get("status", -1)) != expected_status:
+		var saved_status := int(reservation.get("status", -1))
+		var status_is_valid := saved_status == EQReservation.Status.ARMED
+		if not armed_by_expiry.has(event_id):
+			status_is_valid = saved_status == EQReservation.Status.RESOLVED
+			if save_schema_version >= 8:
+				status_is_valid = status_is_valid or saved_status == EQReservation.Status.INVALIDATED
+		if not status_is_valid:
 			return _reaction_expiry_state_fault(
 				"reaction expiry reservation status disagrees with armed membership",
 				{
 					"event_id": event_id,
-					"expected_status": expected_status,
+					"saved_status": saved_status,
 					"reason": "status_mismatch",
 				}
 			)
@@ -1263,7 +1586,8 @@ func _verify_reaction_expiry_state(
 				{"event_id": event_id, "reason": "reservation_mismatch"}
 			)
 		if (
-			not armed_by_expiry.has(event_id)
+			save_schema_version < 8
+			and not armed_by_expiry.has(event_id)
 			and int(reservation.get("remaining_ruminations", -1)) != 0
 		):
 			return _reaction_expiry_state_fault(
@@ -1307,7 +1631,10 @@ func apply_state(data: Dictionary) -> void:
 			var expiry_event_id := int(expiry["event_id"])
 			var expiry_reservation := EQReservation.from_dict(expiry["reservation"])
 			restored_expiries[expiry_event_id] = expiry_reservation
-			_expiry_by_event[expiry_event_id] = expiry_reservation
+			_expiry_by_event[expiry_event_id] = {
+				"reservation": expiry_reservation,
+				"slot_id": -1,
+			}
 	for a in data.get("armed_triggers", []):
 		var expiry_id := int(a.get("expiry_event_id", -1))
 		var res: EQReservation = (
@@ -1320,9 +1647,33 @@ func apply_state(data: Dictionary) -> void:
 		if not cd.is_empty():
 			cond = EQCondition.from_dict(cd)
 		res.status = EQReservation.Status.ARMED
-		engine.arm(res, cond, int(a.get("armed_at", 0)))
+		var slot_id := engine._arm_slot(res, cond, int(a.get("armed_at", 0)))
+		var counter_lines: Array = []
+		for counter_value in a.get("counter_lines", []):
+			var counter: Dictionary = counter_value
+			counter_lines.append({
+				"line_id": StringName(counter.get("line_id", "")),
+				"condition_id": StringName(counter.get("condition_id", "")),
+			})
+		_store_reaction_gate(slot_id, {
+			"authored_solve": (
+				res.definition.solve_conditions.map(func(spec): return spec.to_dict())
+				if res.definition != null
+				else []
+			),
+			"authored_inv": (
+				res.definition.invalidation_conditions.map(func(spec): return spec.to_dict())
+				if res.definition != null
+				else []
+			),
+			"solve": (a.get("solve", []) as Array).duplicate(true),
+			"inv": (a.get("inv", []) as Array).duplicate(true),
+			"counter_lines": counter_lines,
+		})
+		if expiry_id > 0 and _expiry_by_event.has(expiry_id):
+			(_expiry_by_event[expiry_id] as Dictionary)["slot_id"] = slot_id
 		if expiry_id > 0 and save_schema_version < 6:
-			_expiry_by_event[expiry_id] = res
+			_expiry_by_event[expiry_id] = {"reservation": res, "slot_id": slot_id}
 	for c in data.get("pending_conditional", []):
 		_pending_conditional.append({
 			"res": EQReservation.from_dict(c.get("reservation", {})),
@@ -1423,6 +1774,8 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 				true
 			)
 			return -1
+		if not _preflight_reaction_gate(res):
+			return -1
 	if not _bind_effect_commit_versions(res, &"submit"):
 		return -1
 	res._bind_issued_meta_level()
@@ -1435,13 +1788,20 @@ func submit(res: EQReservation, reaction_condition = null) -> int:
 			ready_def.delay = res.definition.delay
 			return submit(EQReservation.new(res.actor_id, ready_def))
 		EQActionDefinition.Kind.REACTION_PREPARATION:
-			if not engine.arm(res, reaction_condition, runtime.scheduler.current_tick):
+			var slot_id := engine._arm_slot(
+				res, reaction_condition, runtime.scheduler.current_tick
+			)
+			if slot_id < 0:
 				_reject_reaction_condition_type(res, &"engine_rejected")
 				return -1
+			_store_reaction_gate(slot_id, _bind_reaction_gate(res))
 			if res.definition.duration > 0:
 				var expiry_id := runtime.schedule(res.actor_id, runtime.scheduler.current_tick + res.definition.duration, 0, &"expiry")
 				if expiry_id > 0:
-					_expiry_by_event[expiry_id] = res
+					_expiry_by_event[expiry_id] = {
+						"reservation": res,
+						"slot_id": slot_id,
+					}
 			return -1
 		_:
 			var bound := _bind_conditions(res)
@@ -1683,6 +2043,129 @@ func _bind_conditions(res: EQReservation) -> Dictionary:
 		inv.append(_bind_one(spec, "invalidation", seq, ctx))
 		seq += 1
 	return {"solve": solve, "inv": inv}
+
+
+## Reaction gates are authored conditions only. Duration and rumination sugar
+## keep their established expiry-event / remaining_ruminations stores and must
+## not be rebound as a second closure mechanism.
+func _preflight_reaction_gate(res: EQReservation) -> bool:
+	for specs in [res.definition.solve_conditions, res.definition.invalidation_conditions]:
+		for value in specs:
+			if value == null:
+				continue
+			var spec: EQConditionSpec = value
+			match spec.type:
+				EQConditionSpec.Type.LINE_THRESHOLD:
+					if not lines.has_line(spec.line_id):
+						runtime._fault(
+							EQError.CONDITION_LINE_UNKNOWN,
+							"reaction condition reads unknown line %s" % spec.line_id,
+							{"actor_id": String(res.actor_id), "line_id": String(spec.line_id)},
+							true
+						)
+						return false
+				EQConditionSpec.Type.NAMED_PREDICATE:
+					if not runtime.has_predicate(spec.predicate_name):
+						runtime._fault(
+							EQError.CONDITION_PREDICATE_UNREGISTERED,
+							"reaction predicate '%s' is not registered" % spec.predicate_name,
+							{
+								"actor_id": String(res.actor_id),
+								"predicate": String(spec.predicate_name),
+							},
+							true
+						)
+						return false
+	return true
+
+
+func _bind_reaction_gate(res: EQReservation) -> Dictionary:
+	var ctx := {"lines": lines.ctx_lines()}
+	var solve: Array = []
+	var inv: Array = []
+	var counter_lines: Array = []
+	var authored_solve: Array = []
+	var authored_inv: Array = []
+	for group in [
+		{
+			"name": "solve",
+			"specs": res.definition.solve_conditions,
+			"out": solve,
+			"authored": authored_solve,
+		},
+		{
+			"name": "invalidation",
+			"specs": res.definition.invalidation_conditions,
+			"out": inv,
+			"authored": authored_inv,
+		},
+	]:
+		var seq := 0
+		for value in group["specs"]:
+			if value == null:
+				continue
+			var spec: EQConditionSpec = value
+			(group["authored"] as Array).append(spec.to_dict().duplicate(true))
+			var term := _bind_one(spec, group["name"], seq, ctx)
+			(group["out"] as Array).append(term)
+			if spec.type == EQConditionSpec.Type.COUNTER:
+				counter_lines.append({
+					"line_id": term["line_id"],
+					"condition_id": term["condition_id"],
+				})
+			seq += 1
+	return {
+		"authored_solve": authored_solve,
+		"authored_inv": authored_inv,
+		"solve": solve,
+		"inv": inv,
+		"counter_lines": counter_lines,
+	}
+
+
+func _reaction_gate_for_slot(slot_id: int) -> Dictionary:
+	return _armed_reaction_gates.get(slot_id, {})
+
+
+func _store_reaction_gate(slot_id: int, gate: Dictionary) -> void:
+	_armed_reaction_gates[slot_id] = gate
+	var watched := EQEventLines.derive_watched([gate["solve"], gate["inv"]])
+	for line_id in watched:
+		_armed_gate_watched_counts[line_id] = int(
+			_armed_gate_watched_counts.get(line_id, 0)
+		) + 1
+
+
+func _erase_reaction_gate_slot(slot_id: int) -> void:
+	var gate := _armed_reaction_gates.get(slot_id, {})
+	if not gate.is_empty():
+		var watched := EQEventLines.derive_watched([gate["solve"], gate["inv"]])
+		for line_id in watched:
+			var remaining := int(_armed_gate_watched_counts.get(line_id, 0)) - 1
+			if remaining <= 0:
+				_armed_gate_watched_counts.erase(line_id)
+			else:
+				_armed_gate_watched_counts[line_id] = remaining
+	_armed_reaction_gates.erase(slot_id)
+
+
+## Advances every declared use counter after an accepted FIRE. Returns the
+## first exhausted condition id in declaration order, or empty when still open.
+func _advance_reaction_counters(gate: Dictionary) -> StringName:
+	var closed_by: StringName = &""
+	for counter_value in gate.get("counter_lines", []):
+		var counter: Dictionary = counter_value
+		var line_id := StringName(counter.get("line_id", ""))
+		if lines.advance(line_id, -1) and lines.value_of(line_id) <= 0 and closed_by == &"":
+			closed_by = StringName(counter.get("condition_id", ""))
+	return closed_by
+
+
+func _reaction_gate_view(armed: EQReservation, trigger_view: Dictionary) -> Dictionary:
+	return {
+		"trigger": trigger_view.duplicate(true),
+		"reaction": _view_of(armed).duplicate(true),
+	}
 
 
 func _bind_one(spec: EQConditionSpec, group: String, index: int, ctx: Dictionary) -> Dictionary:
@@ -2065,7 +2548,9 @@ func _resolve_one_scheduled_event() -> Dictionary:
 	lines.sync_primary(runtime.scheduler.current_tick)
 	_check_deadlines()
 	if _expiry_by_event.has(e.event_id):
-		var expiry_res := _expiry_by_event[e.event_id] as EQReservation
+		var expiry_res := (
+			(_expiry_by_event[e.event_id] as Dictionary)["reservation"] as EQReservation
+		)
 		_resolve_expiry(e)
 		return _scheduled_event_result(
 			true, e.event_id, e.kind, ScheduledEventOutcome.EXPIRY, expiry_res
@@ -2325,35 +2810,183 @@ func _reaction_fire_reservation(armed: EQReservation) -> EQReservation:
 
 func _sweep_bundle(trigger_occurrences: Array) -> void:
 	var tick := runtime.scheduler.current_tick
+	var slot_plans := {}
+	var slot_order: Array[int] = []
 	var fired: Array = []
+	var abort_sweep := false
 	for trigger_occurrence in trigger_occurrences:
 		var view: Dictionary = trigger_occurrence["view"]
 		var producer_view := EQReactionFireContext.canonical_event_view(view)
-		var chunk_fired := engine.on_event_resolved_occurrences(view.duplicate(true), tick)
-		for fire in chunk_fired:
-			fire["trigger_event_id"] = int(trigger_occurrence["event_id"])
-			fire["trigger_view_index"] = int(trigger_occurrence["view_index"])
-			fire["trigger_view"] = producer_view
-			fired.append(fire)
-	if fired.is_empty():
+		if producer_view.is_empty() and not view.is_empty():
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_INVALID,
+				"trigger view is not a serializable reaction FIRE cause",
+				{"trigger_event_id": int(trigger_occurrence["event_id"])},
+				true
+			)
+			if runtime.halted:
+				break
+			continue
+		var previews := engine.preview_event_resolved_occurrences(view.duplicate(true), tick)
+		for fire in previews:
+			var armed: EQReservation = fire["reservation"]
+			var slot_id := int(fire["slot_id"])
+			if not slot_plans.has(slot_id):
+				var gate_value := _reaction_gate_for_slot(slot_id)
+				slot_plans[slot_id] = _new_reaction_slot_plan(fire, gate_value)
+				slot_order.append(slot_id)
+			var plan: Dictionary = slot_plans[slot_id]
+			if bool(plan["closed"]):
+				continue
+			var gate: Dictionary = plan["gate"]
+			if gate.is_empty():
+				_close_reaction_slot_plan(
+					plan,
+					EQReservation.Status.INVALIDATED,
+					&"condition_fault",
+					int(trigger_occurrence["event_id"])
+				)
+				runtime._fault(
+					EQError.REACTION_FIRE_GATE_STATE_INVALID,
+					"armed reaction is missing its bound FIRE gate",
+					{"actor_id": String(armed.actor_id), "slot_id": slot_id},
+					true
+				)
+				if runtime.halted:
+					abort_sweep = true
+					break
+				continue
+			var outcome := EQConditionEval.Outcome.RESOLVE
+			var solve := {"result": EQConditionEval.Result.YES, "fault": null}
+			var inv := {
+				"result": EQConditionEval.Result.NO,
+				"closed_by": &"",
+				"fault": null,
+			}
+			if not (gate["solve"] as Array).is_empty() or not (gate["inv"] as Array).is_empty():
+				var ctx := _ctx(_reaction_gate_view(armed, producer_view))
+				solve = EQConditionEval.solve_holds(gate["solve"], ctx)
+				inv = EQConditionEval.invalidation_check(gate["inv"], ctx)
+				outcome = EQConditionEval.decide(solve, inv)
+			match outcome:
+				EQConditionEval.Outcome.WAIT:
+					continue
+				EQConditionEval.Outcome.INVALIDATE:
+					_close_reaction_slot_plan(
+						plan,
+						EQReservation.Status.INVALIDATED,
+						StringName(inv["closed_by"]),
+						int(trigger_occurrence["event_id"])
+					)
+					continue
+				EQConditionEval.Outcome.FAULT:
+					var fault: Dictionary = (
+						inv["fault"] if inv["fault"] != null else solve["fault"]
+					)
+					_close_reaction_slot_plan(
+						plan,
+						EQReservation.Status.INVALIDATED,
+						&"condition_fault",
+						int(trigger_occurrence["event_id"])
+					)
+					runtime._fault(
+						fault["code"], fault["message"], fault.get("context", {}), true
+					)
+					if runtime.halted:
+						abort_sweep = true
+						break
+					continue
+				_:
+					pass
+			if int(plan["accepted"]) >= int(plan["max_fires"]):
+				continue
+			var accepted_index := int(plan["accepted"])
+			plan["accepted"] = accepted_index + 1
+			plan["close_event_id"] = int(trigger_occurrence["event_id"])
+			var closes_arm := int(plan["accepted"]) >= int(plan["max_fires"])
+			if closes_arm:
+				plan["closed"] = true
+				plan["closed_by"] = plan["limit_closed_by"]
+				plan["trace_close"] = true
+				plan["close_from_fire"] = true
+				plan["close_event_id"] = int(trigger_occurrence["event_id"])
+				if bool(plan["counter_limited"]):
+					plan["close_status"] = EQReservation.Status.RESOLVED
+			fired.append(
+				{
+					"reservation": armed,
+					"slot_id": slot_id,
+					"fire_index": int(plan["first_fire_index"]) + accepted_index,
+					"closes_arm": closes_arm,
+					"closed_by": plan["limit_closed_by"] if closes_arm else &"",
+					"trigger_event_id": int(trigger_occurrence["event_id"]),
+					"trigger_view_index": int(trigger_occurrence["view_index"]),
+					"trigger_view": producer_view,
+				}
+			)
+		if abort_sweep:
+			break
+	if abort_sweep or runtime.halted:
+		_discard_planned_fires(slot_plans, slot_order, &"condition_fault")
+		_commit_reaction_slot_plans(slot_plans, slot_order, false)
 		_recheck_scheduled_invalidation()
 		_evaluate_pending_conditional()
 		return
-	if tick == _cascade_tick:
-		_cascade_round += 1
-	else:
-		_cascade_tick = tick
-		_cascade_round = 1
-	if _cascade_round > max_cascade_rounds:
-		runtime._fault(EQError.TRIGGER_CHAIN_LIMIT, "same-tick reaction cascade exceeded %d rounds" % max_cascade_rounds, {"tick": tick}, true)
+	if fired.is_empty():
+		_commit_reaction_slot_plans(slot_plans, slot_order, false)
+		_recheck_scheduled_invalidation()
+		_evaluate_pending_conditional()
 		return
-	for fire in _order_candidates(fired, func(x): return x["reservation"]):
+	var next_round := _cascade_round + 1 if tick == _cascade_tick else 1
+	if next_round > max_cascade_rounds:
+		runtime._fault(EQError.TRIGGER_CHAIN_LIMIT, "same-tick reaction cascade exceeded %d rounds" % max_cascade_rounds, {"tick": tick}, true)
+		_discard_planned_fires(slot_plans, slot_order, &"trigger_chain_limit")
+		_commit_reaction_slot_plans(slot_plans, slot_order, false)
+		_recheck_scheduled_invalidation()
+		_evaluate_pending_conditional()
+		return
+	var ordered_fires := _order_candidates(fired, func(x): return x["reservation"])
+	var engine_plans := _reaction_engine_plans(slot_plans, slot_order)
+	if runtime.halted or not engine._validate_occurrence_batch(engine_plans):
+		runtime._fault(
+			EQError.REACTION_FIRE_GATE_STATE_INVALID,
+			"reaction FIRE plan became stale before scheduling",
+			{"reason": "stale_plan"},
+			true
+		)
+		_discard_planned_fires(slot_plans, slot_order, &"condition_fault")
+		_commit_reaction_slot_plans(slot_plans, slot_order, false)
+		return
+	for fire in ordered_fires:
 		var armed: EQReservation = fire["reservation"]
-		var closes_arm := bool(fire["closes_arm"])
+		var preflight_context := EQReactionFireContext.capture(
+			1,
+			int(fire["trigger_event_id"]),
+			int(fire["trigger_view_index"]),
+			tick,
+			int(fire["fire_index"]),
+			fire["trigger_view"]
+		)
+		if preflight_context.is_empty() or not runtime.registry.is_registered(armed.actor_id):
+			runtime._fault(
+				EQError.REACTION_FIRE_CONTEXT_INVALID,
+				"reaction FIRE could not satisfy its schedule/context preconditions",
+				{"actor": String(armed.actor_id), "reason": "schedule_preflight"},
+				true
+			)
+			_discard_planned_fires(slot_plans, slot_order, &"condition_fault")
+			_commit_reaction_slot_plans(slot_plans, slot_order, false)
+			return
+	var scheduled_fires: Array = []
+	for fire in ordered_fires:
+		var armed: EQReservation = fire["reservation"]
 		var occurrence := _reaction_fire_reservation(armed)
 		var id := _schedule(occurrence, 0)
 		if id <= 0:
-			continue
+			_cancel_planned_reaction_fires(scheduled_fires)
+			_discard_planned_fires(slot_plans, slot_order, &"condition_fault")
+			_commit_reaction_slot_plans(slot_plans, slot_order, false)
+			return
 		var context := EQReactionFireContext.capture(
 			id,
 			int(fire["trigger_event_id"]),
@@ -2363,11 +2996,8 @@ func _sweep_bundle(trigger_occurrences: Array) -> void:
 			fire["trigger_view"]
 		)
 		if context.is_empty():
-			runtime.scheduler.cancel(id)
-			_by_event.erase(id)
-			_window_of_event.erase(id)
-			_bound_inv.erase(id)
-			occurrence.status = EQReservation.Status.INVALIDATED
+			scheduled_fires.append({"id": id, "occurrence": occurrence})
+			_cancel_planned_reaction_fires(scheduled_fires)
 			runtime._fault(
 				EQError.REACTION_FIRE_CONTEXT_INVALID,
 				"matching trigger could not produce a reaction FIRE context",
@@ -2377,16 +3007,33 @@ func _sweep_bundle(trigger_occurrences: Array) -> void:
 				},
 				true
 			)
-			continue
-		if closes_arm:
-			# Exactly the occurrence which exhausted the armed slot records
-			# count closure; later status mutation cannot duplicate it.
-			_trace_invalidated(-1, armed.actor_id, &"reaction_count")
+			_discard_planned_fires(slot_plans, slot_order, &"condition_fault")
+			_commit_reaction_slot_plans(slot_plans, slot_order, false)
+			return
+		scheduled_fires.append(
+			{"id": id, "occurrence": occurrence, "context": context, "fire": fire}
+		)
+	if not _commit_reaction_slot_plans(slot_plans, slot_order, true):
+		_cancel_planned_reaction_fires(scheduled_fires)
+		runtime._fault(
+			EQError.REACTION_FIRE_GATE_STATE_INVALID,
+			"reaction FIRE plan could not commit after scheduling",
+			{"reason": "commit_failed"},
+			true
+		)
+		return
+	_cascade_tick = tick
+	_cascade_round = next_round
+	for scheduled in scheduled_fires:
+		var id := int(scheduled["id"])
+		var occurrence: EQReservation = scheduled["occurrence"]
+		var context: Dictionary = scheduled["context"]
+		var fire: Dictionary = scheduled["fire"]
+		if bool(fire["closes_arm"]):
+			_trace_invalidated(
+				-1, occurrence.actor_id, StringName(fire["closed_by"])
+			)
 		_reaction_fire_context_by_event[id] = context
-		if occurrence.definition != null:
-			var bound_inv := _bind_conditions(occurrence).get("inv", [])
-			if not bound_inv.is_empty():
-				_bound_inv[id] = bound_inv
 		runtime.trace().record(
 			{
 				"kind": "reaction_fired",
@@ -2398,6 +3045,128 @@ func _sweep_bundle(trigger_occurrences: Array) -> void:
 		)
 	_recheck_scheduled_invalidation()
 	_evaluate_pending_conditional()
+
+
+func _new_reaction_slot_plan(preview: Dictionary, gate: Dictionary) -> Dictionary:
+	var armed: EQReservation = preview["reservation"]
+	var rumination_limit := armed.remaining_ruminations + 1
+	var counter_limit := -1
+	var counter_closed_by: StringName = &""
+	for counter_value in gate.get("counter_lines", []):
+		var counter: Dictionary = counter_value
+		var value := lines.value_of(StringName(counter.get("line_id", "")))
+		if counter_limit < 0 or value < counter_limit:
+			counter_limit = value
+			counter_closed_by = StringName(counter.get("condition_id", ""))
+	var max_fires := rumination_limit
+	var limit_closed_by: StringName = &"reaction_count"
+	var counter_limited := false
+	if counter_limit >= 0 and counter_limit <= rumination_limit:
+		max_fires = counter_limit
+		limit_closed_by = counter_closed_by
+		counter_limited = true
+	var authored_ruminations := (
+		armed.definition.rumination if armed.definition != null else 0
+	)
+	return {
+		"preview": preview,
+		"reservation": armed,
+		"gate": gate,
+		"accepted": 0,
+		"max_fires": max_fires,
+		"first_fire_index": authored_ruminations - armed.remaining_ruminations + 1,
+		"counter_limited": counter_limited,
+		"limit_closed_by": limit_closed_by,
+		"closed": false,
+		"close_status": -1,
+		"closed_by": &"",
+		"trace_close": false,
+		"trace_trigger": false,
+		"close_from_fire": false,
+		"close_event_id": -1,
+	}
+
+
+func _close_reaction_slot_plan(
+	plan: Dictionary, status: int, closed_by: StringName, trigger_event_id: int
+) -> void:
+	plan["closed"] = true
+	plan["close_status"] = status
+	plan["closed_by"] = closed_by
+	plan["trace_close"] = true
+	plan["trace_trigger"] = true
+	plan["close_from_fire"] = false
+	plan["close_event_id"] = trigger_event_id
+
+
+func _reaction_engine_plans(slot_plans: Dictionary, slot_order: Array[int]) -> Array:
+	var out: Array = []
+	for slot_id in slot_order:
+		var plan: Dictionary = slot_plans[slot_id]
+		var count := int(plan["accepted"])
+		var close_status := int(plan["close_status"])
+		if count == 0 and close_status == -1:
+			continue
+		out.append(
+			{"preview": plan["preview"], "count": count, "close_status": close_status}
+		)
+	return out
+
+
+func _commit_reaction_slot_plans(
+	slot_plans: Dictionary, slot_order: Array[int], advance_counters: bool
+) -> bool:
+	var engine_plans := _reaction_engine_plans(slot_plans, slot_order)
+	if engine_plans.is_empty():
+		return true
+	if not engine._commit_occurrence_batch(engine_plans):
+		return false
+	for slot_id in slot_order:
+		var plan: Dictionary = slot_plans[slot_id]
+		if advance_counters:
+			for _i in range(int(plan["accepted"])):
+				_advance_reaction_counters(plan["gate"])
+		if bool(plan["closed"]):
+			_erase_reaction_gate_slot(slot_id)
+		if bool(plan["trace_close"]) and not bool(plan["close_from_fire"]):
+			var trace_details := {}
+			if bool(plan["trace_trigger"]):
+				trace_details["trigger_event_id"] = int(plan["close_event_id"])
+			_trace_invalidated(
+				-1,
+				(plan["reservation"] as EQReservation).actor_id,
+				StringName(plan["closed_by"]),
+				&"",
+				trace_details,
+			)
+	return true
+
+
+func _discard_planned_fires(
+	slot_plans: Dictionary, slot_order: Array[int], closed_by: StringName
+) -> void:
+	for slot_id in slot_order:
+		var plan: Dictionary = slot_plans[slot_id]
+		if int(plan["accepted"]) <= 0:
+			continue
+		plan["accepted"] = 0
+		if int(plan["close_status"]) != EQReservation.Status.INVALIDATED:
+			_close_reaction_slot_plan(
+				plan, EQReservation.Status.INVALIDATED, closed_by, int(plan["close_event_id"])
+			)
+
+
+func _cancel_planned_reaction_fires(scheduled_fires: Array) -> void:
+	for scheduled in scheduled_fires:
+		var id := int(scheduled["id"])
+		runtime.scheduler.cancel(id)
+		_by_event.erase(id)
+		_window_of_event.erase(id)
+		_bound_inv.erase(id)
+		_reaction_fire_context_by_event.erase(id)
+		(scheduled["occurrence"] as EQReservation).status = EQReservation.Status.INVALIDATED
+
+
 func _clear_bundle_event_link(event_id: int) -> void:
 	var bundle_id := _bundle_of.get(event_id, &"")
 	if bundle_id == &"":
@@ -2476,8 +3245,10 @@ func step_tick() -> void:
 ## EQRuntime.invalidate_actor), all with `closed_by: <cause>` traces. Mode-
 ## neutral. Returns the number of cancelled scheduler events.
 func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed") -> int:
-	for r in engine.disarm_for(actor_id):
-		(r as EQReservation).status = EQReservation.Status.INVALIDATED
+	for entry in engine._disarm_entries_for(actor_id):
+		var armed: EQReservation = entry["reservation"]
+		_erase_reaction_gate_slot(int(entry["slot_id"]))
+		armed.status = EQReservation.Status.INVALIDATED
 		_trace_invalidated(-1, actor_id, cause)
 	var still: Array[Dictionary] = []
 	for p in _pending_conditional:
@@ -2496,7 +3267,8 @@ func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed"
 			_window_of_event.erase(event_id)
 			_bound_inv.erase(event_id)
 	for event_id in _expiry_by_event.keys():
-		if (_expiry_by_event[event_id] as EQReservation).actor_id == actor_id:
+		var expiry: Dictionary = _expiry_by_event[event_id]
+		if (expiry["reservation"] as EQReservation).actor_id == actor_id:
 			_expiry_by_event.erase(event_id)
 	if relations != null:
 		relations.invalidate_actor(actor_id)
@@ -2509,12 +3281,15 @@ func invalidate_actor(actor_id: StringName, cause: StringName = &"actor_removed"
 ## duration` (+ optional expiry effect, through the pipeline); already closed
 ## -> a lightweight `closed_by: already_closed` record.
 func _resolve_expiry(e) -> void:
-	var res: EQReservation = _expiry_by_event[e.event_id]
+	var expiry: Dictionary = _expiry_by_event[e.event_id]
+	var res: EQReservation = expiry["reservation"]
+	var slot_id := int(expiry["slot_id"])
 	_expiry_by_event.erase(e.event_id)
 	# Armed membership is authoritative. A scheduled FIRE occurrence is a
 	# distinct reservation instance, so its status can never mask this slot;
 	# this membership check also repairs historical status drift safely.
-	if engine.disarm(res):
+	if engine._disarm_slot(slot_id):
+		_erase_reaction_gate_slot(slot_id)
 		res.status = EQReservation.Status.INVALIDATED
 		_trace_invalidated(e.event_id, res.actor_id, &"duration")
 		if not _verify_effect_commit_versions(res, &"expiry_resolution"):
@@ -2709,7 +3484,12 @@ func _watched() -> Dictionary:
 		term_sets.append(p["inv"])
 	for event_id in _bound_inv:
 		term_sets.append(_bound_inv[event_id])
-	return EQEventLines.derive_watched(term_sets)
+	var watched := {}
+	for line_id in _armed_gate_watched_counts:
+		watched[line_id] = true
+	for line_id in EQEventLines.derive_watched(term_sets):
+		watched[line_id] = true
+	return watched
 
 
 func _ctx(view: Dictionary) -> Dictionary:

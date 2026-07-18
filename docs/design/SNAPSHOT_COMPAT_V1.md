@@ -74,6 +74,18 @@
 > rejected before mutation. A v6 reader rejects v7 at the top-level boundary
 > and cannot silently fall back to the later declaration value.
 
+> **Armed reaction FIRE gate (EQM-141, 2026-07-19): bundle
+> `SCHEMA_VERSION` is now 8.** Every armed trigger row carries its already-bound
+> `solve`, `inv`, and declared `counter_lines` state; `event_lines.counter_ids`
+> records which frozen lines were generated as counters. A v1-v7 empty-gate arm
+> migrates to empty arrays. A historical arm whose definition declares a gate
+> rejects before mutation because those formats cannot recover its relative
+> threshold anchor or counter-line identity. Schema v8 verifies exact term shape,
+> the arm-time authored spec snapshot, saved line identity, predicate registration,
+> and unique generated-counter provenance. Post-arm definition edits therefore do
+> not rewrite the gate or make a writer-produced bundle unloadable. A v7
+> reader rejects v8 at the top-level boundary.
+
 The serialized scheduler snapshot (`EQSnapshot`, `SCHEMA_VERSION = 1`) and the
 save bundle (`EQSaveAdapter`, `schema_version`) are the on-disk contracts a
 consumer's save files depend on. This declares the v1.0 compatibility stance so a
@@ -96,21 +108,22 @@ game shipping on v1.0 knows what survives an addon upgrade.
   (`RUNTIME_RESILIENCE_POLICY`): the consumer's game is not crashed, and a bad save
   is not silently half-loaded.
 - `EQSaveAdapter.load(...)` returns `false` on an unsupported `schema_version`
-  (tested, EQM-085), so a consumer can branch on it. The current v7 reader
-  accepts bundle versions 1 through 7. For v1-v3 only, absent effect-result
+  (tested, EQM-085), so a consumer can branch on it. The current v8 reader
+  accepts bundle versions 1 through 8. For v1-v3 only, absent effect-result
   binding fields migrate to legacy `0`, but any explicit nonzero binding is
   rejected; v4+ requires both fields. Schema v5 additionally requires the
   scheduled-row context field. Schema v6 additionally requires exact
   `reaction_expiries` ownership. Schema v7 additionally requires an integer
   `issued_meta_level` on every reservation; v1-v6 migrate it from the inline
-  definition and reject an explicit differing value. All reject malformed
-  bundles before applying any state.
+  definition and reject an explicit differing value. Schema v8 additionally
+  requires exact bound state for every armed reaction FIRE gate; v1-v7 migrate
+  only empty-gate arms. All reject malformed bundles before applying any state.
 
 ## What a consumer can rely on at v1.0
 
 1. A save written by any v1.x release loads in any later v1.x release.
 2. A save written by a *newer* schema is rejected cleanly on an older reader,
-   never partially applied. In particular, a v6 reader rejects a v7 bundle at
+   never partially applied. In particular, a v7 reader rejects a v8 bundle at
    the top-level version boundary.
 3. When a breaking change ships, it is a version bump with a documented migrator —
    the change is visible, not silent.

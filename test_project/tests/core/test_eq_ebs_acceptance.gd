@@ -185,7 +185,11 @@ static func _test_r06_focus_cost_stop(t) -> void:
 	var result := _run_focus_cost_counter_stop(rr)
 	t.ok('"closed_by":"focus_exhausted"' in result["trace"], "focus-driven counter run closes via focus_exhausted")
 	t.eq(rr.pending().size(), 0, "focus-driven counter run leaves no pending reservation")
-	t.eq(result["counter_hits"], focus_total, "counter effect firings match sum of starting focus")
+	t.eq(
+		result["counter_hits"],
+		focus_total - 1,
+		"the first zero-focus candidate is invalidated before a fifth FIRE commit"
+	)
 
 
 static func _run_focus_cost_counter_stop(rr: EQReservationRuntime) -> Dictionary:

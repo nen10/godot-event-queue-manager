@@ -33,7 +33,9 @@ EQM-133 reaction-expiry checkpoint surface note: save-bundle schema v6 adds `rea
 
 EQM-135 reservation-intervention surface note: `EQReservationRuntime.intervene_reservation(event_id, intervener)` targets one ordinary scheduled PREPARED singleton. Reservation meta is sampled at accepted submission, persisted as `issued_meta_level` by save-bundle schema v7, and compared with tie-success semantics. Success invalidates without executing the effect; avoid keeps the target; unsupported group/context targets fail closed (SEM §8.3.1, §10.5).
 
-EQM-127 historical schema note: save-bundle schema_version 3 introduced the additive `relations` / `state_algebra` tables via optional `EQReservationRuntime.state_algebra` attachment; current schema v7 retains those tables unchanged (SEM v1.2 §10.1)。
+EQM-141 reaction-gate surface note: `EQTriggerEngine.preview_event_resolved_occurrences()` returns non-mutating opaque candidate tokens (expired candidates are filtered without closing them); `commit_occurrence()` and `invalidate_occurrence()` accept only a still-current token and reject stale reuse. `on_event_resolved_occurrences()` remains the commit-all compatibility wrapper and applies standalone expiry. Save-bundle schema v8 persists arm-bound solve/invalidation state plus generated-counter provenance (SEM §6.2, §10.6). `EQError.CONDITION_COUNTER_SOLVE_UNSUPPORTED` makes the invalidation-only COUNTER authoring rule explicit.
+
+EQM-127 historical schema note: save-bundle schema_version 3 introduced the additive `relations` / `state_algebra` tables via optional `EQReservationRuntime.state_algebra` attachment; current schema v8 retains those tables unchanged (SEM v1.2 §10.1)。
 
 EQM-126 surface note: `EQReservationRuntime.open_phase` / `close_phase` / `current_window` (操作フェーズ sub-checkpoint, SEM v1.2 §8.4)。
 

@@ -133,14 +133,14 @@ atomic bundle memberと`expiry_effect_name`では明示的に拒否されます�
 保存します。save/loadとresolutionはこのbindingを再検査するため、pending workを残したまま
 named handlerをlegacy↔typedへ変更して意味をすり替えることはできません。不一致は
 `eqm.effect.commit_result_binding_mismatch`で通知され、binding fieldのないschema v1-v3 saveはlegacyのままです。
-schema v4が両binding fieldを導入し、current schema v7 writerも必ず書きます。readerが欠落fieldをlegacy 0へ
+schema v4が両binding fieldを導入し、current schema v8 writerも必ず書きます。readerが欠落fieldをlegacy 0へ
 migrateするのはschema v1-v3だけです。v4以降のreservationでどちらかが欠ける場合は
 `eqm.effect.commit_result_version_unsupported`としてstate適用前に拒否します。v3 readerは
 top-level versionでv4 bundle全体を拒否するため、typed bindingを無視して解釈し直しません。
 current readerもschema v1-v3で明示されたnonzero bindingを
 `reason: binding_not_supported_by_schema`で拒否するため、top-level versionだけを書き換えても回避できません。
 
-scheduled reaction FIREのhandler viewにはversion 1の`reaction_fire_context`も入ります。FIRE eventと1始まりの使用回数を識別し、trigger event id/tick/ordered viewとconsumer-owned value copyを保持します。schema v5はscheduled rowごとにこれを保存し、current schema v7も保持します。armed stateとpending FIREは別reservation instanceであり、保存原因を持たないhistorical pending FIREは現在worldから再構築せず拒否します。schema v6はさらに全live reaction expiryをarmed membershipから独立して保存するため、回数終了後にsave/loadしても最終的な`closed_by: already_closed`を決定的に維持します。reservationを復元できないhistorical orphan expiryは拒否します。schema v7はaccepted submit時の`issued_meta_level`を全reservationへ保存し、後のdefinition変更からpending workを隔離します。
+scheduled reaction FIREのhandler viewにはversion 1の`reaction_fire_context`も入ります。FIRE eventと1始まりの使用回数を識別し、trigger event id/tick/ordered viewとconsumer-owned value copyを保持します。schema v5はscheduled rowごとにこれを保存し、current schema v8も保持します。armed stateとpending FIREは別reservation instanceであり、保存原因を持たないhistorical pending FIREは現在worldから再構築せず拒否します。schema v6はさらに全live reaction expiryをarmed membershipから独立して保存するため、回数終了後にsave/loadしても最終的な`closed_by: already_closed`を決定的に維持します。reservationを復元できないhistorical orphan expiryは拒否します。schema v7はaccepted submit時の`issued_meta_level`を全reservationへ保存し、schema v8はarm時にbindしたreaction solve/invalidation/counter stateを保存します。
 
 master timelineのexactなcheckpoint／interleave境界が必要なconsumerは`resolve_one_scheduled_event()`を使います。scheduler popを最大1件だけ処理し、`{advanced, event_id, event_kind, outcome, reservation}`を返します。`EXPIRY` outcomeは後続reservationを同じcallで消費しません。expiry／invalidated／faultを内部処理し、次のtracked reservationを境界にしたい場合は従来どおり`resolve_next()`を使います。
 

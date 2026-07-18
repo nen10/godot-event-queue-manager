@@ -32,6 +32,7 @@ var faults: Array[Dictionary] = []
 var _lines: Dictionary = {}          # id -> {"value": int, "rate": int, "modifiers": Array[Dictionary]}
 var _effective_rates: Dictionary = {}  # id -> derived effective rate (never serialized)
 var _counter_seq: int = 0
+var _counter_ids: Dictionary = {}     # generated counter id -> true (serialized provenance)
 var _modifier_seq: int = 0
 var _sweep_rules: Array[Dictionary] = []  # [{"name": StringName, "callable": Callable}] in registration order
 var _trace = null                    # EQTrace or null (observation only)
@@ -52,6 +53,14 @@ func set_trace(trace) -> void:
 ## Issues a new line. Returns false (and records nothing) when the id already
 ## exists — issuance is not an update path.
 func issue(id: StringName, value: int = 0, rate: int = 0) -> bool:
+	# The generated-counter namespace is runtime-owned. Reserving it prevents a
+	# consumer line from being silently captured by a later COUNTER bind.
+	if String(id).begins_with("eqm.counter."):
+		return false
+	return _issue_line(id, value, rate)
+
+
+func _issue_line(id: StringName, value: int, rate: int) -> bool:
 	if id == &"" or _lines.has(id):
 		return false
 	_lines[id] = {"value": value, "rate": rate, "modifiers": []}
@@ -64,10 +73,13 @@ func issue(id: StringName, value: int = 0, rate: int = 0) -> bool:
 ## (`eqm.counter.<seq>`). Issuance order is unique (Q20), so ids are stable
 ## across replay.
 func issue_counter(start: int) -> StringName:
-	_counter_seq += 1
-	var id := StringName("eqm.counter.%d" % _counter_seq)
-	issue(id, start, 0)
-	return id
+	while true:
+		_counter_seq += 1
+		var id := StringName("eqm.counter.%d" % _counter_seq)
+		if _issue_line(id, start, 0):
+			_counter_ids[id] = true
+			return id
+	return &""
 
 
 func has_line(id: StringName) -> bool:
@@ -258,9 +270,12 @@ func to_dict() -> Dictionary:
 				serialized_modifiers.append({"id": String(m["id"]), "kind": String(m["kind"]), "value": int(m["value"])})
 			line["modifiers"] = serialized_modifiers
 		lines.append(line)
+	var counter_ids := _counter_ids.keys()
+	counter_ids.sort_custom(func(a, b): return String(a) < String(b))
 	return {
 		"lines": lines,
 		"counter_seq": _counter_seq,
+		"counter_ids": counter_ids.map(func(id): return String(id)),
 		"modifier_seq": _modifier_seq,
 		"sweep_rules": sweep_rule_names().map(func(n): return String(n)),
 	}
@@ -280,6 +295,7 @@ static func from_dict(d: Dictionary, trace = null) -> EQEventLines:
 func restore_values(d: Dictionary) -> void:
 	_lines.clear()
 	_effective_rates.clear()
+	_counter_ids.clear()
 	_lines[PRIMARY_LINE_ID] = {"value": 0, "rate": 0, "modifiers": []}
 	for i in range(d.get("lines", []).size()):
 		var line_payload: Dictionary = d.get("lines", [])[i]
@@ -294,6 +310,22 @@ func restore_values(d: Dictionary) -> void:
 			})
 		_lines[StringName(line_payload["id"])] = {"value": int(line_payload["value"]), "rate": int(line_payload["rate"]), "modifiers": modifiers}
 	_counter_seq = int(d.get("counter_seq", 0))
+	var counter_values = d.get("counter_ids", null)
+	if counter_values is Array:
+		for id_value in counter_values:
+			var counter_id := StringName(id_value)
+			if _lines.has(counter_id):
+				_counter_ids[counter_id] = true
+	else:
+		# Historical event-line payloads predate explicit provenance. Only the
+		# deterministic generated namespace at or below counter_seq can migrate.
+		for id in _lines:
+			var text := String(id)
+			if not text.begins_with("eqm.counter."):
+				continue
+			var suffix := text.trim_prefix("eqm.counter.")
+			if suffix.is_valid_int() and int(suffix) >= 1 and int(suffix) <= _counter_seq:
+				_counter_ids[id] = true
 	_modifier_seq = int(d.get("modifier_seq", 0))
 	_rebuild_effective_rates()
 

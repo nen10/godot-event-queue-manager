@@ -58,6 +58,7 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.condition.line_id_empty` | RESOURCE_INVALID | ERROR | editor, game | LINE_THRESHOLD spec without a `line_id` (EQM-111) |
 | `eqm.condition.predicate_name_empty` | RESOURCE_INVALID | ERROR | editor, game | NAMED_PREDICATE spec / registration without a name |
 | `eqm.condition.counter_start_invalid` | RESOURCE_INVALID | ERROR | editor, game | COUNTER spec with `counter_start < 1` |
+| `eqm.condition.counter_solve_unsupported` | RESOURCE_INVALID | ERROR | editor, game | COUNTER was authored in `solve_conditions`; counters progress only after an accepted resolution and are invalidation-only |
 | `eqm.condition.predicate_unregistered` | CONTRACT_VIOLATION | ERROR | editor, game | evaluating / loading a condition whose predicate name is not registered (SEM §5.5 stable error) |
 | `eqm.condition.line_unknown` | CONTRACT_VIOLATION | ERROR | editor, game | a condition reads an event-line absent from the evaluation context |
 | `eqm.effect.unregistered` | CONTRACT_VIOLATION | ERROR | editor, game | a reservation declares `effect_name` but no handler is registered (SEM §6.1 declared linkage — never a silent skip; EQM-113) |
@@ -77,6 +78,7 @@ Determinism holds in both modes: skip/degrade appears in the trace and reproduce
 | `eqm.reaction.condition_type_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | `reaction_condition` is neither `EQCondition` nor null; authoritative submit rejects before status, index, expiry, or scheduler mutation and records `reservation_rejected`. Direct engine/index calls return false/-1 without mutation or trace. |
 | `eqm.reservation.intervention_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | reservation intervention targets an unknown/nonpending/non-PREPARED event or a v1-excluded bundle/race/reaction-FIRE context; target state is unchanged |
 | `eqm.reservation.issued_meta_level_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | schema v7 reservation lacks an integer issuance meta, or a historical top-level schema carries a differing value it cannot represent; load rejects before mutation |
+| `eqm.reaction.fire_gate_state_invalid` | CONTRACT_VIOLATION | ERROR | editor, game | an armed reaction lacks its bound FIRE gate, schema v8 gate terms/generated-counter provenance are malformed or disagree with the arm-time authored snapshot, or a conditioned v1–v7 arm cannot reconstruct bind-time state; rejects before mutation |
 
 Codes are added by later tasks (snapshot/actor/reservation/trigger) under the same rules. The snapshot load codes (EQM-012 `EQSnapshot.Load`) predate this taxonomy and stay as their own enum for now; EQM-022 may fold them in without renaming.
 
